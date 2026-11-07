@@ -116,7 +116,8 @@ static func _sail(c: Campaign, rng: SimRng, to: String, log: PackedStringArray) 
 		for ev in vr.encounters:
 			if ev.has("battle_required"):
 				var br: Dictionary = ev.battle_required
-				c.fight(br.get("kind", "sea fight"), br.tier, _forced(c, br.attackers), false)
+				var stat := c.world_rules.levy_stat if br.get("kind", "") == "levy" else c.world_rules.sea_fight_stat
+				c.fight(br.get("kind", "sea fight"), br.tier, _forced(c, br.attackers), false, stat)
 				if c.over:
 					return false
 		if vr.arrived:
@@ -163,7 +164,8 @@ static func _do_raid(c: Campaign, rng: SimRng, target: Place, log: PackedStringA
 	if not _sail(c, rng.fork("sail"), target.id, log):
 		return false
 	var req := Raiding.raid(rng.fork("raid"), c.world_rules, c.world, c.band, target, log)
-	var result := c.fight("raid on %s" % target.display_name, req.tier, req.defenders, true)
+	var center := int(c.world_rules.defender_stat_by_kind[target.kind] + target.defenses * c.world_rules.defender_stat_per_defense)
+	var result := c.fight("raid on %s" % target.display_name, req.tier, req.defenders, true, clampi(center, 1, 10))
 	if c.over:
 		return true
 	var won := result.winner == 0
@@ -207,7 +209,8 @@ static func _do_contract(c: Campaign, rng: SimRng, o: Dictionary, log: PackedStr
 		success = _sail(c, rng.fork("sail"), r.voyage_required, log)
 	if success and r.has("battle_required"):
 		var br: Dictionary = r.battle_required
-		var res := c.fight(br.get("kind", o.kind), br.tier, _forced(c, br.attackers), true)
+		var res := c.fight(br.get("kind", o.kind), br.tier, _forced(c, br.attackers), true,
+				c.world_rules.levy_stat if o.kind == "levy" else c.world_rules.sea_fight_stat)
 		success = not c.over and res.winner == 0
 	if c.over:
 		return true
@@ -255,7 +258,7 @@ static func _spine(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
 		var r := Timeline.fire(rng.fork(ev.id), c.world_rules, c.world, c.band, ev, choice, log)
 		if r.has("battle_required"):
 			var br: Dictionary = r.battle_required
-			var res := c.fight(br.get("kind", ev.id), br.tier, _forced(c, br.attackers), br.get("side", "") != "against")
+			var res := c.fight(br.get("kind", ev.id), br.tier, _forced(c, br.attackers), br.get("side", "") != "against", c.world_rules.spine_stat)
 			if c.over:
 				return
 			Timeline.resolve(c.world_rules, c.world, c.band, ev, choice, res.winner == 0, log)
@@ -280,7 +283,9 @@ static func _feuds(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
 			return
 		if ev.has("battle_required"):
 			var br: Dictionary = ev.battle_required
-			c.fight(br.get("kind", "ambush"), br.tier, _forced(c, br.attackers), false)
+			var f := Feud.find(c.band, ev.get("family", ""))
+			var level: int = f.get("level", 1) if f != null and f is Dictionary else 1
+			c.fight(br.get("kind", "ambush"), br.tier, _forced(c, br.attackers), false, c.world_rules.feud_stat_base + level - 1)
 		elif ev.get("kind", "") == "demand":
 			var family: String = ev.family
 			var ask := Feud.offer_settlement(c.world_rules, c.band, family)

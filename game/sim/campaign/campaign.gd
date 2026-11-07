@@ -131,7 +131,7 @@ func _enemy_tier(r: SimRng) -> CombatTypes.Tier:
 ## Fights one battle with the band's men as side 0. `attacking` sets who
 ## has the aggressive leader. Applies growth, bonds, luck, plunder and
 ## deaths, and handles the leader's death.
-func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attacking: bool) -> BattleResult:
+func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attacking: bool, stat_center := -1) -> BattleResult:
 	tally.battles += 1
 	var seed_in := rng.fork("battle:%d:%d" % [cal.year, tally.battles]).seed_value
 	var battle := Battle.new(combat_rules, seed_in)
@@ -142,7 +142,7 @@ func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attackin
 	for m in fighters:
 		ours.append(m.to_warrior(0))
 	var enemy := BandFactory.make_band(SimRng.new(seed_in).fork("enemy"), 1, enemy_size, enemy_tier,
-			CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID, _mean_stat(fighters))
+			CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID, stat_center if stat_center > 0 else _mean_stat(fighters))
 	BandFactory.deploy_column(battle.grid, ours, 5, Vector2i(1, 0), combat_rules)
 	BandFactory.deploy_column(battle.grid, enemy, 10, Vector2i(-1, 0), combat_rules)
 	battle.add_band(ours)

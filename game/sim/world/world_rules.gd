@@ -254,6 +254,17 @@ var raid_odds_max := 1.3
 ## Fights the band did not choose (sea fights, ambushes, levies) are capped at
 ## the band's size plus this, so a small band is not simply crushed by data.
 var forced_fight_max_extra := 2
+## Enemy stat centres (1-10) by what the band is fighting: the world has its
+## own strength, and the player picks his fights. Farm defenders are farmers.
+var defender_stat_by_kind := {
+	WorldTypes.PlaceKind.FARMSTEAD: 2, WorldTypes.PlaceKind.HALL: 4, WorldTypes.PlaceKind.TOWN: 4,
+	WorldTypes.PlaceKind.THING_SITE: 3, WorldTypes.PlaceKind.FORT: 5, WorldTypes.PlaceKind.BAY: 2,
+}
+var defender_stat_per_defense := 0.34
+var sea_fight_stat := 3
+var levy_stat := 4
+var spine_stat := 4
+var feud_stat_base := 3
 var raid_days := 3
 var trade_min_silver := 30
 var trade_spend_fraction := 0.6

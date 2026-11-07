@@ -793,8 +793,11 @@ right work for cloud sessions now.
    campaign loop that runs years of raids and winters through the combat
    sim. **Done 7 Nov 2026**: see `campaign-architecture.md`, "Milestone 2
    gate, measured".
-6. **Sandbox foundations.** Free-sailing map of Norway, market economy,
-   faction AI, letting the years pass, feuds from raids and the Thing.
+6. **Sandbox foundations (headless).** Free-sailing map of Norway and its
+   neighbours, voyages and encounters, market economy and raiding, factions
+   with ambitions and the historical spine, the Thing, feuds and outlawry,
+   letting the years pass, and a planner-driven summer on the map. **Done
+   7 Nov 2026**: see `world-architecture.md`, "Milestone 3 gate, measured".
 7. **Expansion by region.** Denmark and the Baltic, the west and Iceland, the
    eastern routes; the full historical spine.
 

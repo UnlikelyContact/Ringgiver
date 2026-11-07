@@ -330,3 +330,62 @@ and uses `Sandbox.summer` instead of fixed raids; `Sandbox.pass_years(n)`
 auto-resolves summers (land income, faction AI, timeline, market drift,
 aging) until an interrupt (a feud attack, a summons, a spine event, a son
 of age, a vow due). `tools/batch_sandbox.gd`; `tests/test_sandbox.gd`.
+
+## Integration notes (as built, 7 Nov 2026)
+
+Module N is in: `sandbox.gd` (setup, summer, years passing, year end),
+`tools/batch_sandbox.gd`, `tests/test_sandbox.gd`; `Campaign` gained
+`world`, `world_rules`, `debug_battles`/`battle_logs`, and an optional
+`stat_center` on `fight`. Interface drift from the spec above, and rules
+added while integrating:
+
+- `Voyage.plan(world, from, to, known := {})`; `Voyage.sail` stops at the
+  end of a lane on a battle request; the caller fights and sails again.
+  The merchant encounter returns an `offer` and never stops the voyage.
+  `Knowledge.learn_home` exists but `Sandbox.setup` reveals the home region
+  itself.
+- `Raiding.raid` returns the battle request flat (`defenders`, `tier`,
+  `place`), not nested. `Market.best_trade` takes optional `rules`.
+- `Timeline.resolve(rules, world, band, event, choice, won, log)` reports a
+  battle's outcome; `fire` returns `battle_required` with `side`.
+  `FactionAI.on_raid`, `Faction.allies`, `Contracts.rank_earned` exist.
+- `Thing.run` returns only the verdict; a brawl request is on
+  `ThingCase.battle_required`. `Feud.summer_events` yields `ambush` and
+  `demand` events. `Outlawry.is_outlawed` never expires anything;
+  `Sandbox.year_end` calls `lift` when a lesser sentence has run out.
+- `contract_days` is a per-kind table (Module L); the sandbox's flat
+  duplicate was removed.
+- **Enemy strength is the world's, not the band's.** The first batches
+  built every enemy to the band's own mean stat, so a green band of
+  freedmen fought farm defenders as strong as itself and lost two raids in
+  three. Now `defender_stat_by_kind` plus defenses sets raid defenders
+  (farmers are 2s, hall hirdmen 4s), and sea fights, levies, spine battles
+  and feud ambushes have their own stat centres. The player picks his
+  fights; the sandbox planner picks by `raid_odds_max` (1.3).
+- **Forced fights are capped** at the band's size plus
+  `forced_fight_max_extra`: rival crews of 8 and levies of 14 crushed
+  five-man bands before they could grow.
+- The planner serves Harald when his relation is non-negative and fights
+  for him at Hafrsfjord; otherwise it ignores spine events.
+- If a tool script fails to compile, Godot idles instead of exiting; run
+  tools under `timeout`.
+
+### Milestone 3 gate, measured
+
+6 sandbox campaigns of 8 years from Hardanger with a leader and four men:
+per campaign 10.7 battles, 4.7 won; 4.8 raids and 12.0 contracts; 3.5
+spine events; 10.3 faction events; mean 10.3 men and 207 oz silver at the
+end; three of six leaders reckoned hersir; Harald holds 11.8 places by
+874. Every campaign replays exactly from its seed. Encoded in
+`tests/test_sandbox.gd` (277 tests in the suite).
+
+Known tuning questions for the playable prototype:
+
+- Spine and rival-ship fights are still lost more often than won; the
+  stat centres for them are first guesses.
+- Winter feud attacks remain rare (0.3 per campaign) because few raids
+  start feuds that survive to winter; `raid_feud_chance` and the demand
+  rule are the levers.
+- The planner never goes to the Thing. The Thing module is tested on its
+  own; wiring a case into the summer plan (sue over a raid, answer a feud
+  demand at the Gulathing) is the next sandbox step.
