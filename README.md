@@ -1,5 +1,7 @@
 # Ring-Giver
 
+Play the current web build: https://unlikelycontact.github.io/ringgiver/
+
 A historical saga sandbox set in Viking-age Norway. See
 [`docs/design/concept.md`](docs/design/concept.md) for the design.
 

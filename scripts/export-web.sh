@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exports the prototype to ring-giver/web (single-threaded Godot web build,
+# Exports the prototype to web/ (single-threaded Godot web build,
 # which runs on GitHub Pages without special headers). Needs the Godot web
 # export templates; setup-web-templates.sh installs them.
 set -euo pipefail
