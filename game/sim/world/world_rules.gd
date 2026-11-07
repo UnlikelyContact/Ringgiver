@@ -107,26 +107,81 @@ var marriage_chance := 0.2
 var marriage_relation_gain := 15
 var absorb_strength := 20
 var raid_relation_hit := 25
+## Share of a lost holding's men (loser strength / holdings) the conqueror gains.
+var conquest_strength_gain := 0.5
+## Each year an expander's relation toward weaker, unallied neighbours sours by this.
+var expand_hostility := 5
+## Chance per year that one of two allies turns on the other; relations fall by the hit.
+var betrayal_chance := 0.02
+var betrayal_relation_hit := 60
 var contract_relation := 0
 var contract_relation_gain := 10
+var contract_fail_relation_hit := 10
 var contract_pay := {"escort": 25, "hunt_outlaws": 20, "levy": 0, "debt": 15, "tribute": 40}
 var contract_fame := {"escort": 2, "hunt_outlaws": 4, "levy": 8, "debt": 1, "tribute": 5}
+## Days the work is expected to take (the offer's `days`).
+var contract_days := {"escort": 12, "hunt_outlaws": 4, "levy": 20, "debt": 6, "tribute": 15}
+var contract_pay_spread := 0.2
+var contract_offers_max := 3
+var contract_outlaws := 5
+var contract_outlaw_tier: CombatTypes.Tier = CombatTypes.Tier.GREEN
+var contract_levy_men := 16
+var contract_levy_tier: CombatTypes.Tier = CombatTypes.Tier.BLOODED
+var tribute_min_rank: WorldTypes.Rank = WorldTypes.Rank.HERSIR
 var rank_progress_per_contract := 10
 var rank_thresholds := {WorldTypes.Rank.HERSIR: 50, WorldTypes.Rank.JARL: 150, WorldTypes.Rank.KING: 400}
 var harald_min_holdings := 8
-## The historical spine. See world-architecture.md, Module L.
+## What the band gains or loses by siding with or against a spine event's faction.
+var spine_serve_relation := 20
+var spine_serve_fame := 3
+var spine_serve_rank_progress := 15
+var spine_oppose_relation := -30
+var spine_battle_fame := 10
+var spine_battle_rank_progress := 25
+## The historical spine. See world-architecture.md, Module L. `faction` is whose
+## event it is (whom "serve" serves); `effects` is the historical outcome, which
+## happens on "ignore", on siding with the faction, on opposing it without a
+## battle, and when the band opposes it in battle and loses. Effect keys:
+## conquer (places to the faction), absorb (factions into it), leader
+## ({faction: new leader}), relation ([[a, b, delta]]), ambition, open (place),
+## flag (timeline_state key set true), on_defeat ("harald_falls"), battle
+## ({attackers, tier}: siding with or opposing the faction is fought out).
 var spine := [
-	{"year": 866, "id": "harald_vow", "precondition": "harald_alive", "options": ["serve", "resist", "ignore"]},
-	{"year": 868, "id": "harald_takes_trondelag", "precondition": "harald_alive", "place": "lade", "options": ["serve", "resist", "ignore"]},
-	{"year": 870, "id": "harald_takes_west", "precondition": "harald_alive", "place": "avaldsnes", "options": ["serve", "resist", "ignore"]},
-	{"year": 872, "id": "hafrsfjord", "precondition": "harald_alive", "place": "hafrsfjord", "options": ["fight_for_harald", "fight_against", "ignore"]},
-	{"year": 874, "id": "iceland_opens", "precondition": "always", "place": "iceland", "options": ["ignore"]},
-	{"year": 875, "id": "orkney_earldom", "precondition": "always", "place": "orkney", "options": ["serve", "ignore"]},
-	{"year": 900, "id": "rollo_outlawed", "precondition": "harald_alive", "options": ["join_rollo", "ignore"]},
-	{"year": 930, "id": "eric_bloodaxe", "precondition": "harald_line", "options": ["back_eric", "betray_eric", "ignore"]},
-	{"year": 934, "id": "haakon_the_good", "precondition": "harald_line", "place": "frostathing", "options": ["acclaim", "ignore"]},
+	{"year": 866, "id": "harald_vow", "precondition": "harald_alive", "faction": "harald", "options": ["serve", "resist", "ignore"],
+		"text": "Harald Halfdansson vows to neither cut nor comb his hair until all Norway is his.",
+		"effects": {"ambition": "expand"}},
+	{"year": 868, "id": "harald_takes_trondelag", "precondition": "harald_alive", "place": "lade", "faction": "harald", "options": ["serve", "resist", "ignore"],
+		"text": "Harald marches north into Trøndelag; Hakon of Lade bends the knee and Lade is the king's.",
+		"effects": {"conquer": ["lade"], "battle": {"attackers": 20, "tier": CombatTypes.Tier.BLOODED}}},
+	{"year": 870, "id": "harald_takes_west", "precondition": "harald_alive", "place": "avaldsnes", "faction": "harald", "options": ["serve", "resist", "ignore"],
+		"text": "Harald's ships come down the west coast and take the royal seat at Avaldsnes.",
+		"effects": {"conquer": ["avaldsnes"], "battle": {"attackers": 24, "tier": CombatTypes.Tier.BLOODED}}},
+	{"year": 872, "id": "hafrsfjord", "precondition": "harald_alive", "place": "hafrsfjord", "faction": "harald", "options": ["fight_for_harald", "fight_against", "ignore"],
+		"text": "At Hafrsfjord the kings of the west meet Harald's fleet; the petty kingdoms fall to him.",
+		"effects": {"absorb": ["rogaland", "hordaland", "agder"], "flag": "harald_line", "on_defeat": "harald_falls",
+			"battle": {"attackers": 30, "tier": CombatTypes.Tier.VETERAN}}},
+	{"year": 874, "id": "iceland_opens", "precondition": "always", "place": "iceland", "options": ["ignore"],
+		"text": "Ingolf Arnarson takes land in Iceland; men who will not bow to kings follow him west.",
+		"effects": {"open": "iceland"}},
+	{"year": 875, "id": "orkney_earldom", "precondition": "always", "place": "orkney", "faction": "orkney", "options": ["serve", "ignore"],
+		"text": "Orkney is made an earldom for Rognvald's kin; Sigurd the Mighty holds it.",
+		"effects": {"leader": {"orkney": "Sigurd Eysteinsson"}, "relation": [["orkney", "more", 20], ["more", "orkney", 20]]}},
+	{"year": 900, "id": "rollo_outlawed", "precondition": "harald_alive", "faction": "harald", "options": ["join_rollo", "ignore"],
+		"text": "Harald outlaws Rollo, Rognvald's son, for a strandhögg in Viken; Rollo sails west into exile.",
+		"effects": {}},
+	{"year": 930, "id": "eric_bloodaxe", "precondition": "harald_line", "faction": "harald", "options": ["back_eric", "betray_eric", "ignore"],
+		"text": "Eric Bloodaxe takes his father's high seat and kills his brothers for it.",
+		"effects": {"leader": {"harald": "Eric Bloodaxe"}}},
+	{"year": 934, "id": "haakon_the_good", "precondition": "harald_line", "place": "frostathing", "faction": "harald", "options": ["acclaim", "ignore"],
+		"text": "Haakon, Athelstan's foster-son, is acclaimed king at the Frostathing; Eric flees west.",
+		"effects": {"leader": {"harald": "Haakon the Good"}}},
 ]
 var spine_fallback := {"id": "rival_bid", "text": "With Harald gone, a rival jarl takes up the bid for a single crown."}
+## Options that side with the event's faction, and those that oppose it.
+var spine_side_with := ["serve", "fight_for_harald", "back_eric", "acclaim"]
+var spine_oppose := ["resist", "fight_against", "betray_eric", "join_rollo"]
+## Options that are fought out when the event has a battle.
+var spine_battle_options := ["resist", "fight_for_harald", "fight_against"]
 
 # --- Law: the Thing, feuds, outlawry (Module M) -----------------------------
 var fame_per_supporter := 15
