@@ -75,6 +75,10 @@ var good_sources := {
 	WorldTypes.Good.GRAIN: [WorldTypes.Region.VIKEN, WorldTypes.Region.TRONDELAG, WorldTypes.Region.DENMARK],
 }
 var source_supply := 10
+## Yearly source supply varies by +/- this many units.
+var source_supply_spread := 3
+## Cargo units a band with no ship can carry on its backs.
+var no_ship_cargo := 2
 var farm_food_price := 1
 var captive_price := 15
 var captive_glut := 0.1
@@ -84,6 +88,8 @@ var defenders_base := {
 	WorldTypes.PlaceKind.THING_SITE: 6, WorldTypes.PlaceKind.FORT: 14, WorldTypes.PlaceKind.BAY: 0,
 }
 var defenders_per_alert := 1
+## Defender tier by place defenses: >= [0] blooded, >= [1] veteran, >= [2] champion, else green.
+var defender_tier_defenses := [3, 5, 8]
 var plunder_fraction := 0.4
 var plunder_spread := 0.1
 var loot_fraction := 0.3
