@@ -81,6 +81,12 @@ var green_panic_ignore_chance := 0.3
 # --- Battle loop (battle.gd) ----------------------------------------------
 var max_rounds := 30
 var missile_range := 6
+## LeaderAI doctrine thresholds.
+var ai_form_rounds := 2
+var ai_hold_rounds_before_push := 2
+var ai_fall_back_percent := 35
+var ai_break_them_percent := 40
+var ai_scatter_mean_distance := 3
 
 # --- Post-battle (fate) ----------------------------------------------------
 ## Downed men roll 2d6 + grit against these: < maimed_at -> dead,
