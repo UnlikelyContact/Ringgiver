@@ -76,3 +76,18 @@ watermark.
   bigger head and hands and shorter legs; drop the cloak for the sprite
   version since it hides the silhouette; show the shield face toward the
   viewer; and render from the 45-degree isometric camera slightly above.
+- `art/ref-02-band-lineup.png` (band of five on a fjord shore). Keeps:
+  every man reads as an individual through cloak colour, fur, kit and
+  shield pattern alone, which is the "named men" pillar made visible;
+  shield faces as identity on the grid. Use as the roster-screen mood.
+- `art/ref-03-shield-wall.png` (prompt 2). Keeps: locked lines, the leader
+  shouting and pointing, horn-blowers and dragon banners on both sides, a
+  man down behind a splintered shield, mud, a farmstead and a beached
+  longship. It is cinematic side-on rather than the 45-degree isometric
+  camera, so it is key art, not a grid reference. Push: a version from
+  above at 45 degrees with the lines as diagonals.
+- `art/ref-04-portrait.png` (prompt 4). Keeps everything: painterly,
+  side-lit, dark ground, penannular brooch, scar, beaded beard braids.
+  This is the roster portrait style. Push: it is a hero face; the band
+  needs old men, broken noses, a missing eye, a freedman's thin face, so
+  the repeat prompt should vary age, hair, origin and wear.
