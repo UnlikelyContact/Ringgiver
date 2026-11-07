@@ -1,0 +1,162 @@
+class_name Market
+extends RefCounted
+## Module K: the regional market. Prices follow scarcity: a good is dear
+## where stock is thin and cheap where it piles up, scaled by where in the
+## world it is (furs are cheap in Hålogaland and dear at Hedeby). Buying and
+## selling move stock one unit at a time, so a big purchase drives its own
+## price up. Captives sell only at the great slave markets, and each one
+## sold there this year lowers the next one's price.
+## See world-architecture.md > Module K.
+
+
+## Ounces per unit at this place's current stock. A place without a market
+## sells only food (grain) at `farm_food_price`; any other good is 0 there
+## (not for sale).
+static func price(rules: WorldRules, place: Place, good: WorldTypes.Good) -> int:
+	if not place.has_market:
+		return rules.farm_food_price if good == WorldTypes.Good.GRAIN else 0
+	return _price_at(rules, place, good, int(place.stock.get(good, 0)))
+
+
+static func _price_at(rules: WorldRules, place: Place, good: WorldTypes.Good, stock: int) -> int:
+	var factor: float = rules.region_factor.get(place.region, {}).get(good, 1.0)
+	var scarcity := clampf(float(rules.stock_baseline) / float(maxi(1, stock)), rules.price_floor, rules.price_ceiling)
+	return maxi(1, roundi(float(rules.base_price[good]) * factor * scarcity))
+
+
+## Free cargo room: the ship's hold, or what the men can carry without one.
+static func cargo_room(rules: WorldRules, band: Band) -> int:
+	var cap: int = band.ship.cargo_capacity(rules) if band.ship != null else rules.no_ship_cargo
+	return maxi(0, cap - band.cargo_units())
+
+
+## Buys up to `units`, one at a time at the price of the moment, stopping
+## when stock, silver or cargo room runs out. Returns units bought. At a
+## place without a market only grain can be had, and it goes into the food
+## store as rations (it takes no cargo room).
+static func buy(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good, units: int, log: PackedStringArray) -> int:
+	var bought := 0
+	var paid := 0
+	var farm := not place.has_market
+	if farm and good != WorldTypes.Good.GRAIN:
+		log.append("%s sells no %s" % [place.display_name, WorldTypes.GOOD_NAMES[good]])
+		return 0
+	while bought < units:
+		if int(place.stock.get(good, 0)) <= 0:
+			break
+		if not farm and cargo_room(rules, band) <= 0:
+			break
+		var p := price(rules, place, good)
+		if band.silver < p:
+			break
+		band.silver -= p
+		paid += p
+		place.stock[good] = int(place.stock[good]) - 1
+		if farm:
+			band.food += 1
+		else:
+			band.cargo[good] = int(band.cargo.get(good, 0)) + 1
+		bought += 1
+	if bought > 0:
+		if farm:
+			log.append("bought %d rations at %s for %d oz" % [bought, place.display_name, paid])
+		else:
+			log.append("bought %d %s at %s for %d oz (now %d oz a unit)" % [
+				bought, WorldTypes.GOOD_NAMES[good], place.display_name, paid, price(rules, place, good)])
+	return bought
+
+
+## Sells up to `units` from the band's cargo, one at a time; each unit sold
+## adds to stock and lowers the next price. Returns ounces earned. A place
+## without a market buys nothing.
+static func sell(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good, units: int, log: PackedStringArray) -> int:
+	if not place.has_market:
+		log.append("%s has no market" % place.display_name)
+		return 0
+	var n := mini(units, int(band.cargo.get(good, 0)))
+	var earned := 0
+	for i in n:
+		earned += price(rules, place, good)
+		place.stock[good] = int(place.stock.get(good, 0)) + 1
+	if n > 0:
+		band.cargo[good] = int(band.cargo[good]) - n
+		if band.cargo[good] <= 0:
+			band.cargo.erase(good)
+		band.silver += earned
+		log.append("sold %d %s at %s for %d oz" % [n, WorldTypes.GOOD_NAMES[good], place.display_name, earned])
+	return earned
+
+
+## Price of the next captive here, or 0 where captives are not bought.
+static func captive_price(rules: WorldRules, place: Place) -> int:
+	if not rules.slave_markets.has(place.id):
+		return 0
+	return maxi(0, roundi(float(rules.captive_price) * (1.0 - rules.captive_glut * float(place.captives_sold))))
+
+
+## Sells up to `count` captives, each at the glutted price of the moment;
+## stops when the price reaches nothing. Returns ounces earned.
+static func sell_captives(rules: WorldRules, place: Place, band: Band, count: int, log: PackedStringArray) -> int:
+	if not rules.slave_markets.has(place.id):
+		log.append("%s does not buy captives" % place.display_name)
+		return 0
+	var sold := 0
+	var earned := 0
+	while sold < mini(count, band.captives):
+		var p := captive_price(rules, place)
+		if p <= 0:
+			break
+		earned += p
+		sold += 1
+		place.captives_sold += 1
+	if sold > 0:
+		band.captives -= sold
+		band.silver += earned
+		log.append("sold %d captives at %s for %d oz" % [sold, place.display_name, earned])
+	return earned
+
+
+## Once a year: every stock moves `drift_fraction` of the way back to its
+## baseline, source regions add `source_supply` ± spread, and the captive
+## glut clears. Farms refill their grain the same way.
+static func yearly_drift(rng: SimRng, rules: WorldRules, world: World, log: PackedStringArray) -> void:
+	var ids: Array = world.places.keys()
+	ids.sort()
+	for id in ids:
+		var place: Place = world.places[id]
+		place.captives_sold = 0
+		var goods: Array = WorldTypes.Good.values() if place.has_market else place.stock.keys()
+		for g in goods:
+			var s := int(place.stock.get(g, 0))
+			s += roundi(float(rules.stock_baseline - s) * rules.drift_fraction)
+			if place.has_market and rules.good_sources.get(g, []).has(place.region):
+				s += maxi(0, rules.source_supply + rng.randi_range(-rules.source_supply_spread, rules.source_supply_spread))
+			place.stock[g] = maxi(0, s)
+	log.append("the markets settle after a year")
+
+
+## The most profitable good to carry from `from` to another known, open
+## market, judged at today's prices: {good, to, profit_per_unit}, or {} if
+## nothing pays. The contract signature has no rules; pass them as the
+## optional fourth argument when they differ from the defaults.
+static func best_trade(world: World, band: Band, from: String, rules: WorldRules = null) -> Dictionary:
+	if rules == null:
+		rules = WorldRules.new()
+	var src := world.place(from)
+	if src == null or not src.has_market:
+		return {}
+	var best := {}
+	var best_profit := 0
+	for g in WorldTypes.Good.values():
+		if int(src.stock.get(g, 0)) <= 0:
+			continue
+		var cost := price(rules, src, g)
+		for id in world.places:
+			var dst: Place = world.places[id]
+			if id == from or not dst.has_market or not dst.is_open(world.year) or not band.knows(id):
+				continue
+			var profit := price(rules, dst, g) - cost
+			if profit > best_profit:
+				best_profit = profit
+				best = {"good": g, "to": id, "profit_per_unit": profit}
+	return best
