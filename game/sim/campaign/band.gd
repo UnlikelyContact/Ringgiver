@@ -30,6 +30,19 @@ var alliances: PackedStringArray = []
 # Hall (Module G owns the Hall class; set when the module lands).
 var hall: RefCounted = null
 
+# World (milestone 3). Null ship means the band has none.
+var ship: Ship = null
+var cargo := {}  # WorldTypes.Good -> units
+var location := ""  # place id
+var home := ""  # place id of the hall
+var known_places := {}  # place id -> true
+var captives := 0
+var land := 0  # units of farmland held; yields food and silver each winter
+var rank: WorldTypes.Rank = WorldTypes.Rank.KARL
+var rank_progress := 0
+var outlawry: WorldTypes.Outlawry = WorldTypes.Outlawry.NONE
+var outlaw_until := 0
+
 var _bonds := {}  # "lo:hi" -> int
 var _bond_kinds := {}  # "lo:hi" -> CampaignTypes.BondKind
 var _next_id := 1
@@ -104,12 +117,24 @@ func set_bond_kind(a: Man, b: Man, kind: CampaignTypes.BondKind) -> void:
 	_bond_kinds[_key(a, b)] = kind
 
 
-func add_feud(against: String, cause: String) -> bool:
+func add_feud(against: String, cause: String, place_id := "") -> bool:
 	for f in feuds:
 		if f.against == against and not f.settled:
 			return false
-	feuds.append({"against": against, "cause": cause, "year": year, "settled": false})
+	feuds.append({"against": against, "family": against, "cause": cause, "year": year, "settled": false,
+			"place": place_id, "level": 1})
 	return true
+
+
+func cargo_units() -> int:
+	var t := 0
+	for g in cargo:
+		t += cargo[g]
+	return t
+
+
+func knows(place_id: String) -> bool:
+	return known_places.has(place_id)
 
 
 func unsettled_feuds() -> Array[Dictionary]:

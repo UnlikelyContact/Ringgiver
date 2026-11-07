@@ -5,6 +5,8 @@ extends RefCounted
 var year := 866
 var season: CampaignTypes.Season = CampaignTypes.Season.SUMMER
 var winter_turn: CampaignTypes.WinterTurn = CampaignTypes.WinterTurn.EARLY
+## Day of the sailing season, 1 on about 1 April (milestone 3).
+var day := 1
 
 
 func _init(p_year := 866) -> void:
@@ -35,6 +37,16 @@ func next_year() -> void:
 	year += 1
 	season = CampaignTypes.Season.SUMMER
 	winter_turn = CampaignTypes.WinterTurn.EARLY
+	day = 1
+
+
+func advance_days(n: int) -> void:
+	day += n
+
+
+## Days left before the sea lanes close.
+func summer_left(summer_days: int) -> int:
+	return maxi(0, summer_days - day)
 
 
 func describe() -> String:
