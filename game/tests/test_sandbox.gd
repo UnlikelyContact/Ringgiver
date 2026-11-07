@@ -56,3 +56,41 @@ func test_pass_years_stops_for_the_spine() -> void:
 	var stops2 := Sandbox.pass_years(c, 1, log)
 	assert_true(stops2.is_empty() or stops2[0].begins_with("spine:") or stops2[0] == "feud" or stops2[0] == "son_of_age",
 			"a year passes or stops for a listed reason: %s" % str(stops2))
+
+
+func test_feud_demand_can_be_answered_at_the_thing() -> void:
+	var c := _campaign(31)
+	c.band.silver = 120
+	c.band.location = "fitjar"
+	c.band.known_places["gulathing"] = true
+	c.band.add_feud("Augvald's kin", "raid on Avaldsnes", "avaldsnes")
+	var log := PackedStringArray()
+	var went := Sandbox.go_to_thing(c, c.rng.fork("t"), "Augvald's kin", WorldTypes.CaseKind.RAID, false, log)
+	assert_true(went, "the band went to the Gulathing")
+	assert_eq(c.band.location, "gulathing")
+	assert_eq(c.tally.get("thing_cases", 0), 1)
+	var f := Feud.find(c.band, "Augvald's kin")
+	assert_true(f.is_empty() or f.settled or c.band.feuds[0].get("verdict", "") == "" , "a verdict settles the feud or the matter went to the sword")
+
+
+func test_outlaw_emigrates_to_iceland_when_it_is_open() -> void:
+	var c := _campaign(32)
+	c.cal.year = 876
+	c.world.year = 876
+	c.band.year = 876
+	c.band.location = "avaldsnes"
+	c.band.known_places["orkney"] = true
+	c.band.known_places["iceland"] = true
+	c.band.outlawry = WorldTypes.Outlawry.FULL
+	c.band.add_feud("Augvald's kin", "raid on Avaldsnes", "avaldsnes")
+	var log := PackedStringArray()
+	var wr := c.world_rules
+	wr.wreck_chance = 0.0
+	wr.encounter_chance = 0.0
+	wr.storm_chance = 0.0
+	var went := Sandbox._consider_emigration(c, c.rng.fork("e"), log)
+	assert_true(went, "an outlaw with Iceland known sails for it")
+	assert_eq(c.band.home, "iceland")
+	assert_eq(c.band.outlawry, WorldTypes.Outlawry.NONE, "Norwegian law does not reach Iceland")
+	assert_true(c.band.unsettled_feuds().is_empty())
+	assert_true(c.band.land >= wr.iceland_land_claim)

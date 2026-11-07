@@ -250,7 +250,10 @@ var home_margin_days := 10
 var start_land := 1
 var raid_min_wealth := 15
 var raid_avoid_relation := 0
-var raid_odds_max := 1.3
+var raid_odds_max := 1.2
+## How strongly the planner favours soft targets: score is scaled by
+## 1 + (our mean stat - their stat centre) * this, clamped 0.2-2.
+var raid_softness_weight := 0.4
 ## Fights the band did not choose (sea fights, ambushes, levies) are capped at
 ## the band's size plus this, so a small band is not simply crushed by data.
 var forced_fight_max_extra := 2
@@ -263,7 +266,7 @@ var defender_stat_by_kind := {
 var defender_stat_per_defense := 0.34
 var sea_fight_stat := 3
 var levy_stat := 4
-var spine_stat := 4
+var spine_stat := 3
 var feud_stat_base := 3
 var raid_days := 3
 var trade_min_silver := 30
@@ -272,6 +275,15 @@ var market_days := 2
 var idle_days := 5
 var idle_turns_before_roving := 2
 var settle_if_fraction := 0.5
+## The Thing: sue when the band can spend this much, and spend this share.
+var thing_min_silver := 20
+var thing_spend_fraction := 0.3
+var thing_spend_max := 50
+var thing_days := 6
+## Iceland: emigrate when fully outlawed, or when Harald rules the home and
+## the band's relation with him is below this; the land-take claims this much.
+var emigrate_relation := -20
+var iceland_land_claim := 3
 var land_food_per_unit := 10
 var land_silver_per_unit := 5
 var pass_years_interrupts := ["feud_attack", "summons", "spine", "son_of_age", "vow_due"]

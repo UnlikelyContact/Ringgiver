@@ -46,6 +46,11 @@ static func summer(c: Campaign, log: PackedStringArray) -> void:
 	_feuds(c, rng.fork("feuds"), log)
 	if c.over:
 		return
+	if _consider_emigration(c, rng.fork("emigrate"), log):
+		return
+	_sue_wrongs(c, rng.fork("sue"), log)
+	if c.over:
+		return
 	if Outlawry.is_outlawed(band, cal):
 		log.append("%d: %s sails as an outlaw" % [cal.year, band.leader.display_name])
 
@@ -94,7 +99,8 @@ static func summer(c: Campaign, log: PackedStringArray) -> void:
 
 ## Size of a fight the band did not pick: never more than its own strength plus a margin.
 static func _forced(c: Campaign, n: int) -> int:
-	return clampi(n, 3, c.band.fighters().size() + c.world_rules.forced_fight_max_extra)
+	var ours := mini(c.band.fighters().size(), Campaign.MAX_FIGHTERS)
+	return clampi(n, 3, ours + c.world_rules.forced_fight_max_extra)
 
 
 static func _days_home(c: Campaign) -> int:
@@ -117,7 +123,7 @@ static func _sail(c: Campaign, rng: SimRng, to: String, log: PackedStringArray) 
 			if ev.has("battle_required"):
 				var br: Dictionary = ev.battle_required
 				var stat := c.world_rules.levy_stat if br.get("kind", "") == "levy" else c.world_rules.sea_fight_stat
-				c.fight(br.get("kind", "sea fight"), br.tier, _forced(c, br.attackers), false, stat)
+				c.fight(br.get("kind", "sea fight"), br.tier, _forced(c, br.attackers), true, stat)
 				if c.over:
 					return false
 		if vr.arrived:
@@ -153,7 +159,9 @@ static func _best_raid_target(c: Campaign) -> Place:
 		var fighters := c.band.fighters().size()
 		if a.defenders > fighters * wr.raid_odds_max:
 			continue
-		var score: float = float(a.expected_plunder) / (float(a.defenders) + 1.0) / (1.0 + days * 0.1)
+		var their_center: float = float(wr.defender_stat_by_kind[p.kind]) + p.defenses * wr.defender_stat_per_defense
+		var softness: float = clampf(1.0 + (c._mean_stat(c.band.fighters()) - their_center) * wr.raid_softness_weight, 0.2, 2.0)
+		var score: float = float(a.expected_plunder) / (float(a.defenders) + 1.0) / (1.0 + days * 0.1) * softness
 		if score > best_score:
 			best_score = score
 			best = p
@@ -256,6 +264,8 @@ static func _spine(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
 	for ev in Timeline.pending(c.world_rules, c.world, c.cal.year):
 		var choice := _spine_choice(c, ev)
 		var r := Timeline.fire(rng.fork(ev.id), c.world_rules, c.world, c.band, ev, choice, log)
+		if r.has("place_opened"):
+			c.band.known_places[r.place_opened] = true
 		if r.has("battle_required"):
 			var br: Dictionary = r.battle_required
 			var res := c.fight(br.get("kind", ev.id), br.tier, _forced(c, br.attackers), br.get("side", "") != "against", c.world_rules.spine_stat)
@@ -285,14 +295,112 @@ static func _feuds(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
 			var br: Dictionary = ev.battle_required
 			var f := Feud.find(c.band, ev.get("family", ""))
 			var level: int = f.get("level", 1) if f != null and f is Dictionary else 1
-			c.fight(br.get("kind", "ambush"), br.tier, _forced(c, br.attackers), false, c.world_rules.feud_stat_base + level - 1)
+			c.fight(br.get("kind", "ambush"), br.tier, _forced(c, br.attackers), true, c.world_rules.feud_stat_base + level - 1)
 		elif ev.get("kind", "") == "demand":
 			var family: String = ev.family
 			var ask := Feud.offer_settlement(c.world_rules, c.band, family)
 			if ask <= c.band.silver * c.world_rules.settle_if_fraction:
 				Feud.settle(c.world_rules, c.band, family, ask, log)
-			else:
+			elif not go_to_thing(c, rng.fork("thing:" + family), family, WorldTypes.CaseKind.RAID, false, log):
 				Feud.escalate(c.world_rules, c.band, family, log)
+
+
+# --- The Thing and Iceland ------------------------------------------------
+
+## The nearest known Thing site the band can reach, or "".
+static func nearest_thing(c: Campaign) -> String:
+	var best := ""
+	var best_days := 999
+	for id in c.band.known_places:
+		var p := c.world.place(id)
+		if p == null or p.kind != WorldTypes.PlaceKind.THING_SITE or not p.is_open(c.world.year):
+			continue
+		var route := Voyage.plan(c.world, c.band.location, id, c.band.known_places)
+		if route.is_empty():
+			continue
+		var days := 0
+		for i in range(1, route.size()):
+			days += c.world.days_between(route[i - 1], route[i])
+		if days < best_days:
+			best_days = days
+			best = id
+	return best
+
+
+## Sails to the nearest Thing and argues a case against `family`. Returns
+## false if no Thing is reachable or the season is too far gone. A verdict
+## of any kind other than FAILED settles the feud with that family.
+static func go_to_thing(c: Campaign, rng: SimRng, family: String, kind: WorldTypes.CaseKind,
+		plaintiff: bool, log: PackedStringArray) -> bool:
+	var wr := c.world_rules
+	if c.band.silver < wr.thing_min_silver or Outlawry.is_outlawed(c.band, c.cal):
+		return false
+	var site := nearest_thing(c)
+	if site == "":
+		return false
+	if c.cal.summer_left(wr.summer_days) < wr.thing_days + wr.home_margin_days + 4:
+		return false
+	if not _sail(c, rng.fork("sail"), site, log):
+		return false
+	var claim := Feud.wergild(wr, c.band.rank)
+	var tc := Thing.open_case(wr, c.band, kind, family, claim, plaintiff)
+	var spend := mini(int(c.band.silver * wr.thing_spend_fraction), wr.thing_spend_max)
+	var verdict := Thing.run(rng.fork("case"), wr, c.world, c.band, tc, spend, log)
+	if not tc.battle_required.is_empty():
+		var br: Dictionary = tc.battle_required
+		c.fight(br.get("kind", "thing brawl"), br.tier, _forced(c, br.attackers), false, wr.sea_fight_stat)
+		if c.over:
+			return true
+	c.cal.advance_days(wr.thing_days)
+	c.tally.thing_cases = c.tally.get("thing_cases", 0) + 1
+	var f := Feud.find(c.band, family)
+	if verdict != WorldTypes.Verdict.FAILED and not f.is_empty():
+		f.settled = true
+		f.verdict = WorldTypes.VERDICT_NAMES[verdict]
+		c.band.log("the matter with %s was settled at the Thing: %s" % [family, WorldTypes.VERDICT_NAMES[verdict]])
+	return true
+
+
+## Feuds where the band is the wronged party (a man of ours slain) go to the
+## Thing as a killing case, once.
+static func _sue_wrongs(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
+	for f in c.band.unsettled_feuds():
+		if f.get("sued", false) or str(f.get("cause", "")).begins_with("raid on"):
+			continue
+		f.sued = true
+		if go_to_thing(c, rng.fork(str(f.get("family", ""))), str(f.get("family", "")), WorldTypes.CaseKind.KILLING, true, log):
+			return
+
+
+## A full outlaw, or a man whose home now answers to a hostile Harald, sails
+## for Iceland if it is open and known, takes land there and starts again.
+## Returns true when the band emigrated (the summer ends there).
+static func _consider_emigration(c: Campaign, rng: SimRng, log: PackedStringArray) -> bool:
+	var wr := c.world_rules
+	var iceland := c.world.place("iceland")
+	if iceland == null or not iceland.is_open(c.world.year) or not c.band.knows("iceland") or c.band.home == "iceland":
+		return false
+	var home := c.world.place(c.band.home)
+	var hostile_harald := home != null and home.faction_id == "harald" \
+			and FactionAI.relation(c.world, "harald", "band") < wr.emigrate_relation
+	var full_outlaw := c.band.outlawry == WorldTypes.Outlawry.FULL
+	if not (hostile_harald or full_outlaw):
+		return false
+	if not _sail(c, rng.fork("sail"), "iceland", log):
+		return false
+	c.band.home = "iceland"
+	c.band.land += wr.iceland_land_claim
+	c.band.known_places["iceland"] = true
+	if c.band.outlawry != WorldTypes.Outlawry.NONE:
+		Outlawry.lift(c.band, log)
+		log.append("%d: Norwegian law does not reach Iceland" % c.cal.year)
+	for f in c.band.unsettled_feuds():
+		f.settled = true
+	c.tally.emigrations = c.tally.get("emigrations", 0) + 1
+	var why := "an outlaw" if full_outlaw else "with no wish to bow to Harald"
+	c.band.log("%s sails for Iceland, %s, and carries fire around his land-take" % [c.band.leader.display_name, why])
+	log.append("%d: the band takes land in Iceland" % c.cal.year)
+	return true
 
 
 # --- Letting the years pass ------------------------------------------------

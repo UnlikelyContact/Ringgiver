@@ -389,3 +389,30 @@ Known tuning questions for the playable prototype:
 - The planner never goes to the Thing. The Thing module is tested on its
   own; wiring a case into the summer plan (sue over a raid, answer a feud
   demand at the Gulathing) is the next sandbox step.
+
+### Polish pass (7 Nov 2026)
+
+- **The Thing is in the summer plan.** `Sandbox.go_to_thing` sails to the
+  nearest known Thing site and argues a case; a feud demand the band cannot
+  afford to settle is answered there as defendant instead of being refused,
+  and a feud where the band is the wronged party (a man of ours slain) is
+  taken there once as a killing case. Any verdict but FAILED settles the
+  feud. In batch runs rich bands settle demands privately, so cases are
+  rare; the path is covered by `test_sandbox.gd`.
+- **Iceland.** When the land-take opens it becomes known to all. A full
+  outlaw, or a band whose home answers to a Harald it is on bad terms with,
+  sails for Iceland, takes `iceland_land_claim` land, and leaves Norwegian
+  law and its feuds behind. Covered by a test; the planner serves Harald in
+  batch runs, so it is rare there.
+- **Forced fights are fought hard.** A steady defender loses two to one in
+  the combat sim, so sea fights and ambushes now use the aggressive
+  doctrine for the band; rival-ship fights went from 0 of 4 to 2 of 4.
+  The cap on forced fights now respects the twelve-man battle limit.
+- **Raid targets weigh softness** (`raid_softness_weight`): the planner
+  scales a target's score by how much weaker its defenders are than the
+  band's men. Spine fights use `spine_stat` 3.
+- `tools/batch_sandbox.gd` prints a by-kind tally of fights won.
+
+Measured after the pass, 6 campaigns of 8 years: 10.3 battles, 5.3 won
+(raids 13 of 27, outlaw hunts 15 of 23, rival ships 2 of 4, spine 0 of 3);
+mean 9.7 men and 244 oz at the end.

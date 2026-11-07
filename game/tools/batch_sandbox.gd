@@ -16,6 +16,7 @@ func _init() -> void:
 	var silver_end := 0
 	var harald_holdings := 0
 	var ranks := [0, 0, 0, 0, 0, 0]
+	var by_kind := {}
 	var sample := ""
 	for i in n:
 		var c := Campaign.new(seed_in + i)
@@ -29,6 +30,18 @@ func _init() -> void:
 		men_end += c.band.living_men().size()
 		silver_end += c.band.silver
 		ranks[c.band.rank] += 1
+		for line in c.log:
+			if not line.contains(" against ") or not (line.contains(" wins after ") or line.contains("draw after")):
+				continue
+			var kind: String = line.split(": ")[1].split(" against ")[0]
+			var parts := kind.split(" ")
+			var head := parts[0] + (" " + parts[1] if parts[0] == "raid" and parts.size() > 1 else "")
+			if not by_kind.has(head):
+				by_kind[head] = [0, 0, 0]
+			by_kind[head][0] += 1
+			if line.contains("side 0 wins"):
+				by_kind[head][1] += 1
+			by_kind[head][2] += int(line.split(" against ")[1].split(" ")[0])
 		if c.world.factions.has("harald"):
 			harald_holdings += c.world.factions["harald"].holdings.size()
 		if i == 0:
@@ -40,5 +53,7 @@ func _init() -> void:
 		line += " %s %.1f" % [k, float(totals[k]) / n]
 	print(line)
 	print("   ranks: thrall %d freedman %d karl %d hersir %d jarl %d king %d" % ranks)
+	for k in by_kind:
+		print("   %-16s fights %3d  won %3d  mean enemy %.1f" % [k, by_kind[k][0], by_kind[k][1], float(by_kind[k][2]) / by_kind[k][0]])
 	print("   sample:\n" + sample)
 	quit(0)
