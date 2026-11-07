@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Installs the Godot 4.5 headless-capable Linux binary as /usr/local/bin/godot
-# and builds the project's script class cache so tests run immediately.
-# Idempotent. Run from the directory that contains the Modding checkout, or
-# from anywhere if the project is not present (install only).
+# Installs the Godot 4.5 Linux binary as /usr/local/bin/godot (with sudo when
+# not root) and builds this project's script class cache so tests run
+# immediately. Idempotent, and works from any working directory: the project
+# is found relative to this script.
 set -euo pipefail
 GODOT_VERSION="4.5-stable"
 GODOT_FILE="Godot_v${GODOT_VERSION}_linux.x86_64"
@@ -11,14 +11,17 @@ if ! command -v godot >/dev/null 2>&1; then
   tmp="$(mktemp -d)"
   curl -sSL -o "$tmp/godot.zip" "$GODOT_URL"
   unzip -q -o "$tmp/godot.zip" -d "$tmp"
-  install -m 755 "$tmp/$GODOT_FILE" /usr/local/bin/godot
+  if [ "$(id -u)" -eq 0 ]; then
+    install -m 755 "$tmp/$GODOT_FILE" /usr/local/bin/godot
+  else
+    sudo install -m 755 "$tmp/$GODOT_FILE" /usr/local/bin/godot
+  fi
   rm -rf "$tmp"
 fi
 godot --headless --version
-for p in Modding/ring-giver/game ring-giver/game game; do
-  if [ -f "$p/project.godot" ]; then
-    godot --headless --path "$p" --import >/dev/null 2>&1 || true
-    echo "class cache built for $p"
-    break
-  fi
-done
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+proj="$here/../game"
+if [ -f "$proj/project.godot" ] && [ -w "$proj" ]; then
+  godot --headless --path "$proj" --import >/dev/null 2>&1 || true
+  echo "class cache built for $proj"
+fi
