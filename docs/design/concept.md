@@ -125,6 +125,33 @@ The preview is what makes the single-character design work: the player's
 decision each turn is really "given what I think my men will do, where should
 I be and what should I shout?"
 
+### Pulsed turns: real-time on the surface, turns underneath
+
+Decided 7 Nov 2026. The simulation stays simultaneous-turn, but the battle
+is presented as real time with a tactical pause:
+
+- The clock advances one round every few seconds unless paused. The pulse
+  length is a setting, from "wait for me" (pure turns) to about a second
+  (near real time); the prototype will find the default.
+- You can shout at any moment; the shout lands on the next pulse, so a late
+  shout feels late.
+- Pause freezes the clock and brings up the muster preview as an overlay.
+- Auto-pause triggers: a man goes down, you are threatened, the enemy
+  leader shouts, a flank is turned, the banner falls. All of them can be
+  switched off for a faster game.
+- Animation carries the feel. The fixed beats of a round (movement,
+  missiles, melee, the push, the morale check) play as one continuous
+  piece of motion across the pulse: men step, spears go in, the lines heave,
+  a man breaks and runs. Nothing waits for a "next turn" button, and no
+  resolution is ever shown out of beat order.
+
+What this buys: the sim's legibility and determinism, replays, the preview,
+and the push as a dramatic moment, with the pressure and chaos of real
+time on the surface. If the prototype finds pulses still feel like turns,
+the fallback is a fixed-timestep scheduler where each man acts on his own
+timer; the per-man rules survive that unchanged, only the battle loop
+changes.
+
 ### Shouts
 
 | Shout | Effect |
@@ -751,9 +778,12 @@ right work for cloud sessions now.
    motion, time per new animation, and ease of gear swaps. *Gate: art route
    chosen.*
 3. **Playable combat prototype.** The sim on a grid with placeholder sprites:
-   your character plus about six AI men, the muster preview, and the four
-   readouts. *Gate: a tester can say what a shout will do before locking,
-   and the single-character design feels like leading rather than watching.*
+   your character plus about six AI men, pulsed turns with pause and
+   auto-pause, the muster preview as the pause overlay, beat-by-beat
+   animation of each round, and the four readouts. *Gate: a tester can say
+   what a shout will do before locking, the battle reads as real time at the
+   default pulse, and the single-character design feels like leading rather
+   than watching.*
 4. **Vertical slice.** The burned-hall origin in the western Norway fjords:
    about ten men, a skirmish and a shield-wall sector, one winter, one Thing
    case and one saga thread. *Gate: the loop is fun across one full year.*
