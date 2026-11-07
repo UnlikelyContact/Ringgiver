@@ -35,7 +35,7 @@ func _init() -> void:
 				growth += m.total_stats() - start_stats[m.id]
 				growth_n += 1
 		if i == 0:
-			sample = c.summary() + "\n" + "\n".join(c.band.chronicle.slice(0, 12))
+			sample = c.summary() + "\n" + "\n".join(c.band.chronicle.slice(0, 12)) + "\n   battle log:\n" + "\n".join(c.log.slice(0, 8))
 	print("== %d campaigns x %d years, seed %d" % [n, years, seed_in])
 	print("   ended early (no heir): %d   mean men at end %.1f" % [overs, float(men_end) / n])
 	var line := "   per campaign:"

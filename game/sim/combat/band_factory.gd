@@ -22,9 +22,10 @@ const TIER_CENTER := {
 ## are forked by id, so ids must not depend on how many bands were made
 ## before in the same process.
 static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier,
-		armor: CombatTypes.Armor = CombatTypes.Armor.NONE, name_offset := 0, first_id := 1) -> Array[Warrior]:
+		armor: CombatTypes.Armor = CombatTypes.Armor.NONE, name_offset := 0, first_id := 1,
+		stat_center := -1) -> Array[Warrior]:
 	var out: Array[Warrior] = []
-	var center: int = TIER_CENTER[tier]
+	var center: int = TIER_CENTER[tier] if stat_center < 0 else stat_center
 	for i in count:
 		var stats: Array = []
 		for s in 5:

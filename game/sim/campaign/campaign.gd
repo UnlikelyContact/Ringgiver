@@ -39,6 +39,10 @@ func start(origin: CampaignTypes.Origin, leader_name: String, followers: int) ->
 	var leader := Recruits.make(r.fork("leader"), rules, origin, 22, leader_name, band.next_id())
 	leader.is_leader = true
 	leader.loyalty = 100
+	# The player's man is the hero of the saga: the same edge an enemy leader gets.
+	for s in [CombatTypes.Stat.MIGHT, CombatTypes.Stat.SKILL, CombatTypes.Stat.NERVE]:
+		leader.set_stat(s, leader.stat(s) + rules.leader_start_bonus)
+		leader.potential[s] = maxi(leader.potential[s], leader.stat(s))
 	band.leader = leader
 	band.luck = rules.luck_start
 	for i in followers:
@@ -51,6 +55,7 @@ func start(origin: CampaignTypes.Origin, leader_name: String, followers: int) ->
 		if Potential.is_coal_biter(rules, m):
 			tally.coal_biters += 1
 	band.log("%s gathers %d men and swears them to his service" % [leader.display_name, followers])
+	_name_second_if_needed()
 
 
 func run_years(n: int) -> void:
@@ -80,21 +85,37 @@ func summer() -> void:
 	for i in rules.battles_per_summer:
 		if over:
 			return
-		var tier := _enemy_tier(rng.fork("enemy_tier:%d:%d" % [cal.year, i]))
-		fight("raid", tier, rules.enemy_band_size, true)
+		var er := rng.fork("enemy:%d:%d" % [cal.year, i])
+		var tier := _enemy_tier(er.fork("tier"))
+		var size := clampi(band.fighters().size() + er.fork("size").randi_range(-rules.enemy_size_spread, rules.enemy_size_spread),
+				rules.enemy_size_min, MAX_FIGHTERS)
+		fight("raid", tier, size, true)
 	_settle_vow()
 
 
-## Picks an enemy quality: mostly matched to the band, sometimes worse or better.
+## The band's mean stat, so enemy bands are built to the same strength.
+func _mean_stat(fighters: Array[Man]) -> int:
+	var total := 0
+	for m in fighters:
+		total += m.total_stats()
+	return clampi(int(round(float(total) / maxi(1, fighters.size() * 5))), 1, 10)
+
+
+## Picks an enemy quality relative to the band's own: mostly the same tier,
+## sometimes one worse or one better. The player chooses his fights.
 func _enemy_tier(r: SimRng) -> CombatTypes.Tier:
+	var total := 0
+	var fighters := band.fighters()
+	for m in fighters:
+		total += m.tier
+	var base := int(round(float(total) / maxi(1, fighters.size())))
 	var roll := r.randf()
-	if roll < 0.35:
-		return CombatTypes.Tier.GREEN
-	if roll < 0.8:
-		return CombatTypes.Tier.BLOODED
-	if roll < 0.95:
-		return CombatTypes.Tier.VETERAN
-	return CombatTypes.Tier.CHAMPION
+	var shift := 0
+	if roll < rules.enemy_weaker_chance:
+		shift = -1
+	elif roll > 1.0 - rules.enemy_stronger_chance:
+		shift = 1
+	return clampi(base + shift, CombatTypes.Tier.GREEN, CombatTypes.Tier.CHAMPION) as CombatTypes.Tier
 
 
 ## Fights one battle with the band's men as side 0. `attacking` sets who
@@ -111,7 +132,7 @@ func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attackin
 	for m in fighters:
 		ours.append(m.to_warrior(0))
 	var enemy := BandFactory.make_band(SimRng.new(seed_in).fork("enemy"), 1, enemy_size, enemy_tier,
-			CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID)
+			CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID, _mean_stat(fighters))
 	BandFactory.deploy_column(battle.grid, ours, 5, Vector2i(1, 0), combat_rules)
 	BandFactory.deploy_column(battle.grid, enemy, 10, Vector2i(-1, 0), combat_rules)
 	battle.add_band(ours)
@@ -137,7 +158,12 @@ func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attackin
 	for w in ours:
 		if w.fate == CombatTypes.Fate.MAIMED:
 			tally.maimed += 1
+	# The bridge already awarded "fought together"; Bonds.after_battle would
+	# award it again, so it runs here only for grief and oath-brother checks.
+	var fought := rules.bond_fought_together
+	rules.bond_fought_together = 0
 	Bonds.after_battle(rules, band, survivors, fallen, log)
+	rules.bond_fought_together = fought
 	var killer := enemy[0].display_name
 	for m in fallen:
 		Bonds.on_death(rules, band, m, killer, log)
@@ -212,6 +238,19 @@ func _apply_report(plan: WinterPlan, report: WinterReport) -> void:
 		Leader.on_feast(rules, band, true, log)
 	if report.vow != "":
 		_pending_vow = report.vow
+	for ev in report.events:
+		if ev.get("recruit_request", false) and band.living_men().size() < rules.recruit_cap:
+			var m := Recruits.make(rng.fork("outlaw:%d:%d" % [cal.year, cal.winter_turn]), rules,
+					CampaignTypes.Origin.OUTLAW, 24, Recruits.NAMES[rng.fork("outlaw_name:%d" % cal.year).randi_range(0, Recruits.NAMES.size() - 1)], band.next_id())
+			band.add_man(m)
+			tally.recruits += 1
+		if ev.has("marriage_offer") and band.wife == "":
+			var mr := rng.fork("marriage:%d" % cal.year)
+			var pot: Array[int] = []
+			for s in 5:
+				pot.append(clampi(rules.cap_mean + mr.randi_range(-rules.cap_spread, rules.cap_spread), 1, 10))
+			var house: String = ev.marriage_offer
+			Family.marry(rules, band, "a daughter of %s" % house, pot, mr.randi_range(1, rules.household_skill_max), house, log)
 
 
 func _thaw() -> void:
@@ -233,6 +272,7 @@ func _thaw() -> void:
 		succession("old")
 		if over:
 			return
+	_name_second_if_needed()
 	# Fame draws new men in spring.
 	var wanted := Leader.recruits_drawn(rules, band)
 	for i in wanted:
@@ -246,6 +286,20 @@ func _thaw() -> void:
 		band.log("%s, a %s, swears to %s" % [m.display_name, CampaignTypes.ORIGIN_NAMES[m.origin], band.leader.display_name])
 	if band.living_men().is_empty() and band.leader != null and band.leader.alive:
 		band.log("%s winters alone" % band.leader.display_name)
+
+
+## A leader without a living named second names his best man: highest tier,
+## then the strongest bond with him.
+func _name_second_if_needed() -> void:
+	var second := band.man_by_id(band.sworn_second_id)
+	if second != null and second.alive and band.men.has(second):
+		return
+	var best: Man = null
+	for m in band.living_men():
+		if best == null or m.tier > best.tier or (m.tier == best.tier and band.bond(band.leader, m) > band.bond(band.leader, best)):
+			best = m
+	if best != null:
+		Succession.name_second(band, best, log)
 
 
 # --- Succession -------------------------------------------------------------
@@ -272,7 +326,7 @@ func succession(death_cause: String) -> void:
 	tally.successions += 1
 	var feast := mini(band.silver, rules.grave_ale_ounces)
 	var vow := "to avenge %s" % old.display_name if death_cause == "battle" else "to hold what %s held" % old.display_name
-	var leavers := Succession.succeed(rng.fork("succeed:%d" % cal.year), rules, band, cal, heir_man, feast, vow, death_cause, log)
+	var leavers := Succession.succeed(rng.fork("succeed:%d" % cal.year), rules, band, cal, heir_man, feast, vow, log, death_cause)
 	tally.departures += leavers.size()
 	_pending_vow = vow
 

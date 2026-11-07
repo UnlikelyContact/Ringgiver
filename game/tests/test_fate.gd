@@ -9,6 +9,8 @@ func _downed(grit: int) -> Warrior:
 
 func _shares(grit: int, seed: int, n: int) -> Array:
 	var r := CombatRules.new()
+	r.fate_dead_below = 7  # calibrated to these thresholds, not the defaults
+	r.fate_maimed_below = 10
 	var rng := SimRng.new(seed)
 	var counts := [0, 0, 0]
 	for i in n:

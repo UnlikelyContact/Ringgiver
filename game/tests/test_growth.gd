@@ -45,6 +45,7 @@ func test_natures_and_age_scale_effort() -> void:
 
 func test_growth_threshold_one_point_per_call_and_cap() -> void:
 	var r := CampaignRules.new()
+	r.growth_pool_per_point = 10  # calibrated to this threshold, not the default
 	var log := PackedStringArray()
 	var m := _man([3, 3, 3, 3, 3], [5, 3, 8, 8, 8])
 	m.effort = [200, 200, 29, 30, 0]
@@ -62,6 +63,7 @@ func test_growth_threshold_one_point_per_call_and_cap() -> void:
 
 func test_soft_cap_doubles_threshold() -> void:
 	var r := CampaignRules.new()
+	r.growth_pool_per_point = 10  # calibrated to this threshold, not the default
 	var below := _man([7, 7, 7, 7, 3], [9, 9, 9, 9, 9])
 	var at := _man([7, 7, 7, 7, 4], [9, 9, 9, 9, 9])
 	assert_eq(Growth.threshold(r, below, CombatTypes.Stat.MIGHT), 70)
@@ -159,8 +161,10 @@ func test_gate_growth_over_twenty_years() -> void:
 	var years := 20
 	for t in trials:
 		var rules := CampaignRules.new()
+		rules.growth_pool_per_point = 10  # the gate is calibrated to this threshold, not the default
 		rules.decline_chance = 0.0
 		var open := CampaignRules.new()
+		open.growth_pool_per_point = 10
 		open.decline_chance = 0.0
 		open.total_soft_cap = 999
 		var men := _recruits(1000 + t, rules, 200)

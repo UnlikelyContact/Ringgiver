@@ -10,7 +10,7 @@ var join_age_max := 30
 var loyalty_start := 50
 
 # --- Growth and recruits (Module E: potential.gd, growth.gd, recruits.gd, bridge.gd)
-var growth_pool_per_point := 10
+var growth_pool_per_point := 6
 var total_soft_cap := 32
 var nature_up := 1.25
 var nature_down := 0.75
@@ -31,7 +31,7 @@ var coal_biter_chance := 0.08
 var coal_biter_max_stat := 3
 var coal_biter_min_cap := 8
 var inherit_spread := 2
-var drill_effort := 3
+var drill_effort := 6
 var loyalty_fled_penalty := 5
 var bond_fought_together := 2
 ## Maim -> [stat, penalty]; stat is a CombatTypes.Stat.
@@ -277,10 +277,15 @@ var shameful_deaths := ["outlaw", "oathbreaker"]
 
 # --- Campaign loop (Module I) -----------------------------------------------
 var battles_per_summer := 3
-var enemy_band_size := 8
+var enemy_band_size := 8  # unused by the loop now; sizes track the band
+var enemy_size_spread := 1
+var enemy_size_min := 3
+var enemy_weaker_chance := 0.3
+var enemy_stronger_chance := 0.15
 var plunder_per_win := 30
 var ambition_per_win := 15
 var vow_wins_needed := 2
 var grave_ale_ounces := 20
+var leader_start_bonus := 1
 var recruit_cap := 16
 var old_leader_death_chance := 0.15

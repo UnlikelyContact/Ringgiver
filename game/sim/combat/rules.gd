@@ -142,4 +142,4 @@ var ai_patience_rounds := 6
 ## Downed men roll 2d6 + grit against these: < fate_dead_below -> dead,
 ## < fate_maimed_below -> maimed, else recover.
 var fate_dead_below := 7
-var fate_maimed_below := 10
+var fate_maimed_below := 8
