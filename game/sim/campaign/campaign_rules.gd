@@ -138,13 +138,27 @@ var honor_vow_broken := 10
 var luck_oath_broken := 3
 var honor_oath_broken := 25
 var fame_feast := 3
+## Fame from victories (a win against long odds gives fame_long_odds instead).
+var fame_win := 2
+var fame_long_odds := 5
 var omen_chance := 0.3
+## Luck lost when an ignored omen comes true (rolled with omen_chance).
+var luck_omen := 1
 var luck_high := 7
 var luck_low := 3
 var fame_per_recruit := 20
 var recruits_min := 1
 var birth_chance := 0.35
 var daughter_chance := 0.5
+var household_skill_max := 5
+var son_names := [
+	"Thorstein", "Ketil", "Hallbjorn", "Eyvind", "Sigurd", "Thorvald", "Bjorn", "Asgeir",
+	"Ulf", "Hrafn", "Kolbein", "Orm", "Gunnar", "Hoskuld", "Steinar", "Vigfus",
+]
+var daughter_names := [
+	"Thorgerd", "Asgerd", "Hallveig", "Gudrun", "Ragnhild", "Thordis", "Sigrid", "Helga",
+	"Alfdis", "Vigdis", "Ingunn", "Thurid",
+]
 var heir_min_age := 15
 var foster_returns_at_age := 16
 var luck_inherit_fraction := 0.5
@@ -159,7 +173,10 @@ var death_lines := {
 	"old": "He died in his bed, old and honored, which is rarer in those days.",
 	"outlaw": "He died an outlaw, and few mourned him.",
 	"sickness": "A fever took him, and men said his luck had run out.",
+	"oathbreaker": "He died with a broken oath on him, and his luck went into the mound with him.",
 }
+## Death causes that cost the heir luck_shameful_death.
+var shameful_deaths := ["outlaw", "oathbreaker"]
 
 # --- Campaign loop (Module I) -----------------------------------------------
 var battles_per_summer := 3
