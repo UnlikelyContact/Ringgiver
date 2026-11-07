@@ -106,6 +106,13 @@ var mishear_blooded := 0.25
 var mishear_veteran := 0.1
 var green_lag_chance := 0.35
 var green_panic_ignore_chance := 0.3
+## An active banner-bearer on the side widens the certain-hearing radius.
+var hear_banner_radius_bonus := 2
+## A Reckless man charges (behaves as Break them!) when an enemy is this close.
+var reckless_charge_radius := 3
+## Under Fall back!, green and blooded men at or below this morale waver and
+## run for the round instead of stepping back in order.
+var fall_back_steady_morale := 4
 
 # --- Battle loop (battle.gd) ----------------------------------------------
 var max_rounds := 30

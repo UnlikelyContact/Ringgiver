@@ -207,10 +207,11 @@ static func hear_chance(rules: CombatRules, distance: int, wits: int,
 # Formation
 static func line_slots(grid: BattleGrid, leader: Warrior, count: int) -> Array[Vector2i]
 static func wedge_slots(grid: BattleGrid, leader: Warrior, count: int) -> Array[Vector2i]
-static func assign(slots: Array[Vector2i], men: Array[Warrior]) -> Dictionary  # Warrior -> Vector2i, nearest-first
+static func assign(slots: Array[Vector2i], men: Array[Warrior]) -> Dictionary  # Warrior -> Vector2i, nearest pair first
 # Decision
 static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
-        w: Warrior, leader: Warrior, all: Array[Warrior]) -> Action
+        w: Warrior, leader: Warrior, all: Array[Warrior],
+        log: PackedStringArray = PackedStringArray()) -> Action
 ```
 
 Rules to implement:
@@ -230,8 +231,11 @@ Rules to implement:
   cells that are not free (or occupied by a friend, which counts as
   filled). `wedge_slots`: the leader at the tip, then the two cells
   behind-left and behind-right, then the next rank out, and so on.
-  `assign` is a greedy nearest-first match (each man to the closest
-  unassigned slot, men ordered by distance to the leader).
+  `assign` is a greedy nearest-first match: of all (man, slot) pairs the
+  closest is matched first, then the closest remaining, so a man already on
+  a slot keeps it and a man walking to his slot is not re-routed (ties: man
+  nearer the leader's side of the line, then id, then slot order). Slots
+  never include the leader's own cell.
 - **Decisions.** In priority order:
   1. `broken` → FLEE one cell directly away from the nearest active enemy
      (prefer a free cell; if none, IDLE).
