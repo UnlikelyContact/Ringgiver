@@ -8,3 +8,5 @@ godot --headless --path . --import >/dev/null 2>&1 || true
 mkdir -p ../web
 godot --headless --path . --export-release "Web" ../web/index.html
 ls -la ../web
+
+# Pages source set to GitHub Actions on 7 Nov 2026; pushes to main deploy the web build.
