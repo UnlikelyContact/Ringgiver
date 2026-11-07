@@ -1,0 +1,5 @@
+# Godot 4 editor/import cache
+.godot/
+*.import
+# Exports
+export/
