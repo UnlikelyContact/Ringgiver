@@ -52,7 +52,9 @@ func choose(battle: Battle, side: int) -> CombatTypes.Shout:
 		if not battle.grid.adjacent_warriors(w.pos, 1 - side).is_empty():
 			in_contact += 1
 	if in_contact == 0:
-		return CombatTypes.Shout.PUSH if doctrine == Doctrine.AGGRESSIVE else CombatTypes.Shout.HOLD
+		if doctrine == Doctrine.AGGRESSIVE or battle.round > battle.rules.ai_form_rounds + battle.rules.ai_patience_rounds:
+			return CombatTypes.Shout.PUSH
+		return CombatTypes.Shout.HOLD
 	_formed_rounds += 1
 	if doctrine == Doctrine.AGGRESSIVE or _formed_rounds > battle.rules.ai_hold_rounds_before_push:
 		return CombatTypes.Shout.PUSH

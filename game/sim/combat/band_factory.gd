@@ -60,7 +60,7 @@ static func deploy_column(grid: BattleGrid, band: Array[Warrior], column: int, f
 			leader = w
 		else:
 			order.append(w)
-	var mid := band.size() / 2
+	var mid := (band.size() - 1) / 2
 	if leader != null:
 		order.insert(mid, leader)
 	for i in order.size():

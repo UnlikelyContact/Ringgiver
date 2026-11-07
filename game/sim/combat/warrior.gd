@@ -102,7 +102,7 @@ func reset_for_battle(rules: CombatRules) -> void:
 	heard_order = CombatTypes.Shout.NONE
 	order_lag = 0
 	effort = {}
-	morale = int(round(nerve * rules.morale_start_from_nerve))
+	morale = clampi(int(round(nerve * rules.morale_start_from_nerve)) + rules.morale_start_bonus, 0, 10)
 
 
 func wound_penalty(rules: CombatRules) -> int:

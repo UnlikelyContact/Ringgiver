@@ -69,6 +69,8 @@ var rain_bow_penalty := 2
 
 # --- Morale and the push (morale.gd, push.gd) -----------------------------
 var morale_start_from_nerve := 1.0
+## Added to starting morale so a fresh man is not already at the break threshold.
+var morale_start_bonus := 3
 var morale_leader_adjacent := 2
 var morale_ally_down_adjacent := -2
 var morale_ally_down_visible := -1
@@ -80,6 +82,11 @@ var morale_break_threshold := 3
 var morale_rally_to_me := 2
 var push_morale_weight := 0.5
 var push_second_rank_bonus := 1
+## After a won push, winners step into the vacated ground so contact holds.
+var push_winners_advance := true
+## A push only moves a line when the winner's margin reaches this; smaller
+## margins are a heave that gains nothing, which keeps lines from dissolving.
+var push_min_margin := 3
 ## Chebyshev radius within which a man sees a friend or foe go down.
 var morale_visible_radius := 3
 ## A man at or below the break threshold rolls 2d6 + Nerve + personality
@@ -106,6 +113,8 @@ var mishear_blooded := 0.25
 var mishear_veteran := 0.1
 var green_lag_chance := 0.35
 var green_panic_ignore_chance := 0.3
+## A man falling back who finds himself this far from his leader rejoins him instead.
+var fall_back_regroup_distance := 3
 ## An active banner-bearer on the side widens the certain-hearing radius.
 var hear_banner_radius_bonus := 2
 ## A Reckless man charges (behaves as Break them!) when an enemy is this close.
@@ -116,6 +125,9 @@ var fall_back_steady_morale := 4
 
 # --- Battle loop (battle.gd) ----------------------------------------------
 var max_rounds := 30
+## A side whose leader has called "fall back" and whose men are all at least
+## this far from every enemy has left the field and loses.
+var withdraw_distance := 4
 var missile_range := 6
 ## LeaderAI doctrine thresholds.
 var ai_form_rounds := 2
@@ -123,6 +135,8 @@ var ai_hold_rounds_before_push := 2
 var ai_fall_back_percent := 35
 var ai_break_them_percent := 40
 var ai_scatter_mean_distance := 3
+## A STEADY leader waits this many rounds without contact before pushing.
+var ai_patience_rounds := 6
 
 # --- Post-battle (fate) ----------------------------------------------------
 ## Downed men roll 2d6 + grit against these: < fate_dead_below -> dead,

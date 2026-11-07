@@ -46,8 +46,10 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	# 7 (and 8). The heard order, with archers shooting rather than moving.
 	var act := _by_order(rules, grid, w, leader, all, enemies, w.heard_order, log)
 
-	# 6. A veteran with no move to make covers a gap beside him.
-	if w.tier >= CombatTypes.Tier.VETERAN and act.kind != CombatTypes.ActionKind.MOVE and act.kind != CombatTypes.ActionKind.FLEE:
+	# 6. A veteran with no move to make, and nobody to fight in front of him,
+	# covers a gap beside him.
+	if w.tier >= CombatTypes.Tier.VETERAN and act.kind != CombatTypes.ActionKind.MOVE \
+			and act.kind != CombatTypes.ActionKind.FLEE and act.kind != CombatTypes.ActionKind.ATTACK:
 		var gap := _gap_cell(grid, w, enemies)
 		if gap != Vector2i(-1, -1):
 			return Action.move_to(gap)
@@ -84,11 +86,14 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 			if w.tier <= CombatTypes.Tier.BLOODED and w.morale <= rules.fall_back_steady_morale:
 				log.append("the line wavers: %s turns to run" % w.display_name)
 				return _flee(grid, w, enemies)
-			var back := w.pos - w.facing
-			if grid.is_free(back):
-				act = Action.move_to(back)
-			else:
-				act = Action.brace()
+			if has_leader and BattleGrid.chebyshev(w.pos, leader.pos) > rules.fall_back_regroup_distance:
+				act = _step_toward(grid, w, leader.pos, Vector2i.ZERO)
+			if act == null:
+				var back := w.pos - w.facing
+				if grid.is_free(back):
+					act = Action.move_to(back)
+				else:
+					act = Action.brace()
 		CombatTypes.Shout.SVINFYLKING:
 			act = _form(grid, w, leader, all, enemies, true)
 		_:
@@ -120,13 +125,24 @@ static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 	var front := _front(w, enemies)
 	if not front.is_empty():
 		return Action.attack(_pick_target(w, front, leader))
-	var dir := w.facing
+	var adj := _adjacent(w, enemies)
+	if not adj.is_empty():
+		return Action.attack(_pick_target(w, adj, leader))
+	# Drive forward means toward the enemy, not along whatever the leader
+	# happened to face last; the line keeps its facing while the foe is ahead.
+	var near := _nearest(w.pos, enemies)
+	if near == null:
+		return Action.brace()
+	var toward := BattleGrid.direction_to(w.pos, near.pos)
+	var line_dir := w.facing
 	if leader != null and leader.is_active():
-		dir = leader.facing
-	var c := w.pos + dir
-	if grid.is_free(c):
-		return Action.move_to(c, dir)
-	return Action.brace()
+		line_dir = leader.facing
+	var keep_line := BattleGrid.arc_of(w, near.pos) == CombatTypes.Arc.FRONT \
+			or BattleGrid.arc_of(w, near.pos) == CombatTypes.Arc.FRONT_RIGHT
+	var step := _step_toward(grid, w, near.pos, line_dir if keep_line else toward)
+	if step == null:
+		return Action.brace(toward)
+	return step
 
 
 static func _break_them(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior) -> Action:
@@ -202,12 +218,18 @@ static func _guard_leader(grid: BattleGrid, w: Warrior, leader: Warrior,
 	return Action.move_to(best, BattleGrid.direction_to(best, foe.pos))
 
 
-## A free cell on w's line (left or right) with an active enemy next to it:
-## the space a fallen neighbour has left. (-1, -1) if none.
+## A free cell on w's line (left or right) that is a true gap: a friend
+## stands on the far side of it and an active enemy is next to it. That is
+## the space a fallen neighbour has left; the open end of a line is not a
+## gap. (-1, -1) if none.
 static func _gap_cell(grid: BattleGrid, w: Warrior, enemies: Array[Warrior]) -> Vector2i:
 	for steps in [2, -2]:
-		var c := w.pos + BattleGrid.rotate(w.facing, steps)
+		var side_dir := BattleGrid.rotate(w.facing, steps)
+		var c := w.pos + side_dir
 		if not grid.is_free(c):
+			continue
+		var beyond := grid.occupant(c + side_dir)
+		if beyond == null or beyond.side != w.side or not beyond.is_active():
 			continue
 		for e in enemies:
 			if BattleGrid.chebyshev(c, e.pos) == 1:

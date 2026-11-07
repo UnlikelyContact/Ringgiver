@@ -45,7 +45,7 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 			var roll := OpposedRoll.resolve(rng, roundi(strength_of[i]), roundi(strength_of[j]))
 			var label := "%s's group (%.1f) against %s's group (%.1f)" % [
 				a[0].display_name, strength_of[i], b[0].display_name, strength_of[j]]
-			if roll.margin == 0:
+			if absi(roll.margin) < rules.push_min_margin:
 				log.append("push: %s, neither gives ground" % label)
 				continue
 			var won: Array[Warrior] = a if roll.margin > 0 else b
@@ -62,8 +62,28 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	for w in winners:
 		w.add_effort(CombatTypes.Stat.MIGHT)
 	_shove(rules, grid, losers, result, log)
+	if rules.push_winners_advance:
+		_advance(grid, winners, losers, result, log)
 	result.winning_side = _top_side(wins)
 	return result
+
+
+## Winners step into the ground the losers gave up: each winner whose cell
+## ahead is now free moves into it, so the lines stay in contact and a push
+## actually drives the line forward (concept.md, "Push!").
+static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Warrior],
+		result: PushResult, log: PackedStringArray) -> void:
+	if losers.is_empty():
+		return
+	for w in winners:
+		if not w.is_active() or w.broken:
+			continue
+		var ahead := w.pos + w.facing
+		if grid.is_free(ahead):
+			grid.place(w, ahead)
+			result.advanced.append(w)
+	if not result.advanced.is_empty():
+		log.append("side %d drives forward" % result.advanced[0].side)
 
 
 ## True when w is active, not broken, and faces an adjacent active enemy.
@@ -71,7 +91,8 @@ static func in_contact(grid: BattleGrid, w: Warrior) -> bool:
 	if not w.is_active() or w.broken:
 		return false
 	for e in grid.adjacent_warriors(w.pos):
-		if e.side != w.side and e.is_active() and BattleGrid.arc_of(w, e.pos) == CombatTypes.Arc.FRONT:
+		var arc := BattleGrid.arc_of(w, e.pos)
+		if e.side != w.side and e.is_active() and (arc == CombatTypes.Arc.FRONT or arc == CombatTypes.Arc.FRONT_RIGHT):
 			return true
 	return false
 

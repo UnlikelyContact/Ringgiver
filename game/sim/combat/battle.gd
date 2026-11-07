@@ -84,8 +84,9 @@ func is_over() -> bool:
 
 func run(max_rounds := -1) -> BattleResult:
 	var limit := rules.max_rounds if max_rounds < 0 else max_rounds
-	for side in 2:
-		result.started[side] = active(side).size()
+	if round == 0:
+		for side in 2:
+			result.started[side] = active(side).size()
 	while not _over and round < limit:
 		run_round()
 	if not _over:
@@ -131,6 +132,7 @@ func run_round() -> void:
 		actions[w] = a
 		if a.kind == CombatTypes.ActionKind.ATTACK or a.kind == CombatTypes.ActionKind.SHOOT:
 			any_attacks = true
+	_log_action_counts(actions)
 
 	# 3a. Movement.
 	_resolve_movement(rr.fork("move"), actions)
@@ -138,10 +140,11 @@ func run_round() -> void:
 	_resolve_missiles(rr.fork("missiles"), actions)
 	# 3c. Melee.
 	_resolve_melee(rr.fork("melee"), actions)
-	# 3d. The push.
-	var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log)
-	if push.winning_side >= 0:
-		log.append("the push goes to side %d" % push.winning_side)
+	# 3d. The push: a heave happens only when a leader has called for it.
+	if _push_called():
+		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log)
+		if push.winning_side >= 0:
+			log.append("the push goes to side %d" % push.winning_side)
 	# 3e. Morale.
 	var broke := Morale.round_update(rr.fork("morale"), rules, grid, warriors, leaders, any_attacks, log)
 	for w in broke:
@@ -156,9 +159,46 @@ func run_round() -> void:
 		if standing == 0:
 			_finish(1 - side, "side %d has no one left standing" % side)
 			return
+	for side in 2:
+		if last_shout(side) == CombatTypes.Shout.FALL_BACK and _withdrawn(side):
+			_finish(1 - side, "side %d draws off and leaves the field" % side)
+			return
+
+
+func _push_called() -> bool:
+	for side in 2:
+		var s := last_shout(side)
+		if s == CombatTypes.Shout.PUSH or s == CombatTypes.Shout.SVINFYLKING:
+			return true
+	return false
+
+
+## True when no active man of `side` is within withdraw_distance of an enemy.
+func _withdrawn(side: int) -> bool:
+	var foes := active(1 - side)
+	if foes.is_empty():
+		return false
+	for w in active(side):
+		for e in foes:
+			if BattleGrid.chebyshev(w.pos, e.pos) < rules.withdraw_distance:
+				return false
+	return true
+
+
+func _log_action_counts(actions: Dictionary) -> void:
+	var counts := [0, 0, 0, 0, 0, 0]
+	for w in actions:
+		counts[(actions[w] as Action).kind] += 1
+	log.append("actions: brace %d move %d attack %d shoot %d flee %d idle %d" % counts)
 
 
 func _resolve_movement(mr: SimRng, actions: Dictionary) -> void:
+	# Facing chosen with any action (a brace toward the nearest enemy, say)
+	# applies now; attackers turn toward their target in the melee beat.
+	for w in actions:
+		var a: Action = actions[w]
+		if a.new_facing != Vector2i.ZERO and a.kind != CombatTypes.ActionKind.MOVE and a.kind != CombatTypes.ActionKind.FLEE:
+			w.facing = a.new_facing
 	var movers: Array[Warrior] = []
 	for w in warriors:
 		if not actions.has(w):
@@ -254,6 +294,10 @@ func _resolve_melee(mr: SimRng, actions: Dictionary) -> void:
 		var b_attacks := ba.kind == CombatTypes.ActionKind.ATTACK and ba.target == a
 		var a_braced := aa.kind == CombatTypes.ActionKind.BRACE
 		var b_braced := ba.kind == CombatTypes.ActionKind.BRACE
+		if a_attacks and BattleGrid.chebyshev(a.pos, b.pos) >= 1:
+			a.facing = BattleGrid.direction_to(a.pos, b.pos)
+		if b_attacks and BattleGrid.chebyshev(a.pos, b.pos) >= 1:
+			b.facing = BattleGrid.direction_to(b.pos, a.pos)
 		var r := MeleeExchange.resolve(mr.fork(key), rules, grid, a, b, a_attacks, b_attacks, a_braced, b_braced, log)
 		_after_exchange(r)
 

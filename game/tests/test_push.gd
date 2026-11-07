@@ -37,6 +37,7 @@ func _lines(grid: BattleGrid, rules: CombatRules, xs0: Array, xs1: Array,
 
 func test_no_contact_no_push() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(16, 12)
 	var log := PackedStringArray()
 	var a := _man("a", 0, 1, rules)
@@ -60,6 +61,7 @@ func test_no_contact_no_push() -> void:
 
 func test_group_strength_formula() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(16, 12)
 	var front := _man("front", 0, 1, rules, [6, 4, 4, 4, 4])  # morale 4
 	var back := _man("back", 0, 2, rules)
@@ -76,6 +78,7 @@ func test_group_strength_formula() -> void:
 
 func test_stronger_line_wins_and_losers_give_ground() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var wins := [0, 0]
 	var trials := 2000
 	for s in trials:
@@ -101,6 +104,8 @@ func test_stronger_line_wins_and_losers_give_ground() -> void:
 
 func test_equal_lines_are_even() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
+	rules.push_min_margin = 1  # this test calibrates the contest, not the threshold
 	var wins := [0, 0]
 	var trials := 4000
 	for s in trials:
@@ -115,6 +120,8 @@ func test_equal_lines_are_even() -> void:
 
 func test_morale_and_second_rank_tip_the_push() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
+	rules.push_min_margin = 1  # this test calibrates the contest, not the threshold
 	var wins0 := 0
 	var trials := 4000
 	for s in trials:
@@ -137,6 +144,7 @@ func test_morale_and_second_rank_tip_the_push() -> void:
 
 func test_blocked_shove_costs_breath() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(16, 12)
 	var log := PackedStringArray()
 	# A huge, high-morale man (15 strength) against a weak, shaken one (1):
@@ -174,6 +182,7 @@ func test_blocked_shove_costs_breath() -> void:
 
 func test_groups_are_line_connected_components() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	# Full lines facing each other: one group per side, one contest.
 	var grid := BattleGrid.new(16, 12)
 	var all := _lines(grid, rules, [2, 3, 4, 5, 6, 7], [2, 3, 4, 5, 6, 7])
@@ -198,6 +207,7 @@ func test_groups_are_line_connected_components() -> void:
 
 func test_broken_men_do_not_push() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(16, 12)
 	var all := _lines(grid, rules, [4], [4])
 	all[0].broken = true
@@ -208,6 +218,7 @@ func test_broken_men_do_not_push() -> void:
 
 func test_push_is_deterministic() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var out := []
 	for k in 2:
 		var grid := BattleGrid.new(16, 12)

@@ -35,11 +35,11 @@ static func build_battle(name: String, seed_in: int, rules: CombatRules) -> Batt
 	var brng := SimRng.new(seed_in).fork("bands")
 	var band_a := BandFactory.make_band(brng.fork("a"), 0, 8, spec[0], spec[2], 0)
 	var band_b := BandFactory.make_band(brng.fork("b"), 1, 8, spec[1], spec[3], 16)
-	BandFactory.deploy_column(b.grid, band_a, 4, Vector2i(1, 0), rules)
-	BandFactory.deploy_column(b.grid, band_b, 11, Vector2i(-1, 0), rules)
+	BandFactory.deploy_column(b.grid, band_a, 5, Vector2i(1, 0), rules)
+	BandFactory.deploy_column(b.grid, band_b, 10, Vector2i(-1, 0), rules)
 	b.add_band(band_a)
 	b.add_band(band_b)
-	b.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.STEADY))
+	b.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
 	b.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY))
 	return b
 
@@ -53,6 +53,7 @@ func run_scenario(name: String, n: int, seed_in: int) -> void:
 	var fled := [0, 0]
 	var dead := [0, 0]
 	var round_hist := {}
+	var exchanges := 0
 	for i in n:
 		var b := build_battle(name, seed_in + i, rules)
 		var r := b.run()
@@ -61,6 +62,9 @@ func run_scenario(name: String, n: int, seed_in: int) -> void:
 		else:
 			wins[r.winner] += 1
 		rounds_total += r.rounds
+		for line in r.log:
+			if line.contains(" beats "):
+				exchanges += 1
 		round_hist[r.rounds] = round_hist.get(r.rounds, 0) + 1
 		for s in 2:
 			downed[s] += r.downed[s]
@@ -68,8 +72,8 @@ func run_scenario(name: String, n: int, seed_in: int) -> void:
 			fled[s] += r.fled[s]
 			dead[s] += r.dead[s]
 	print("== %s  (%d battles, seed %d)" % [name, n, seed_in])
-	print("   A wins %5.1f%%   B wins %5.1f%%   draws %5.1f%%   mean rounds %.1f" % [
-		100.0 * wins[0] / n, 100.0 * wins[1] / n, 100.0 * wins[2] / n, float(rounds_total) / n])
+	print("   A wins %5.1f%%   B wins %5.1f%%   draws %5.1f%%   mean rounds %.1f   decisive blows/battle %.1f" % [
+		100.0 * wins[0] / n, 100.0 * wins[1] / n, 100.0 * wins[2] / n, float(rounds_total) / n, float(exchanges) / n])
 	for s in 2:
 		print("   side %s per battle: down %.2f  broken %.2f  fled %.2f  dead %.2f" % [
 			"A" if s == 0 else "B", float(downed[s]) / n, float(broken[s]) / n, float(fled[s]) / n, float(dead[s]) / n])

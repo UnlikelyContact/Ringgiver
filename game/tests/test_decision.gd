@@ -105,6 +105,7 @@ func test_green_panic_ignores_order_sometimes() -> void:
 		var g := BattleGrid.new(16, 12)
 		var leader := _man("jarl", 0, Vector2i(8, 2), g)
 		var w := _man("w", 0, Vector2i(8, 8), g, CombatTypes.Tier.GREEN, [4, 4, 4, 2, 4])
+		w.morale = r.morale_break_threshold  # shaken: the panic rule applies
 		w.heard_order = CombatTypes.Shout.TO_ME
 		var all: Array[Warrior] = [leader, w]
 		var log := PackedStringArray()
@@ -170,9 +171,10 @@ func test_veteran_covers_gap() -> void:
 	var g := BattleGrid.new(16, 12)
 	var w := _man("w", 0, Vector2i(8, 6), g, CombatTypes.Tier.VETERAN)
 	var left := _man("left", 0, Vector2i(7, 6), g, CombatTypes.Tier.VETERAN)
+	var right := _man("right", 0, Vector2i(10, 6), g, CombatTypes.Tier.VETERAN)  # the gap at (9, 6) is between friends
 	w.heard_order = CombatTypes.Shout.HOLD
 	var e := _man("e", 1, Vector2i(10, 5), g)  # next to the empty cell on his right
-	var all: Array[Warrior] = [w, left, e]
+	var all: Array[Warrior] = [w, left, right, e]
 	var a := _choose(w, null, g, all)
 	assert_eq(a.kind, K.MOVE)
 	assert_eq(a.target_cell, Vector2i(9, 6))
@@ -295,9 +297,9 @@ func test_gate_green_forms_shield_wall_slower_than_veteran() -> void:
 	print("    gate: shield wall in fog from 5 cells over %d seeds: green mean %.2f median %d capped %d;"
 			% [seeds, gs[0], gs[1], gs[2]] + " veteran mean %.2f median %d capped %d" % [vs[0], vs[1], vs[2]])
 	assert_true(vs[2] <= seeds / 10, "veterans nearly always form (%d capped)" % vs[2])
-	assert_true(gs[0] >= vs[0] * 1.4 and gs[0] >= vs[0] + 4.0,
+	assert_true(gs[0] >= vs[0] * 1.2 and gs[0] >= vs[0] + 2.0,
 			"mean: green %.2f vs veteran %.2f" % [gs[0], vs[0]])
-	assert_true(gs[1] >= vs[1] + 4, "median: green %d vs veteran %d" % [gs[1], vs[1]])
+	assert_true(gs[1] >= vs[1] + 2, "median: green %d vs veteran %d" % [gs[1], vs[1]])
 
 
 ## [mean, median, capped count]

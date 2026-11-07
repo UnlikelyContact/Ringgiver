@@ -22,6 +22,7 @@ func _put(grid: BattleGrid, w: Warrior, c: Vector2i, facing := Vector2i(0, -1)) 
 ## broken after 10 rounds.
 func _gate_run(seed: int, with_leader: bool) -> int:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(16, 12)
 	var rng := SimRng.new(seed)
 	var log := PackedStringArray()
@@ -85,6 +86,7 @@ func test_gate_leader_holds_the_line() -> void:
 
 func test_on_down_moves_morale_by_distance_and_side() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(16, 12)
 	var log := PackedStringArray()
 	var downed := _man("downed", 0, 1, rules)
@@ -111,6 +113,7 @@ func test_on_down_moves_morale_by_distance_and_side() -> void:
 
 func test_leader_and_banner_down_hit_whole_side() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(30, 12)
 	var log := PackedStringArray()
 	var lead := _man("lead", 0, 1, rules)
@@ -131,6 +134,7 @@ func test_leader_and_banner_down_hit_whole_side() -> void:
 
 func test_morale_clamps_to_scale() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(8, 8)
 	var log := PackedStringArray()
 	var downed := _man("downed", 0, 1, rules)
@@ -154,6 +158,7 @@ func test_morale_clamps_to_scale() -> void:
 
 func test_leader_adjacent_and_flanked_modifiers() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(10, 10)
 	var log := PackedStringArray()
 	var lead := _man("lead", 0, 1, rules, [4, 4, 4, 8, 4])
@@ -174,6 +179,7 @@ func test_leader_adjacent_and_flanked_modifiers() -> void:
 
 func test_is_flanked_by_arc() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(10, 10)
 	var w := _man("w", 0, 1, rules)
 	_put(grid, w, Vector2i(5, 5))  # facing north
@@ -197,6 +203,7 @@ func test_break_rate_and_steady_bonus() -> void:
 	# Nerve 4 at morale 0 with target 9 breaks on 2d6 < 5 (6/36); a steady man
 	# with +2 breaks only on 2d6 < 3 (1/36).
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var log := PackedStringArray()
 	var rng := SimRng.new(77)
 	var plain_breaks := 0
@@ -221,6 +228,7 @@ func test_break_rate_and_steady_bonus() -> void:
 
 func test_men_above_threshold_do_not_check() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	rules.morale_check_target = 100  # anyone who checks breaks
 	var grid := BattleGrid.new(8, 8)
 	var log := PackedStringArray()
@@ -234,6 +242,7 @@ func test_men_above_threshold_do_not_check() -> void:
 
 func test_panic_spreads_one_hop_only() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	rules.morale_check_target = 100  # anyone who checks breaks
 	var grid := BattleGrid.new(10, 10)
 	var log := PackedStringArray()
@@ -262,6 +271,7 @@ func test_panic_spreads_one_hop_only() -> void:
 
 func test_reckless_never_breaks_with_enemy_adjacent() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var log := PackedStringArray()
 	var rng := SimRng.new(11)
 	var broke_engaged := 0
@@ -288,6 +298,7 @@ func test_reckless_never_breaks_with_enemy_adjacent() -> void:
 
 func test_lull_restores_breath() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(8, 8)
 	var log := PackedStringArray()
 	var w := _man("w", 0, 1, rules)
@@ -312,6 +323,7 @@ func test_lull_restores_breath() -> void:
 
 func test_round_update_rallies_near_leader() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(12, 12)
 	var log := PackedStringArray()
 	var lead := _man("lead", 0, 1, rules, [4, 4, 4, 8, 4])
@@ -332,6 +344,7 @@ func test_round_update_rallies_near_leader() -> void:
 
 func test_to_me_rally() -> void:
 	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
 	var grid := BattleGrid.new(16, 12)
 	var log := PackedStringArray()
 	var lead := _man("lead", 0, 1, rules)

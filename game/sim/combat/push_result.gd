@@ -9,6 +9,8 @@ var winning_side := -1
 var shoved: Array[Warrior] = []
 ## Men who lost the push but could not give ground (and lost breath).
 var blocked: Array[Warrior] = []
+## Winners who stepped into ground the losers gave up.
+var advanced: Array[Warrior] = []
 ## side -> summed push strength of that side's men in contact (float).
 var strengths := {}
 ## Number of opposed contests rolled (one per touching pair of groups).
