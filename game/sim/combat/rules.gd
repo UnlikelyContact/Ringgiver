@@ -24,7 +24,9 @@ var breath_recover_lull := 3
 var fatigue_penalty_half := 1
 var fatigue_penalty_empty := 2
 ## Roll penalty by wound state: unhurt, bruised, wounded, grievous, down.
-var wound_penalty := [0, 0, 1, 2, 99]
+## Was [0, 0, 1, 2, 99]; steepened by Module A so two equal unarmored men
+## take 4-7 exchanges to a Down (the old table gave about 8.2).
+var wound_penalty := [0, 1, 3, 5, 99]
 var shield_hp := 3
 
 # --- Melee exchange and absorption (attack.gd) ----------------------------
@@ -46,11 +48,24 @@ var steps_hit := 1
 var steps_heavy := 2
 ## Chance (0-1) that armor absorbs one step of a hit.
 var absorb_leather := 0.25
-var absorb_mail := 0.6
+## Mail was 0.6 (x1.6 exchanges to Down); 0.75 gives the gate's "roughly doubles".
+var absorb_mail := 0.75
 var absorb_helmet_bonus := 0.1
 ## Shield damage on a glancing or absorbed blow; bearded axe deals extra.
 var shield_damage_glancing := 1
 var shield_damage_axe_extra := 1
+## Breath each man loses when an exchange locks (tie).
+var breath_cost_locked := 1
+## Reach: a spear may strike at this Chebyshev distance through a friend.
+var spear_reach := 2
+## Missiles: archer Skill + bow_shot_bonus, -1 per missile_range_penalty_per
+## tiles beyond missile_free_range. Rain costs rain_bow_penalty when raining
+## (stand-in for battle conditions until those exist).
+var bow_shot_bonus := 1
+var missile_free_range := 3
+var missile_range_penalty_per := 1
+var raining := false
+var rain_bow_penalty := 2
 
 # --- Morale and the push (morale.gd, push.gd) -----------------------------
 var morale_start_from_nerve := 1.0
@@ -89,7 +104,7 @@ var ai_break_them_percent := 40
 var ai_scatter_mean_distance := 3
 
 # --- Post-battle (fate) ----------------------------------------------------
-## Downed men roll 2d6 + grit against these: < maimed_at -> dead,
-## < recover_at -> maimed, else recover.
+## Downed men roll 2d6 + grit against these: < fate_dead_below -> dead,
+## < fate_maimed_below -> maimed, else recover.
 var fate_dead_below := 7
 var fate_maimed_below := 10
