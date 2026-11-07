@@ -95,7 +95,7 @@ var benches_seats := 6
 var food_base_capacity := 60
 var storehouse_capacity := 60
 var hunt_rations := 3
-var hunt_spread := 2
+var hunt_spread := 1
 var fish_rations := 4
 var byre_rations := 2
 var feast_rations_per_man := 2
@@ -121,6 +121,25 @@ var rumor_lines := [
 	"a merchant knarr winters at Kaupang",
 	"your enemy's kin gather at the Thing",
 ]
+## Hall-burning fires with this chance when picked (halved by a guard),
+## and only while a feud is unsettled.
+var hall_burning_chance := 0.15
+var feud_attack_men := 6
+var feud_attack_spread := 2
+var hall_burning_men := 10
+var hall_burning_spread := 3
+## Event effects. Fame and loyalty changes are reported, not applied.
+var skald_fee := 5
+var skald_fame := 3
+var trader_price := 10
+var trader_food := 15
+var storm_ship_damage := 1
+var thrall_unrest_food := 6
+var quarrel_holmgang_chance := 0.3
+var envoy_fame := 1
+var marriage_houses := ["the Ladejarl's kin", "a rich bondi of Vik", "the Hordaland jarl's house"]
+## default_plan: ounces given to each of the three lowest-loyalty men at Yule.
+var default_gift_ounces := 5
 
 # --- Leader, family and succession (Module H) -------------------------------
 var luck_start := 5
