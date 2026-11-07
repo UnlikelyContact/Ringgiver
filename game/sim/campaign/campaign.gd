@@ -6,6 +6,9 @@ extends RefCounted
 
 var rules: CampaignRules
 var combat_rules: CombatRules
+## Milestone 3: set by Sandbox.setup; null means fixed raids instead of a map.
+var world: World = null
+var world_rules: WorldRules = null
 var rng: SimRng
 var band: Band
 var cal: Calendar
@@ -82,6 +85,10 @@ func run_year() -> void:
 
 func summer() -> void:
 	_summer_wins = 0
+	if world != null:
+		Sandbox.summer(self, log)
+		_settle_vow()
+		return
 	for i in rules.battles_per_summer:
 		if over:
 			return
@@ -254,6 +261,11 @@ func _apply_report(plan: WinterPlan, report: WinterReport) -> void:
 
 
 func _thaw() -> void:
+	# Land yields; the world moves on.
+	if world != null:
+		band.food += band.land * world_rules.land_food_per_unit
+		band.silver += band.land * world_rules.land_silver_per_unit
+		Sandbox.year_end(self, log)
 	# Births, aging and growth, bonds drifting, then who stays.
 	Family.winter_births(rng.fork("births:%d" % cal.year), rules, band, cal, log)
 	for m in band.fighters():
