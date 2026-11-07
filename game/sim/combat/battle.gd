@@ -16,6 +16,9 @@ var _leaders := {}  # side -> Warrior (the sworn leader, may be down)
 var _ai := {}  # side -> LeaderAI (absent = external input via set_shout)
 var _pending_shout := {}  # side -> Shout set from outside for this round
 var _last_shout := {}  # side -> Shout actually given
+var _player_action := {}  # side -> Action for that side's leader this round (presentation hook)
+## Actions chosen in the last round, Warrior -> Action (read by the view).
+var last_actions := {}
 var _over := false
 
 
@@ -41,6 +44,11 @@ func set_ai(side: int, ai: LeaderAI) -> void:
 ## External (player) shout for the coming round.
 func set_shout(side: int, shout: CombatTypes.Shout) -> void:
 	_pending_shout[side] = shout
+
+
+## The player's own man acts on this instead of Decision next round.
+func set_player_action(side: int, action: Action) -> void:
+	_player_action[side] = action
 
 
 func last_shout(side: int) -> CombatTypes.Shout:
@@ -128,11 +136,20 @@ func run_round() -> void:
 		var leader: Warrior = leaders[w.side]
 		if leader == null:
 			leader = _leaders.get(w.side, w)
-		var a := Decision.choose(rr.fork("decide:%d" % w.id), rules, grid, w, leader, warriors)
+		var a: Action
+		if w.is_leader and _player_action.has(w.side) and _player_action[w.side] != null:
+			a = _player_action[w.side]
+			_player_action.erase(w.side)
+			if a.kind == CombatTypes.ActionKind.ATTACK and (a.target == null or not a.target.is_active()
+					or BattleGrid.chebyshev(w.pos, a.target.pos) > 1):
+				a = Decision.choose(rr.fork("decide:%d" % w.id), rules, grid, w, leader, warriors)
+		else:
+			a = Decision.choose(rr.fork("decide:%d" % w.id), rules, grid, w, leader, warriors)
 		actions[w] = a
 		if a.kind == CombatTypes.ActionKind.ATTACK or a.kind == CombatTypes.ActionKind.SHOOT:
 			any_attacks = true
 	_log_action_counts(actions)
+	last_actions = actions
 
 	# 3a. Movement.
 	_resolve_movement(rr.fork("move"), actions)
