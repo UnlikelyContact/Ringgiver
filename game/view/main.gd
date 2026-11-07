@@ -68,7 +68,7 @@ func start(p_scenario: String, p_seed: int) -> void:
 	add_child(view)
 	view.setup(battle, player)
 	camera = Camera2D.new()
-	camera.zoom = Vector2(1.6, 1.6)
+	camera.zoom = Vector2(1.25, 1.25)
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = 3.0
 	camera.position = focus_point()

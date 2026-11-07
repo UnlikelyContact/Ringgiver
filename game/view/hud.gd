@@ -52,7 +52,7 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 		_refresh())
 	top.add_child(pulse_slider)
 	pause_btn = Button.new()
-	pause_btn.custom_minimum_size = Vector2(120, 44)
+	pause_btn.custom_minimum_size = Vector2(110, 48)
 	pause_btn.pressed.connect(func() -> void: view.set_paused(not view.paused))
 	top.add_child(pause_btn)
 
@@ -61,14 +61,14 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	bottom.offset_left = 12
 	bottom.offset_right = -12
-	bottom.offset_top = -60
+	bottom.offset_top = -64
 	bottom.offset_bottom = -8
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(bottom)
 	for s in SHOUTS:
 		var b := Button.new()
 		b.text = CombatTypes.SHOUT_NAMES[s].capitalize() + "!"
-		b.custom_minimum_size = Vector2(150, 48)
+		b.custom_minimum_size = Vector2(130, 54)
 		b.toggle_mode = true
 		b.pressed.connect(_on_shout.bind(s))
 		bottom.add_child(b)
@@ -78,9 +78,9 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	log_label = RichTextLabel.new()
 	log_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	log_label.offset_left = 12
-	log_label.offset_top = -230
-	log_label.offset_right = 420
-	log_label.offset_bottom = -70
+	log_label.offset_top = -200
+	log_label.offset_right = 360
+	log_label.offset_bottom = -66
 	log_label.scroll_following = true
 	log_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	log_label.add_theme_color_override("default_color", Palette.DIM)
