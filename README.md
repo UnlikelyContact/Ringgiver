@@ -21,11 +21,16 @@ ring-giver/scripts/test.sh            # runs the test suite
 cd ring-giver/game && godot --headless --path . -s tools/margin_table.gd -- 3   # margin table for a +3 edge
 cd ring-giver/game && godot --headless --path . -s tools/batch_battles.gd -- all 200 1   # 200 battles per scenario
 cd ring-giver/game && godot --headless --path . -s tools/replay.gd -- green_vs_veteran 7  # one battle, round by round
+cd ring-giver/game && timeout 600 godot --headless --path . -s tools/batch_years.gd -- 20 10 1   # 20 campaigns x 10 years
 ```
 
-Design docs: `docs/design/concept.md` (the game) and
-`docs/design/sim-architecture.md` (the combat sim contract and what was
-actually built).
+Wrap tools in `timeout`: if a tool script fails to compile, Godot idles
+instead of exiting.
+
+Design docs: `docs/design/concept.md` (the game),
+`docs/design/sim-architecture.md` (the combat sim) and
+`docs/design/campaign-architecture.md` (the campaign layer), each with the
+contract and what was actually built.
 
 `class_name` lookups need Godot's class cache (`game/.godot/`), which is
 gitignored. `setup-godot.sh` and `test.sh` build it with an import pass.

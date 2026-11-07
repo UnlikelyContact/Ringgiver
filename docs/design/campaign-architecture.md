@@ -358,3 +358,45 @@ tiers, departures, successions, coal-biters found. `tests/test_campaign.gd`
 is the gate: a ten-year campaign runs without error and replays exactly;
 men grow and reach tiers; an unfed band scatters; a dead leader is
 succeeded.
+
+## Integration notes (as built, 7 Nov 2026)
+
+Module I is in: `campaign.gd`, `tools/batch_years.gd`, `tests/test_campaign.gd`.
+Interface drift from the spec above, and rules added while integrating:
+
+- `Man.to_warrior(side)` (no id parameter; ids are preserved from the Man).
+- `Succession.succeed(rng, rules, band, cal, heir_man, feast_ounces, vow, log,
+  death_cause := "")`; `Chronicle.generation_text` takes optional
+  `death_cause` and `rules`. The wife's potential is kept in band metadata
+  (`Family.wife_potential`). Daughters live in `band.sons` with
+  `daughter: true`.
+- `Loyalty.gift` does not move silver (the hall's Yule gifts already did).
+  Both `BattleBridge.after_battle` and `Bonds.after_battle` award
+  "fought together"; the loop zeroes the tunable around the second call.
+- Enemy bands are built to the band's **mean stat** (`BandFactory.make_band`
+  `stat_center`) and a tier relative to the band's own, with size tracking
+  the band. Matching enemies by tier alone made every fight a loss once the
+  men were Blooded with green stats.
+- The player's leader gets the same +1 Might, Skill and Nerve an enemy
+  leader gets (`leader_start_bonus`).
+- A sworn second is named at the start and whenever the slot is empty
+  (highest tier, then best bond). Marriage offers are accepted when the
+  leader is unmarried; outlaws seeking shelter join. Without these, four
+  of five sagas ended in year one of a leader's death.
+- `growth_pool_per_point` 10 → 6 and `drill_effort` 3 → 6: at the old
+  values original men gained under one stat point in ten years.
+- `fate_maimed_below` 10 → 8: a third of all downed men were being maimed.
+- Winter feud attacks never fire in batch runs because feuds only start
+  when an oath brother dies and the oath threshold is rarely reached in
+  ten years. The feud system needs more sources (raids, the Thing) in
+  milestone 3.
+
+### Milestone 2 gate, measured
+
+50 seeded campaigns of 10 years from a leader and four men: 5 ended with
+no heir; mean 10.7 men at the end; per campaign 27.9 battles, 15.7 won,
+5.5 dead, 6.2 maimed, 3.9 left, 16.0 joined, 0.4 successions, 2.5
+coal-biters found; original men still serving gained 6.1 stat points;
+tiers at the end across all bands: 103 green, 65 blooded, 318 veteran,
+49 champion. Every campaign replays exactly from its seed. Encoded in
+`tests/test_campaign.gd`.

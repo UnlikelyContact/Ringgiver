@@ -787,9 +787,15 @@ right work for cloud sessions now.
 4. **Vertical slice.** The burned-hall origin in the western Norway fjords:
    about ten men, a skirmish and a shield-wall sector, one winter, one Thing
    case and one saga thread. *Gate: the loop is fun across one full year.*
-5. **Sandbox foundations.** Free-sailing map of Norway, market economy,
-   faction AI, succession, letting the years pass.
-6. **Expansion by region.** Denmark and the Baltic, the west and Iceland, the
+5. **Campaign core (headless).** Growth from potential and effort, tiers,
+   loyalty, ambitions and bonds, the winter hall with food, seats, tasks,
+   Yule and events, luck and reputation, family and succession, and a
+   campaign loop that runs years of raids and winters through the combat
+   sim. **Done 7 Nov 2026**: see `campaign-architecture.md`, "Milestone 2
+   gate, measured".
+6. **Sandbox foundations.** Free-sailing map of Norway, market economy,
+   faction AI, letting the years pass, feuds from raids and the Thing.
+7. **Expansion by region.** Denmark and the Baltic, the west and Iceland, the
    eastern routes; the full historical spine.
 
 ## Open questions
