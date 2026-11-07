@@ -94,6 +94,37 @@ Gate test: a route from Hordaland to Trøndelag is found and costs between
 1000 open-sea lanes wreck at about `wreck_chance`; a band never arrives
 after `summer_days`.
 
+As built (Module J additions, all static):
+
+- `Voyage.plan(world, from, to, known := {})`: route includes both ends;
+  with `known` non-empty only known places are waypoints. `Voyage.sail`
+  passes `band.known_places`. Also `Voyage.distances(world, from, known,
+  to, prev)` (Dijkstra, `{id: days}`) and `Voyage.route_days(world, route)`.
+  Closed places (`open_year`) are never routed to or through.
+- `sail` per lane: rolls weather (`storm_chance`), then encounter chance
+  and kind; the lane's cost (days + `storm_delay_days` on a storm) is
+  checked against `summer_days` before the band commits, so it never
+  arrives late; the whole route is also checked up front (refused with
+  `days = 0`). A storm from either source is applied once. On open sea the
+  wreck roll follows; a wreck puts the band ashore at the lane's end and
+  ends the voyage. A battle request stops the band at the lane's end.
+  Arrival (wherever the voyage ends) reveals that place and its neighbours.
+  `VoyageResult` adds `reason` and `battle()`.
+- Wreck: `wreck_men_lost` random men drown, plus each other man in mail
+  with `wreck_mail_drown_chance`; the leader never drowns.
+- `Knowledge.learn_home(rules, world, band)` sets the starting knowledge;
+  `Knowledge.spread_rumor(...)` is `hear_rumor` without the market/hall
+  check (the friendly levy uses it). A rumor reveals only the place itself.
+- `Encounters.happens / pick_kind / resolve` are the parts of `roll`.
+  The merchant returns `offer: {good, units, price, home, family}` and no
+  battle; the caller uses `buy_from_merchant(rules, band, enc, units, log)`
+  or `rob_merchant(rules, enc)` (a battle request), then
+  `after_battle(rules, band, req, won, log)`, which gives robbed goods and
+  starts the feud with the merchant's home family, or pays an outlaw
+  bounty (`battle_required.bounty`). Storm returns `delay_days`. The levy
+  fights if the band is outlawed or the lane-end place's faction has
+  `relations["band"] <= war_relation`.
+
 ## Module K — market, trade and raiding (`market.gd`, `raiding.gd`)
 
 ```gdscript

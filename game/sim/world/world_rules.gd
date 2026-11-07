@@ -37,8 +37,18 @@ var outlaw_crew := 5
 var outlaw_bounty := 15
 var levy_crew := 14
 var whale_food := 20
+## Share of "whale" encounters that are a whale rather than a drifting wreck (text only).
+var whale_not_wreck_chance := 0.5
 var route_min_days := 6
 var route_max_days := 14
+## Each man in mail drowns with this chance in a wreck, beyond wreck_men_lost.
+var wreck_mail_drown_chance := 0.5
+## Region alertness per step of rival-crew tier (0-2 green, 3-5 blooded, ...).
+var rival_alert_per_tier := 3
+var merchant_crew := 6
+var merchant_tier: CombatTypes.Tier = CombatTypes.Tier.GREEN
+var outlaw_tier: CombatTypes.Tier = CombatTypes.Tier.GREEN
+var levy_tier: CombatTypes.Tier = CombatTypes.Tier.BLOODED
 
 # --- Market, trade, raiding (Module K) --------------------------------------
 ## Base price in ounces per unit.
