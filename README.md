@@ -19,7 +19,13 @@ A historical saga sandbox set in Viking-age Norway. See
 ring-giver/scripts/setup-godot.sh     # installs Godot 4.5 and builds the class cache
 ring-giver/scripts/test.sh            # runs the test suite
 cd ring-giver/game && godot --headless --path . -s tools/margin_table.gd -- 3   # margin table for a +3 edge
+cd ring-giver/game && godot --headless --path . -s tools/batch_battles.gd -- all 200 1   # 200 battles per scenario
+cd ring-giver/game && godot --headless --path . -s tools/replay.gd -- green_vs_veteran 7  # one battle, round by round
 ```
+
+Design docs: `docs/design/concept.md` (the game) and
+`docs/design/sim-architecture.md` (the combat sim contract and what was
+actually built).
 
 `class_name` lookups need Godot's class cache (`game/.godot/`), which is
 gitignored. `setup-godot.sh` and `test.sh` build it with an import pass.

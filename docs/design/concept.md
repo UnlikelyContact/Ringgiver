@@ -741,7 +741,8 @@ right work for cloud sessions now.
    a batch runner that fights a thousand battles and reports kill rates,
    round counts and break rates. *Gate: green band versus veteran band under
    the same shouts produces clearly different outcomes, and the wound table
-   gives battles of the intended length.*
+   gives battles of the intended length.* **Done 7 Nov 2026**: see
+   `sim-architecture.md`, "Milestone 1 gate, measured".
 2. **Art test (parallel, needs a workstation).** One heroic-proportion
    warrior at 64 and 96 px, built three ways: 3D with pixel-scale painted
    textures, limited palette and outline shader; 3D with hand touch-up; and

@@ -293,3 +293,55 @@ Gate for milestone 1 (from concept.md): across 1000 seeded battles, a
 GREEN band of eight versus a VETERAN band of eight under the same shouts
 differs clearly in win rate, rounds to decision and men lost; and the
 default rules give skirmishes of roughly 8–15 rounds, not 3.
+
+## Integration notes (as built, 7 Nov 2026)
+
+Module D is in: `battle.gd`, `leader_ai.gd`, `band_factory.gd`,
+`battle_result.gd`, `tools/batch_battles.gd`, `tools/replay.gd`,
+`tests/test_battle.gd`. Interfaces that drifted from the spec above, and
+rules added while integrating:
+
+- `Decision.choose(..., all, log := PackedStringArray())` takes a trailing
+  log. `Formation.assign` matches the closest man-slot pair first (the
+  literal "men ordered by distance to the leader" oscillated).
+- Morale starts at Nerve + `morale_start_bonus` (3), clamped to 10. With
+  morale equal to raw Nerve, a green man stood at the break threshold
+  before anything happened.
+- The push resolves only in a round where a leader shouted PUSH or
+  SVINFYLKING, and only moves a line when the winner's margin reaches
+  `push_min_margin`. Winners step into vacated ground (`PushResult.advanced`).
+  Without these, lines dissolved into a shove-fest and almost no blows landed.
+- PUSH drives toward the nearest enemy, keeping the line's facing while he is
+  ahead, and fights any adjacent enemy before walking past him. "In front"
+  for HOLD and PUSH means FRONT or FRONT_RIGHT; the push's contact test uses
+  the same arcs.
+- A veteran covers a gap only when a friend stands on the far side of it
+  (the open end of a line is not a gap) and only when he has nobody to
+  attack. The literal rule made every veteran shuffle sideways forever.
+- A man falling back who is more than `fall_back_regroup_distance` from his
+  leader steps toward him instead; this stops misheard fall-back orders
+  walking men off the map.
+- Facing chosen with a brace applies; attackers turn toward their target.
+- End conditions: no unbroken active men on a side; or a side whose leader
+  called FALL_BACK and whose men are all at least `withdraw_distance` from
+  every enemy has left the field; or `max_rounds` is a draw.
+- Determinism: warrior ids are assigned per battle (`BandFactory.make_band`
+  `first_id`), because rng streams are forked by id.
+- Each round logs `actions: brace N move N attack N ...`, which is the first
+  thing to read when a battle looks wrong.
+
+### Milestone 1 gate, measured
+
+1000 seeded battles, eight green (aggressive leader) against eight veteran
+(steady leader), default rules: veterans win 95.5%, draw 4.0%; mean 19.7
+rounds of which about six are approach and forming; green lose 5.4 down and
+1.2 fled per battle against 0.9 and 0.1. Equal veteran bands decide about
+70% of fights inside 30 rounds; the rest are running fights that have not
+finished. Encoded in `tests/test_battle.gd`.
+
+Known tuning questions for the playable prototype, not for the sim:
+
+- The aggressive attacker beats a steady defender of equal quality about
+  two to one (`equal_green`: 68% to 20%). Holding should be worth more.
+- Equal veteran fights run long (mean 26 rounds). Lethality, max rounds or
+  deployment distance are the levers; none was changed to hit a number.

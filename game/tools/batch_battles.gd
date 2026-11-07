@@ -33,8 +33,8 @@ static func build_battle(name: String, seed_in: int, rules: CombatRules) -> Batt
 	var spec: Array = SCENARIOS[name]
 	var b := Battle.new(rules, seed_in)
 	var brng := SimRng.new(seed_in).fork("bands")
-	var band_a := BandFactory.make_band(brng.fork("a"), 0, 8, spec[0], spec[2], 0)
-	var band_b := BandFactory.make_band(brng.fork("b"), 1, 8, spec[1], spec[3], 16)
+	var band_a := BandFactory.make_band(brng.fork("a"), 0, 8, spec[0], spec[2], 0, 1)
+	var band_b := BandFactory.make_band(brng.fork("b"), 1, 8, spec[1], spec[3], 16, 101)
 	BandFactory.deploy_column(b.grid, band_a, 5, Vector2i(1, 0), rules)
 	BandFactory.deploy_column(b.grid, band_b, 10, Vector2i(-1, 0), rules)
 	b.add_band(band_a)

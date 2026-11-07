@@ -18,11 +18,11 @@ const TIER_CENTER := {
 	CombatTypes.Tier.CHAMPION: 7,
 }
 
-static var _next_id := 1
-
-
+## Ids are assigned from `first_id` so a battle is reproducible: rng streams
+## are forked by id, so ids must not depend on how many bands were made
+## before in the same process.
 static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier,
-		armor: CombatTypes.Armor = CombatTypes.Armor.NONE, name_offset := 0) -> Array[Warrior]:
+		armor: CombatTypes.Armor = CombatTypes.Armor.NONE, name_offset := 0, first_id := 1) -> Array[Warrior]:
 	var out: Array[Warrior] = []
 	var center: int = TIER_CENTER[tier]
 	for i in count:
@@ -31,8 +31,7 @@ static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier
 			stats.append(clampi(center + rng.randi_range(-1, 1), 1, 10))
 		var name: String = NAMES[(name_offset + i) % NAMES.size()]
 		var w := Warrior.make(name, side, stats, tier)
-		w.id = _next_id
-		_next_id += 1
+		w.id = first_id + i
 		w.armor = armor
 		if i == 0:
 			w.is_leader = true
