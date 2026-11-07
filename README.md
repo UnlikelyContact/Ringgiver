@@ -5,7 +5,7 @@ A historical saga sandbox set in Viking-age Norway. See
 
 ## Layout
 
-- `docs/design/` — concept doc and review notes
+- `docs/design/` — concept doc, review notes, architecture contracts and concept art
 - `game/` — the Godot 4.5 project
   - `sim/` — the rules layer: plain `RefCounted` classes, no scene tree, fully
     headless. Everything here must be deterministic from a `SimRng` seed.
@@ -16,13 +16,13 @@ A historical saga sandbox set in Viking-age Norway. See
 ## Running
 
 ```bash
-ring-giver/scripts/setup-godot.sh     # installs Godot 4.5 and builds the class cache
-ring-giver/scripts/test.sh            # runs the test suite
-cd ring-giver/game && godot --headless --path . -s tools/margin_table.gd -- 3   # margin table for a +3 edge
-cd ring-giver/game && godot --headless --path . -s tools/batch_battles.gd -- all 200 1   # 200 battles per scenario
-cd ring-giver/game && godot --headless --path . -s tools/replay.gd -- green_vs_veteran 7  # one battle, round by round
-cd ring-giver/game && timeout 600 godot --headless --path . -s tools/batch_years.gd -- 20 10 1   # 20 campaigns x 10 years
-cd ring-giver/game && timeout 900 godot --headless --path . -s tools/batch_sandbox.gd -- 6 8 1  # 6 sandbox campaigns on the map
+scripts/setup-godot.sh     # installs Godot 4.5 and builds the class cache
+scripts/test.sh            # runs the test suite
+cd game && godot --headless --path . -s tools/margin_table.gd -- 3   # margin table for a +3 edge
+cd game && godot --headless --path . -s tools/batch_battles.gd -- all 200 1   # 200 battles per scenario
+cd game && godot --headless --path . -s tools/replay.gd -- green_vs_veteran 7  # one battle, round by round
+cd game && timeout 600 godot --headless --path . -s tools/batch_years.gd -- 20 10 1   # 20 campaigns x 10 years
+cd game && timeout 900 godot --headless --path . -s tools/batch_sandbox.gd -- 6 8 1  # 6 sandbox campaigns on the map
 ```
 
 Wrap tools in `timeout`: if a tool script fails to compile, Godot idles
