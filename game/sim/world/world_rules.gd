@@ -151,6 +151,26 @@ var feud_level_wergild_mult := [1.0, 1.0, 1.5, 2.0]
 var feud_refusal_honor := 5
 var bounty_chance := 0.25
 var bounty_crew := 6
+## Place wealth per supporter the family brings to the Thing.
+var family_standing := 15
+## The family's supporters vary by up to this many either way.
+var their_supporters_spread := 2
+## Armed men the family brings to the Thing (its household).
+var family_armed_men := 6
+## The plaintiff's weight must reach this multiple of the defendant's to win.
+var win_ratio := 1.1
+## Killings at or above this ratio (below full_outlawry_ratio) bring lesser outlawry;
+## raids and land cases at full_outlawry_ratio or more bring lesser outlawry.
+var lesser_outlawry_ratio := 1.5
+## A man with this trait may argue the band's procedure.
+var law_wise_trait := "law-wise"
+var thing_brawl_tier: CombatTypes.Tier = CombatTypes.Tier.BLOODED
+## Men in a feud ambush before hired blades.
+var feud_ambush_men := 6
+var feud_tier: CombatTypes.Tier = CombatTypes.Tier.BLOODED
+var bounty_tier: CombatTypes.Tier = CombatTypes.Tier.VETERAN
+## Rank of the dead man when a feud or case does not name one.
+var default_victim_rank: WorldTypes.Rank = WorldTypes.Rank.KARL
 
 # --- Sandbox loop (Module N) ------------------------------------------------
 var raids_per_summer_max := 4

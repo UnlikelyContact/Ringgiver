@@ -238,7 +238,14 @@ static func lift(band: Band, log) -> void
 
 `ThingCase` (`sim/world/thing_case.gd`): `kind`, `against`, `claim`,
 `plaintiff_is_band`, `supporters`, `their_supporters`, `procedure_ok`,
-`verdict`, `wergild`, `log`.
+`verdict`, `wergild`, `log`. As built it also carries `victim_rank`
+(killings), `lawman_hired` (pay `lawman_fee` for the reroll),
+`their_armed`, `weight_us`, `weight_them`, `violence` and
+`battle_required` (the `thing_brawl`, since `run` returns only the
+verdict). The verdict is judged against the defendant: COMPENSATION and
+the outlawries fall on the defendant, FAILED is the plaintiff's loss and
+starts a feud. Feud events are `{kind: "ambush", family,
+battle_required}` and `{kind: "demand", family, ounces}`.
 
 Rules:
 
