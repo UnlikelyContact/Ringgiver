@@ -66,3 +66,13 @@ watermark.
 - For prompt 1, also try "pixel-art inspired, limited 32-colour palette,
   crisp edges" and compare with the painterly version. That comparison is
   the open art-route question.
+
+## Results
+
+- `art/ref-01-character-sheet.png` (prompt 1, ChatGPT, 7 Nov 2026). Keeps:
+  palette, painterly chunkiness, clean historical kit, the upgrade read
+  (cap to helmet, tunic to mail, spear to sword), leg wraps, quartered
+  shield. Push next: proportions are nearer 7 heads than 5.5, so ask for a
+  bigger head and hands and shorter legs; drop the cloak for the sprite
+  version since it hides the silhouette; show the shield face toward the
+  viewer; and render from the 45-degree isometric camera slightly above.
