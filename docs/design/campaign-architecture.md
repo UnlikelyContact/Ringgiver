@@ -301,10 +301,10 @@ static func sons_of_age(rules, band, cal) -> Array[Dictionary]
 # Succession
 static func heir(rules, band, cal) -> Dictionary   # {kind: "son"|"second"|"none", son: Dictionary or null, man: Man or null}
 static func name_second(band, m: Man, log) -> void
-static func succeed(rng, rules, band, cal, heir_man: Man, feast_ounces: int, vow: String, log) -> Array[Man]  # men who leave
+static func succeed(rng, rules, band, cal, heir_man: Man, feast_ounces: int, vow: String, log, death_cause := "") -> Array[Man]  # men who leave; death_cause "battle"|"old"|"outlaw"|"sickness"|"oathbreaker"
 # Chronicle
 static func year_lines(band: Band, year: int) -> PackedStringArray
-static func generation_text(band: Band, leader_name: String, from_year: int, to_year: int) -> String
+static func generation_text(band: Band, leader_name: String, from_year: int, to_year: int, death_cause := "", rules: CampaignRules = null) -> String  # cause defaults to the one succeed recorded
 static func line(band: Band, text: String) -> void   # appends "<year>: text"
 ```
 
