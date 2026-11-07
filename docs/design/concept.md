@@ -420,10 +420,8 @@ production chains.
 - **Visitors and events:** paid skalds, traders, jarls' envoys, outlaws
   asking shelter, marriage offers; feud attacks and hall-burnings, sickness,
   storms, thrall unrest; drunken quarrels turning into holmgang challenges.
-- **The household:** your spouse holds the keys and manages the stores; their
-  skill sets how far food stretches, and they act as an advisor. (How this
-  reads depends on the open question of whether the player character can be
-  a woman.)
+- **Your wife runs the household.** She holds the keys and manages the
+  stores; her skill sets how far food stretches, and she acts as an advisor.
 - **Planning:** winter rumors shape where you sail and who you fight in
   spring. This is also where you choose to let the years pass.
 
@@ -531,8 +529,10 @@ on the wrong side of a rising king — is the game's story shape.
 
 ### Character creation
 
-The player builds their character from an origin, home region, family and
-starting traits. Their own potential shows only as hints.
+The player builds his character from an origin, home region, family and
+starting traits. His own potential shows only as hints. **The player
+character is male** for now (decided 7 Nov 2026); a female origin may be
+revisited later, and shieldmaidens remain a band question, not a player one.
 
 - **The burned hall:** your family's land is seized by a jarl loyal to
   Harald; you flee at night with two men, and the escape is the first fight.
@@ -766,9 +766,6 @@ right work for cloud sessions now.
 - [ ] Art route: 3D rendered as pixels or straight pixel art (decided by the
   art test)
 - [ ] Final title: keep Ring-Giver or choose another
-- [ ] Player character: men only, or women as a playable origin? Decides the
-  household design, marriage, pronouns throughout, and how shieldmaidens
-  appear
 - [ ] Save policy: ironman by default (the saga is what happened), with
   reloads as an option, or free saving
 - [ ] Holmgang rules: full duel mini-game or a variant of normal combat

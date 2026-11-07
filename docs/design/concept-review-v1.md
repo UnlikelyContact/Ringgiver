@@ -115,8 +115,8 @@ rightmost-man weakness and rightward drift, which is a free emergent tactic.
 The doc says "he" throughout and "your wife runs the household", while
 shieldmaidens are an open question. This decides pronouns, marriage,
 household design and recruitment, so it should be settled before writing
-dialogue. Added to open questions; the household bullet is reworded to be
-neutral for now.
+dialogue. **Decided 7 Nov 2026: male only for now.** Recorded under
+Character creation in v2; the household bullet keeps "your wife".
 
 ### 13. Named band cap of 30–40 — flagged, not changed
 
