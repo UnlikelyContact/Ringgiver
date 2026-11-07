@@ -54,7 +54,7 @@ var shield_damage_axe_extra := 1
 
 # --- Morale and the push (morale.gd, push.gd) -----------------------------
 var morale_start_from_nerve := 1.0
-var morale_leader_adjacent := 1
+var morale_leader_adjacent := 2
 var morale_ally_down_adjacent := -2
 var morale_ally_down_visible := -1
 var morale_enemy_down_visible := 1
@@ -65,6 +65,20 @@ var morale_break_threshold := 3
 var morale_rally_to_me := 2
 var push_morale_weight := 0.5
 var push_second_rank_bonus := 1
+## Chebyshev radius within which a man sees a friend or foe go down.
+var morale_visible_radius := 3
+## A man at or below the break threshold rolls 2d6 + Nerve + personality
+## modifier and must reach this or break.
+var morale_check_target := 9
+## Added to the break check for STEADY and GRIM men.
+var morale_steady_bonus := 2
+## Morale change for each friend adjacent to a man who breaks this round.
+var morale_panic_spread := -2
+## A broken man whose morale is back above the threshold rallies if his
+## leader is active and within this Chebyshev radius.
+var rally_radius := 2
+## Breath lost by a man the push would shove whose cell behind is blocked.
+var push_blocked_breath := 2
 
 # --- Shouts, hearing and compliance (shout.gd, decision.gd) ---------------
 var hear_certain_radius := 2
