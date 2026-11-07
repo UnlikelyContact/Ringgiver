@@ -15,6 +15,9 @@ var cal: Calendar
 var log := PackedStringArray()
 var over := false
 var over_reason := ""
+## Keep every battle's own log in `battle_logs` (slow; for debugging).
+var debug_battles := false
+var battle_logs: Array[PackedStringArray] = []
 ## Counters for the batch runner.
 var tally := {
 	"battles": 0, "wins": 0, "deaths": 0, "maimed": 0, "departures": 0,
@@ -147,6 +150,8 @@ func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attackin
 	battle.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE if attacking else LeaderAI.Doctrine.STEADY))
 	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY if attacking else LeaderAI.Doctrine.AGGRESSIVE))
 	var result := battle.run()
+	if debug_battles:
+		battle_logs.append(battle.log.duplicate())
 	var won := result.winner == 0
 	var odds := float(enemy_size) / maxf(1.0, fighters.size())
 	log.append("%s: %s against %d %s men: %s" % [cal.describe(), kind, enemy_size,

@@ -92,6 +92,11 @@ static func summer(c: Campaign, log: PackedStringArray) -> void:
 	c.tally.contracts = c.tally.get("contracts", 0) + contracts_done
 
 
+## Size of a fight the band did not pick: never more than its own strength plus a margin.
+static func _forced(c: Campaign, n: int) -> int:
+	return clampi(n, 3, c.band.fighters().size() + c.world_rules.forced_fight_max_extra)
+
+
 static func _days_home(c: Campaign) -> int:
 	if c.band.location == c.band.home:
 		return 0
@@ -111,7 +116,7 @@ static func _sail(c: Campaign, rng: SimRng, to: String, log: PackedStringArray) 
 		for ev in vr.encounters:
 			if ev.has("battle_required"):
 				var br: Dictionary = ev.battle_required
-				c.fight(br.get("kind", "sea fight"), br.tier, br.attackers, false)
+				c.fight(br.get("kind", "sea fight"), br.tier, _forced(c, br.attackers), false)
 				if c.over:
 					return false
 		if vr.arrived:
@@ -202,13 +207,13 @@ static func _do_contract(c: Campaign, rng: SimRng, o: Dictionary, log: PackedStr
 		success = _sail(c, rng.fork("sail"), r.voyage_required, log)
 	if success and r.has("battle_required"):
 		var br: Dictionary = r.battle_required
-		var res := c.fight(br.get("kind", o.kind), br.tier, br.attackers, true)
+		var res := c.fight(br.get("kind", o.kind), br.tier, _forced(c, br.attackers), true)
 		success = not c.over and res.winner == 0
 	if c.over:
 		return true
 	Contracts.complete(c.world_rules, c.world, c.band, o, success, log)
 	_promote(c, log)
-	c.cal.advance_days(int(o.get("days", c.world_rules.contract_days)))
+	c.cal.advance_days(int(o.get("days", 10)))
 	return true
 
 
@@ -250,7 +255,7 @@ static func _spine(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
 		var r := Timeline.fire(rng.fork(ev.id), c.world_rules, c.world, c.band, ev, choice, log)
 		if r.has("battle_required"):
 			var br: Dictionary = r.battle_required
-			var res := c.fight(br.get("kind", ev.id), br.tier, br.attackers, br.get("side", "") != "against")
+			var res := c.fight(br.get("kind", ev.id), br.tier, _forced(c, br.attackers), br.get("side", "") != "against")
 			if c.over:
 				return
 			Timeline.resolve(c.world_rules, c.world, c.band, ev, choice, res.winner == 0, log)
@@ -275,7 +280,7 @@ static func _feuds(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
 			return
 		if ev.has("battle_required"):
 			var br: Dictionary = ev.battle_required
-			c.fight(br.get("kind", "ambush"), br.tier, br.attackers, false)
+			c.fight(br.get("kind", "ambush"), br.tier, _forced(c, br.attackers), false)
 		elif ev.get("kind", "") == "demand":
 			var family: String = ev.family
 			var ask := Feud.offer_settlement(c.world_rules, c.band, family)

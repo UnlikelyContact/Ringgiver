@@ -250,12 +250,14 @@ var home_margin_days := 10
 var start_land := 1
 var raid_min_wealth := 15
 var raid_avoid_relation := 0
-var raid_odds_max := 2.0
+var raid_odds_max := 1.3
+## Fights the band did not choose (sea fights, ambushes, levies) are capped at
+## the band's size plus this, so a small band is not simply crushed by data.
+var forced_fight_max_extra := 2
 var raid_days := 3
 var trade_min_silver := 30
 var trade_spend_fraction := 0.6
 var market_days := 2
-var contract_days := 10
 var idle_days := 5
 var idle_turns_before_roving := 2
 var settle_if_fraction := 0.5
