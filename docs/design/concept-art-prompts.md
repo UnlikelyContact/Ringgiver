@@ -99,3 +99,28 @@ watermark.
   middle pose is a lunge with a fist rather than a shield shove; the spear
   is thrust beside the shield rather than over its rim. The pixel-inspired
   comparison is still to run.
+- `art/ref-06-sprite-poses-pixel.png` (sprite prompt, pixel-inspired).
+  Same man, same three poses with "pixel-art inspired, limited 32-colour
+  palette, crisp hard edges". Keeps: the hard outline and flat palette
+  make the shield device, helmet and kit read at thumbnail size better
+  than the painterly version; the shove pose is right here (shield driven
+  forward, body leaning in). Push: proportions drifted to about 4.5 heads,
+  a notch cuter than the brief; the spear still goes beside the shield;
+  the camera is still eye level.
+
+## Art-route recommendation (7 Nov 2026)
+
+The look is decided; the production route is not.
+
+- **On the grid:** the pixel-inspired look (ref-06): hard outlines, limited
+  palette, chunky shapes, 5 to 5.5 heads tall. It keeps a man's identity
+  (shield device, helmet, mail) readable at 96 pixels, which the painterly
+  version loses at that size.
+- **Off the grid:** the painterly look (ref-04 portrait, ref-03 key art,
+  ref-05 for close-up cuts): expression and drama where the art budget is
+  spent.
+- **Still the art test:** whether the grid look is produced as straight
+  pixel art or as 3D rendered to pixels with an outline shader. These
+  generations say nothing about animation cost, which is what that test
+  measures. The 3D route is the likelier way to get this look across many
+  animations and gear swaps; the test decides.

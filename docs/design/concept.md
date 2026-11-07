@@ -803,8 +803,10 @@ right work for cloud sessions now.
 
 ## Open questions
 
-- [ ] Art route: 3D rendered as pixels or straight pixel art (decided by the
-  art test)
+- [ ] Art route, production: 3D rendered as pixels or straight pixel art
+  (decided by the art test). The *look* is decided (7 Nov 2026): pixel-style
+  hard outlines and a limited palette on the grid, painterly portraits and
+  key art off it; see `concept-art-prompts.md`, "Art-route recommendation".
 - [ ] Final title: keep Ring-Giver or choose another
 - [ ] Save policy: ironman by default (the saga is what happened), with
   reloads as an option, or free saving
