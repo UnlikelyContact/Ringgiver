@@ -91,3 +91,11 @@ watermark.
   This is the roster portrait style. Push: it is a hero face; the band
   needs old men, broken noses, a missing eye, a freedman's thin face, so
   the repeat prompt should vary age, hair, origin and wear.
+- `art/ref-05-sprite-poses.png` (sprite prompt, painterly). Keeps: the
+  proportions are now the brief (big head and hands, about 5.5 heads), the
+  shield face reads with a serpent device, chipped paint shows wear, no
+  cloak gives a clean silhouette, and the spear thrust reads at a glance.
+  Push: the camera is still near eye level, not 45 degrees from above; the
+  middle pose is a lunge with a fist rather than a shield shove; the spear
+  is thrust beside the shield rather than over its rim. The pixel-inspired
+  comparison is still to run.
