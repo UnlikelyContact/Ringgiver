@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Runs the headless sim test suite. Builds the class cache first if missing.
+# Runs the headless sim test suite. Always refreshes Godot's class cache first
+# so newly added class_name scripts resolve.
 set -euo pipefail
 cd "$(dirname "$0")/../game"
-if [ ! -f .godot/global_script_class_cache.cfg ]; then
-  godot --headless --path . --import >/dev/null 2>&1 || true
-fi
+godot --headless --path . --import >/dev/null 2>&1 || true
 exec godot --headless --path . -s tests/run_tests.gd "$@"

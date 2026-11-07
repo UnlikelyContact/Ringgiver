@@ -16,8 +16,8 @@ func _init() -> void:
 	var failed := 0
 	for path in files:
 		var script: GDScript = load(path)
-		if script == null:
-			print("  FAIL could not load %s" % path)
+		if script == null or not script.can_instantiate():
+			print("  FAIL could not load %s (parse error above)" % path)
 			failed += 1
 			continue
 		for m in script.get_script_method_list():
