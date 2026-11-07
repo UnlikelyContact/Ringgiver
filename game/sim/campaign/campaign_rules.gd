@@ -55,6 +55,84 @@ var hint_phrases := {
 	CombatTypes.Stat.NERVE: ["faint-hearted", "steady enough", "slow to anger", "fearless"],
 	CombatTypes.Stat.WITS: ["slow-witted", "sensible", "sharp", "far-seeing"],
 }
+## judge_level 0 text; judge_level 1 text [no room above current, room to grow];
+## the marker a judge_level 3 hint adds to the man's best stat.
+var hint_unknown := "no one can say"
+var hint_room_phrases := ["has grown as far as it will", "could grow yet"]
+var hint_best_marker := ", his greatest gift"
+## Personality -> [stat whose effort goes up, stat whose effort goes down].
+var nature_effects := {
+	CombatTypes.Personality.RECKLESS: [CombatTypes.Stat.MIGHT, CombatTypes.Stat.WITS],
+	CombatTypes.Personality.GRIM: [CombatTypes.Stat.NERVE, CombatTypes.Stat.SKILL],
+	CombatTypes.Personality.BOASTFUL: [CombatTypes.Stat.SKILL, CombatTypes.Stat.GRIT],
+	CombatTypes.Personality.STEADY: [CombatTypes.Stat.NERVE, CombatTypes.Stat.MIGHT],
+	CombatTypes.Personality.GREEDY: [CombatTypes.Stat.WITS, CombatTypes.Stat.NERVE],
+	CombatTypes.Personality.SUPERSTITIOUS: [CombatTypes.Stat.GRIT, CombatTypes.Stat.WITS],
+}
+## Decline and maims also lower the hidden cap, so effort cannot undo them.
+var decline_lowers_cap := true
+var maim_lowers_cap := true
+## Recruit starting stats: base ± spread, plus the origin's bias per stat.
+var recruit_stat_base := 3
+var recruit_stat_spread := 1
+var origin_stat_bias := {
+	CampaignTypes.Origin.FISHERMAN: [0, 0, 1, 0, 0],
+	CampaignTypes.Origin.YOUNGER_SON: [0, 0, 0, 0, 0],
+	CampaignTypes.Origin.OUTLAW: [1, 0, 0, 1, 0],
+	CampaignTypes.Origin.FREEDMAN: [-1, -1, 0, -1, -1],
+	CampaignTypes.Origin.EXILED_JARLS_SON: [0, 1, 0, 0, 1],
+}
+## Origin -> [min age, max age] at joining (within join_age_min..join_age_max).
+var origin_age_ranges := {
+	CampaignTypes.Origin.FISHERMAN: [16, 30],
+	CampaignTypes.Origin.YOUNGER_SON: [15, 24],
+	CampaignTypes.Origin.OUTLAW: [18, 30],
+	CampaignTypes.Origin.FREEDMAN: [17, 30],
+	CampaignTypes.Origin.EXILED_JARLS_SON: [15, 22],
+}
+## The trait each origin brings (appended to Man.traits).
+var origin_traits := {
+	CampaignTypes.Origin.FISHERMAN: "good at sea",
+	CampaignTypes.Origin.YOUNGER_SON: "landless",
+	CampaignTypes.Origin.OUTLAW: "outlawed",
+	CampaignTypes.Origin.FREEDMAN: "once a thrall",
+	CampaignTypes.Origin.EXILED_JARLS_SON: "of jarl's blood",
+}
+## Starting loyalty by origin; origins not listed use loyalty_start.
+var origin_loyalty := {
+	CampaignTypes.Origin.OUTLAW: 30,
+	CampaignTypes.Origin.FREEDMAN: 70,
+}
+## How often Recruits.random picks each origin.
+var origin_weights := {
+	CampaignTypes.Origin.FISHERMAN: 3,
+	CampaignTypes.Origin.YOUNGER_SON: 4,
+	CampaignTypes.Origin.OUTLAW: 2,
+	CampaignTypes.Origin.FREEDMAN: 2,
+	CampaignTypes.Origin.EXILED_JARLS_SON: 1,
+}
+## Origin -> {Ambition -> weight}. The exiled jarl's son wants fame.
+var ambition_weights := {
+	CampaignTypes.Origin.FISHERMAN: {
+		CampaignTypes.Ambition.SILVER: 3, CampaignTypes.Ambition.LAND: 2, CampaignTypes.Ambition.WIFE: 2,
+		CampaignTypes.Ambition.HOME: 2, CampaignTypes.Ambition.FAME: 1,
+	},
+	CampaignTypes.Origin.YOUNGER_SON: {
+		CampaignTypes.Ambition.LAND: 4, CampaignTypes.Ambition.SILVER: 2, CampaignTypes.Ambition.FAME: 2,
+		CampaignTypes.Ambition.WIFE: 2,
+	},
+	CampaignTypes.Origin.OUTLAW: {
+		CampaignTypes.Ambition.SILVER: 4, CampaignTypes.Ambition.VENGEANCE: 3, CampaignTypes.Ambition.HOME: 1,
+	},
+	CampaignTypes.Origin.FREEDMAN: {
+		CampaignTypes.Ambition.LAND: 3, CampaignTypes.Ambition.WIFE: 3, CampaignTypes.Ambition.SILVER: 2,
+	},
+	CampaignTypes.Origin.EXILED_JARLS_SON: {
+		CampaignTypes.Ambition.FAME: 1,
+	},
+}
+## Chance a recruit has a second personality trait (never a conflicting one).
+var second_personality_chance := 0.4
 
 # --- Loyalty, ambitions and bonds (Module F: loyalty.gd, bonds.gd) ---------
 var loyalty_per_ounce := 2
