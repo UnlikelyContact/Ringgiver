@@ -284,7 +284,7 @@ func _refresh() -> void:
 		calls += "  you: " + CombatTypes.SHOUT_NAMES[order]
 	if their_order != CombatTypes.Shout.NONE:
 		calls += "  they: " + CombatTypes.SHOUT_NAMES[their_order]
-	var stance := BattleGrid.AXIS_NAMES[view.player.wall_axis()] if view.player != null else ""
+	var stance: String = BattleGrid.AXIS_NAMES[view.player.wall_axis()] if view.player != null else ""
 	status.text = "Round %d  wall %d/%d%s (%s)  theirs %d/%d%s" % [b.round, mine[0], mine[1], arms_text, stance, theirs[0], theirs[1], calls]
 	form_btn.text = "Form: " + view.formation_name()
 	var warn := ""
