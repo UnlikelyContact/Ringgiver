@@ -365,3 +365,19 @@ leader died fast with every enemy on him. Changes, all in `CombatRules`:
 
 Measured after: veterans win 100% of 200 green-versus-veteran fights in
 17.9 rounds; equal green bands 61.5% to 35.0% with 3.5% draws.
+
+### Hex grid (8 Nov 2026)
+
+`BattleGrid` is now a pointy-top hex grid in axial coordinates (q, r) with
+six facings, clockwise from north-west; opposite directions are three
+apart. Bounds are a rectangle in odd-r offset coordinates
+(`from_offset`/`to_offset`). Distance is hex distance (`chebyshev` kept as
+an alias). Arcs relative to facing: 0 FRONT (covered), 1 FRONT_RIGHT
+(open, no flank bonus), 2 RIGHT (flank), 3–4 REAR, 5 LEFT (covered).
+`line_dirs(facing)` = [rotate(f,2), rotate(f,5)] are a man's right and
+left line neighbours, so a line facing (0,−1) runs along (±1,0). Wedge
+ranks: back-left rotate(f,4), back-right rotate(f,3). `direction_to` and
+`snap_direction` pick the nearest hex direction from a cartesian vector.
+`BandFactory.deploy_line(grid, band, anchor, facing)` deploys along the
+line axis; `deploy_column` wraps it at the map's middle row. Rolls,
+wounds, morale, shouts, the campaign and the world are untouched.

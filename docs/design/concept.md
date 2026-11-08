@@ -104,8 +104,11 @@ enemy. The year ends with eight men, one of them Blooded for the first time.
 
 ## Combat
 
-Combat is turn-based with simultaneous resolution on an isometric square
-grid. You control only your own character; your men act on your shouts, their
+Combat is turn-based with simultaneous resolution on a hex grid (decided
+8 Nov 2026 after the first playtest: six equal neighbours mean a wall can
+face any of six ways and still lock, a wedge is a natural shape, and lines
+never stagger stepping at an angle; Battle Brothers uses hexes for the
+same reasons). You control only your own character; your men act on your shouts, their
 experience and their personalities. Enemy bands are led the same way: their
 leader shouts, and their men obey him as well as *their* experience allows.
 
@@ -208,10 +211,12 @@ point for the combat prototype, not a commitment.
 
 ### Formation rules
 
-- **Facing:** eight directions. A shield covers front, front-left and left;
-  the right side is exposed, and the man to your right covers it. Flank and
-  rear attacks are deadly. The rightmost man of any line is its weak point,
-  so lines drift right under pressure, as real ones did.
+- **Facing:** six directions, one per hex side. Of a man's six neighbours,
+  the shield covers the front and the left; the front-right is open but
+  no flank; the right is the exposed flank; the two behind are the rear.
+  The man to your right covers your open side: that is the wall. The
+  rightmost man of any line is its weak point, so lines drift right under
+  pressure, as real ones did.
 - **Shield wall:** adjacent shield-bearers lock shields for defense. Gaps are
   weaknesses.
 - **Two ranks:** spears strike from behind a shield-bearer.

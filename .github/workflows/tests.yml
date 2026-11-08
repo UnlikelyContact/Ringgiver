@@ -2,6 +2,7 @@ name: tests
 
 on:
   push:
+    branches: ["main"]
     paths: ["game/**", "scripts/**", ".github/workflows/tests.yml"]
   pull_request:
     paths: ["game/**", "scripts/**", ".github/workflows/tests.yml"]
