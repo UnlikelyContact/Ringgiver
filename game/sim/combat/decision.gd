@@ -264,7 +264,7 @@ static func _line_in_contact(grid: BattleGrid, w: Warrior, enemies: Array[Warrio
 
 
 ## The direction a line advances: from this man toward the enemy's centre,
-## snapped to eight directions, so neighbours step the same way.
+## snapped to a hex direction, so neighbours step the same way.
 static func _advance_direction(w: Warrior, enemies: Array[Warrior]) -> Vector2i:
 	var sum := Vector2.ZERO
 	var n := 0

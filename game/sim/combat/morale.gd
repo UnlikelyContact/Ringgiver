@@ -61,8 +61,12 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 			continue
 		var leader := _leader_of(leaders, w.side)
 		var delta := 0
-		if leader != null and leader != w and BattleGrid.chebyshev(w.pos, leader.pos) == 1:
-			delta += rules.morale_leader_adjacent
+		if leader != null and leader != w:
+			var d := BattleGrid.distance(w.pos, leader.pos)
+			if d == 1:
+				delta += rules.morale_leader_adjacent
+			elif d <= rules.morale_leader_near_radius:
+				delta += rules.morale_leader_near
 		if is_flanked(grid, w):
 			delta += rules.morale_flanked
 		if grid.adjacent_warriors(w.pos, w.side).is_empty():

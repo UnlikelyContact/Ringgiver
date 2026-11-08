@@ -32,10 +32,10 @@ same commit and say so in your report.
   or below `morale_break_threshold` must check or break.
 - Breath: `breath_base + grit * breath_per_grit`; actions cost breath;
   penalties at half and at zero (`Warrior.fatigue_penalty`).
-- Grid: Chebyshev distance, eight facings (`BattleGrid.DIRS`, clockwise
-  from north). Arcs relative to facing: FRONT (ahead and front-left),
-  FRONT_RIGHT, LEFT, RIGHT (exposed flank), REAR. Shield covers FRONT and
-  LEFT.
+- Grid: hexes since 8 Nov 2026 (see "Hex grid" below): hex distance, six
+  facings. Arcs relative to facing: FRONT, FRONT_RIGHT (open, no flank
+  bonus), RIGHT (exposed flank), REAR (two cells), LEFT. Shield covers
+  FRONT and LEFT.
 
 ## Existing core (do not restructure)
 

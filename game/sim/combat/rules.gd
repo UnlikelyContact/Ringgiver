@@ -76,6 +76,10 @@ var morale_start_from_nerve := 1.0
 ## Added to starting morale so a fresh man is not already at the break threshold.
 var morale_start_bonus := 3
 var morale_leader_adjacent := 2
+## The leader's presence reaches further than arm's length: men within
+## `morale_leader_near_radius` hexes (but not adjacent) gain this each round.
+var morale_leader_near := 1
+var morale_leader_near_radius := 2
 var morale_ally_down_adjacent := -2
 var morale_ally_down_visible := -1
 var morale_enemy_down_visible := 1
