@@ -214,8 +214,8 @@ func _player_summary(lines: PackedStringArray) -> String:
 					out.append("you braced")
 				CombatTypes.ActionKind.ATTACK:
 					out.append("you struck at %s but the exchange went nowhere" % (a.target.display_name if a.target else "?"))
-	if out.size() > 2:
-		out = out.slice(0, 2)
+	if out.size() > 1:
+		out = out.slice(0, 1)
 	return "; ".join(out)
 
 
@@ -252,16 +252,18 @@ func _side_of_line(line: String) -> int:
 
 
 ## How many of a side's men stand with a locked shield beside a friend.
+## [men in the leader's wall, men standing]: the wall is the unit that
+## moves as one, so this is what "wall 6/8" means.
 func wall_count(side: int) -> Array[int]:
-	var in_wall := 0
 	var total := 0
 	for w in battle.active(side):
-		if w.broken:
-			continue
-		total += 1
-		if _locked_neighbours(w).size() > 0:
-			in_wall += 1
-	return [in_wall, total]
+		if not w.broken:
+			total += 1
+	return [battle.wall_members(side).size(), total]
+
+
+func in_wall(w: Warrior) -> bool:
+	return battle.wall_members(w.side).has(w)
 
 
 func _locked_neighbours(w: Warrior) -> Array[Warrior]:
@@ -449,7 +451,11 @@ func _draw_shield_locks() -> void:
 				continue
 			var a := Iso.to_screen(w.pos)
 			var b := Iso.to_screen(n.pos)
+			# The leader's wall is bright; a broken-off fragment is dim.
+			var whole := in_wall(w) and in_wall(n)
 			var col := Palette.BONE if w.side == player.side else Palette.UNDYED.darkened(0.3)
+			if not whole:
+				col = col.darkened(0.45)
 			draw_line(a, b, Palette.OUTLINE, 7.0)
 			draw_line(a, b, col, 4.0)
 

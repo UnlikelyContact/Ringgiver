@@ -49,7 +49,8 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	you_label = Label.new()
 	you_label.add_theme_color_override("font_color", Palette.GOLD)
 	you_label.add_theme_font_size_override("font_size", 14)
-	you_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	you_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	you_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	you_label.custom_minimum_size = Vector2(200, 0)
 	left.add_child(you_label)
 	var adv := Button.new()
@@ -222,8 +223,10 @@ func _refresh() -> void:
 			("   order: " + CombatTypes.SHOUT_NAMES[order]) if order != CombatTypes.Shout.NONE else "",
 			("   they call: " + CombatTypes.SHOUT_NAMES[their_order]) if their_order != CombatTypes.Shout.NONE else ""]
 	var warn := ""
-	if view.player.is_active() and b.round > 0 and view._locked_neighbours(view.player).is_empty():
-		warn = "   (you are out of the wall)"
+	if view.player.is_active() and b.round > 0 and view.wall_count(0)[0] < 2:
+		warn = "   (nobody stands with you)"
+	elif view.player.is_active() and b.round > 0 and view.wall_count(0)[0] < view.wall_count(0)[1]:
+		warn = "   (the wall is broken: %d of %d with you)" % [view.wall_count(0)[0], view.wall_count(0)[1]]
 	you_label.text = (("you: " + view.player_line) if view.player_line != "" else "tap a cell to step or an enemy to strike; tap yourself to act with the line") + warn
 	if view.is_manual():
 		pulse_label.text = "turns "

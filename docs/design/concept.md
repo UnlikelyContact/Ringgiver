@@ -170,7 +170,17 @@ changes only with "Wheel left" and "Wheel right" (one hex facing, 60
 degrees, each), a step never turns it, "Push!" advances the wall the way
 it faces, and a leader who turned to strike faces his wall again next
 round. Enemy leaders wheel only when the player's band is two or more
-facings round their flank. If the prototype finds pulses still feel like turns,
+facings round their flank.
+
+**Third playtest, same day:** men were still stepping ahead of the wall or
+lagging behind it, and the wall disintegrated at contact. Decision: the
+wall is the unit. Under Push or Fall back the wall (every man connected to
+the leader along the row) makes one test and then every man steps the
+same way or nobody does; it holds if any part is in contact or any man is
+blocked. Men outside the wall rejoin it rather than push ahead. A man who
+falls or breaks splits the wall; each piece moves as its own unit until
+Shield Wall re-forms it, and the HUD says "the wall is broken: 3 of 6
+with you". If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop
 changes.

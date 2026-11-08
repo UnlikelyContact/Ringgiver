@@ -19,6 +19,17 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	if w.broken:
 		return _flee(grid, w, enemies)
 
+	# 1b. A man standing in a wall that is moving as one goes with it; the
+	# wall's single test has already been made.
+	if w.wall_move != Warrior.NO_WALL_MOVE:
+		var wf := leader.wall_facing() if leader != null else w.facing
+		if w.wall_move == w.pos:
+			var front := _front(w, enemies)
+			if not front.is_empty():
+				return Action.attack(_pick_target(w, front, leader))
+			return Action.brace(wf)  # the wall stands fast
+		return Action.move_to(w.wall_move, wf)
+
 	# 2. A green man slow to take up a new order keeps doing what he was: bracing.
 	if w.order_lag > 0:
 		w.order_lag -= 1
@@ -75,7 +86,7 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 		CombatTypes.Shout.HOLD:
 			act = _hold(grid, w, enemies, leader)
 		CombatTypes.Shout.PUSH:
-			act = _push(grid, w, enemies, leader)
+			act = _push(grid, w, enemies, leader, all)
 		CombatTypes.Shout.TO_ME:
 			if has_leader and BattleGrid.chebyshev(w.pos, leader.pos) > 1:
 				act = _step_toward(grid, w, leader.pos, Vector2i.ZERO)
@@ -135,7 +146,7 @@ static func _in_wall(grid: BattleGrid, w: Warrior, wf: Vector2i) -> bool:
 	return false
 
 
-static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior) -> Action:
+static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior, all: Array[Warrior] = []) -> Action:
 	var front := _front(w, enemies)
 	if not front.is_empty():
 		return Action.attack(_pick_target(w, front, leader))
@@ -164,6 +175,9 @@ static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 		var occ := grid.occupant(ahead)
 		if occ != null and occ.side == w.side:
 			return Action.brace(advance)
+	# Not in the wall: rejoin it rather than push ahead alone.
+	if leader != null and leader.is_active() and leader.side == w.side and leader != w and not all.is_empty():
+		return _form(grid, w, leader, all, enemies, false)
 	var step := _step_toward(grid, w, near.pos, toward)
 	if step == null:
 		return Action.brace(toward)
@@ -189,7 +203,7 @@ static func _break_them(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], l
 static func _form(grid: BattleGrid, w: Warrior, leader: Warrior, all: Array[Warrior],
 		enemies: Array[Warrior], wedge: bool) -> Action:
 	if leader == null or leader == w or not leader.is_active() or leader.side != w.side:
-		return _push(grid, w, enemies, leader) if wedge else _hold(grid, w, enemies, leader)
+		return _push(grid, w, enemies, leader, all) if wedge else _hold(grid, w, enemies, leader)
 	var band: Array[Warrior] = []
 	for m in all:
 		if m != leader and m.side == w.side and m.is_active() and not m.broken:
@@ -203,7 +217,7 @@ static func _form(grid: BattleGrid, w: Warrior, leader: Warrior, all: Array[Warr
 			return step
 		return Action.brace(leader.wall_facing())
 	if wedge:
-		return _push(grid, w, enemies, leader)
+		return _push(grid, w, enemies, leader, all)
 	var act := _hold(grid, w, enemies, leader)
 	if act.kind == CombatTypes.ActionKind.BRACE and enemies.is_empty():
 		act.new_facing = leader.wall_facing()

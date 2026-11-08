@@ -87,3 +87,61 @@ func test_the_line_is_dressed_each_round() -> void:
 		if w.is_active() and not b.grid.line_neighbors(w).is_empty():
 			in_wall += 1
 	assert_true(in_wall >= 5, "men standing in the row are back on the wall's facing: %d of 6" % in_wall)
+
+
+func _two_walls(seed_in: int) -> Array:
+	var rules := CombatRules.new()
+	var b := Battle.new(rules, seed_in)
+	var ours := BandFactory.make_band(SimRng.new(seed_in).fork("a"), 0, 6, CombatTypes.Tier.VETERAN, CombatTypes.Armor.NONE, 0, 1)
+	var theirs := BandFactory.make_band(SimRng.new(seed_in).fork("b"), 1, 6, CombatTypes.Tier.VETERAN, CombatTypes.Armor.NONE, 16, 101)
+	BandFactory.deploy_line(b.grid, ours, BattleGrid.from_offset(8, 9), Vector2i(0, -1), rules)
+	BandFactory.deploy_line(b.grid, theirs, BattleGrid.from_offset(8, 1), Vector2i(0, 1), rules)
+	b.add_band(ours)
+	b.add_band(theirs)
+	for side in 2:
+		b.result.started[side] = 6
+	return [b, ours, theirs]
+
+
+func test_a_wall_pushes_as_one() -> void:
+	var parts := _two_walls(5)
+	var b: Battle = parts[0]
+	var ours: Array[Warrior] = parts[1]
+	b.set_shout(0, CombatTypes.Shout.PUSH)
+	b.set_shout(1, CombatTypes.Shout.HOLD)
+	var rows_before := {}
+	for w in ours:
+		rows_before[w] = BattleGrid.to_offset(w.pos).y
+	b.run_round()
+	var moved := 0
+	for w in ours:
+		if BattleGrid.to_offset(w.pos).y == rows_before[w] - 1:
+			moved += 1
+	assert_true(moved == 0 or moved == ours.size(), "everyone steps or nobody does: %d of %d" % [moved, ours.size()])
+	assert_eq(b.wall_members(0).size(), ours.size(), "the wall is still whole after the step")
+	var stepped := false
+	for line in b.log:
+		if line.contains("steps forward as one") or line.contains("hesitates"):
+			stepped = true
+	assert_true(stepped, "the wall's own test is logged")
+
+
+func test_a_wall_holds_when_one_man_is_blocked() -> void:
+	var parts := _two_walls(6)
+	var b: Battle = parts[0]
+	var ours: Array[Warrior] = parts[1]
+	# Water in front of the leftmost man.
+	var left: Warrior = ours[0]
+	for w in ours:
+		if BattleGrid.to_offset(w.pos).x < BattleGrid.to_offset(left.pos).x:
+			left = w
+	var ahead := left.pos + BattleGrid.advance_step(left.pos, Vector2i(0, -1))
+	b.grid.set_terrain(ahead, CombatTypes.Terrain.WATER)
+	b.set_shout(0, CombatTypes.Shout.PUSH)
+	b.set_shout(1, CombatTypes.Shout.HOLD)
+	var before := {}
+	for w in ours:
+		before[w] = w.pos
+	b.run_round()
+	for w in ours:
+		assert_eq(w.pos, before[w], "%s stayed with the wall" % w.display_name)

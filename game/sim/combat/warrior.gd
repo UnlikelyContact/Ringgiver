@@ -48,6 +48,10 @@ var fled := false
 var heard_order: CombatTypes.Shout = CombatTypes.Shout.NONE
 ## Rounds of delay before a green man acts on a new order.
 var order_lag := 0
+## Where the wall he stands in moves him this round, or NO_WALL_MOVE. Set by
+## Battle before decisions; a man carried by his wall acts with it.
+const NO_WALL_MOVE := Vector2i(-9999, -9999)
+var wall_move := NO_WALL_MOVE
 ## Effort gained this battle, by CombatTypes.Stat -> int.
 var effort := {}
 var fate: CombatTypes.Fate = CombatTypes.Fate.RECOVERED

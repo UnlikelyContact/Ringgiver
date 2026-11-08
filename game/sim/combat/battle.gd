@@ -16,6 +16,7 @@ var _leaders := {}  # side -> Warrior (the sworn leader, may be down)
 var _ai := {}  # side -> LeaderAI (absent = external input via set_shout)
 var _pending_shout := {}  # side -> Shout set from outside for this round
 var _last_shout := {}  # side -> Shout actually given
+var _standing := {}  # side -> the last order given that was not NONE
 var _player_action := {}  # side -> Action for that side's leader this round (presentation hook)
 ## Actions chosen in the last round, Warrior -> Action (read by the view).
 var last_actions := {}
@@ -75,6 +76,84 @@ func active(side: int) -> Array[Warrior]:
 	return out
 
 
+## The order a side's men are standing under (the last shout that was given).
+func standing_order(side: int) -> CombatTypes.Shout:
+	return _standing.get(side, CombatTypes.Shout.NONE)
+
+
+## The wall: every active, unbroken man connected to the leader along the
+## row of his wall facing, the leader included. Empty without a leader.
+func wall_members(side: int) -> Array[Warrior]:
+	var out: Array[Warrior] = []
+	var leader := leader_of(side)
+	if leader == null:
+		return out
+	var dirs := BattleGrid.line_dirs(leader.wall_facing())
+	var seen := {leader: true}
+	var queue: Array[Warrior] = [leader]
+	while not queue.is_empty():
+		var w: Warrior = queue.pop_front()
+		out.append(w)
+		for d in dirs:
+			var n := grid.occupant(w.pos + d)
+			if n != null and n.side == side and n.is_active() and not n.broken and not seen.has(n):
+				seen[n] = true
+				queue.append(n)
+	return out
+
+
+## Under Push or Fall back the wall moves as one: one roll against the
+## wall's average chance to hear, and then every man steps the same way or
+## nobody does. It holds if any part of it is in contact or any man's cell
+## is blocked. Men outside the wall are not touched here.
+func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
+	for w in warriors:
+		if w.side == side:
+			w.wall_move = Warrior.NO_WALL_MOVE
+	if leader == null:
+		return
+	var order := standing_order(side)
+	if order != CombatTypes.Shout.PUSH and order != CombatTypes.Shout.FALL_BACK:
+		return
+	var members := wall_members(side)
+	if members.size() < 2:
+		return
+	var wf := leader.wall_facing()
+	var step_facing := wf if order == CombatTypes.Shout.PUSH else BattleGrid.rotate(wf, 3)
+	var horn := false
+	for w in active(side):
+		horn = horn or w.is_horn
+	var targets := {}
+	var chance_sum := 0.0
+	for w in members:
+		if order == CombatTypes.Shout.PUSH and not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
+			log.append("the wall is in contact and holds")
+			return
+		var target: Vector2i = w.pos + BattleGrid.advance_step(w.pos, step_facing)
+		var occ := grid.occupant(target)
+		if not grid.in_bounds(target) or grid.terrain_at(target) == CombatTypes.Terrain.WATER \
+				or (occ != null and not members.has(occ)):
+			log.append("the wall cannot step as one: %s is blocked" % w.display_name)
+			_hold_wall(members)
+			return
+		targets[w] = target
+		chance_sum += 1.0 if w == leader else Shouts.hear_chance(rules, BattleGrid.distance(w.pos, leader.pos), w.wits, horn, fog)
+	var chance := chance_sum / members.size()
+	if wr.randf() > chance:
+		log.append("the line hesitates (%d%% to move as one)" % int(round(chance * 100)))
+		_hold_wall(members)
+		return
+	for w in members:
+		w.wall_move = targets[w]
+	log.append("the wall steps %s as one, %d men" % ["forward" if order == CombatTypes.Shout.PUSH else "back", members.size()])
+
+
+## Marks a wall's men to stand fast this round (wall_move = own cell).
+func _hold_wall(members: Array[Warrior]) -> void:
+	for w in members:
+		w.wall_move = w.pos
+
+
 ## The man giving orders for a side: the sworn leader while he stands, else
 ## the senior active man (highest tier, then id). Null if nobody stands.
 func leader_of(side: int) -> Warrior:
@@ -128,11 +207,17 @@ func run_round() -> void:
 		elif _ai.has(side) and leader != null:
 			shout = (_ai[side] as LeaderAI).choose(self, side)
 		_last_shout[side] = shout
+		if shout != CombatTypes.Shout.NONE:
+			_standing[side] = shout
 		if leader != null and shout != CombatTypes.Shout.NONE:
 			log.append("%s shouts: %s!" % [leader.display_name, CombatTypes.SHOUT_NAMES[shout]])
 			Shouts.propagate(rr.fork("shout:%d" % side), rules, grid, leader, shout, active(side), fog, log)
 			if shout == CombatTypes.Shout.TO_ME:
 				Morale.rally(rules, grid, leader, warriors, log)
+
+	# 1b. The walls decide as units: one test per wall, everyone steps or nobody.
+	for side in 2:
+		_plan_wall(rr.fork("wall:%d" % side), side, leaders[side])
 
 	# 2. Simultaneous decisions. If the player's man is stepping somewhere,
 	# his men form on where he is going: the line follows its leader.
@@ -294,6 +379,19 @@ func _resolve_movement(mr: SimRng, actions: Dictionary) -> void:
 				best_roll = roll
 		winners[best] = true
 		log.append("%s wins the scramble for %s" % [best.display_name, cell])
+	# A wall steps as one: lift every carried man first so they never block
+	# each other, then set them down on their targets.
+	var carried: Array[Warrior] = []
+	for w in movers:
+		if w.wall_move != Warrior.NO_WALL_MOVE and (actions[w] as Action).target_cell == w.wall_move:
+			carried.append(w)
+	for w in carried:
+		grid.remove(w)
+	for w in carried:
+		if not grid.place(w, w.wall_move):
+			grid.place(w, w.pos)
+		w.spend_breath(rules.breath_cost_move)
+		winners.erase(w)
 	for w in movers:
 		var a: Action = actions[w]
 		if not winners.has(w):
