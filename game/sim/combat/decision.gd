@@ -36,10 +36,11 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		if near != null and BattleGrid.chebyshev(w.pos, near.pos) <= rules.reckless_charge_radius:
 			return _break_them(grid, w, enemies, leader)
 
-	# 5. A champion steps in to guard a beset leader.
-	if w.tier == CombatTypes.Tier.CHAMPION and leader != null and leader != w and leader.is_active() \
+	# 5. Champions, and men of guard_min_tier or better, step in to guard a
+	# beset leader.
+	if w.tier >= rules.guard_min_tier and leader != null and leader != w and leader.is_active() \
 			and leader.side == w.side and BattleGrid.chebyshev(w.pos, leader.pos) <= 2:
-		var guard := _guard_leader(grid, w, leader, enemies)
+		var guard := _guard_leader(grid, w, leader, enemies, rules.guard_threats)
 		if guard != null:
 			return guard
 
@@ -194,9 +195,9 @@ static func _form(grid: BattleGrid, w: Warrior, leader: Warrior, all: Array[Warr
 ## one first if he is not already. Null if the leader is not beset or there is
 ## no way in.
 static func _guard_leader(grid: BattleGrid, w: Warrior, leader: Warrior,
-		enemies: Array[Warrior]) -> Action:
+		enemies: Array[Warrior], min_threats := 2) -> Action:
 	var threats := _adjacent(leader, enemies)
-	if threats.size() < 2:
+	if threats.size() < min_threats:
 		return null
 	var mine := _adjacent(w, threats)
 	if not mine.is_empty():

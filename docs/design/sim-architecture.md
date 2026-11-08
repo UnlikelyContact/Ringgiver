@@ -345,3 +345,23 @@ Known tuning questions for the playable prototype, not for the sim:
   two to one (`equal_green`: 68% to 20%). Holding should be worth more.
 - Equal veteran fights run long (mean 26 rounds). Lethality, max rounds or
   deployment distance are the levers; none was changed to hit a number.
+
+### Formation pass (8 Nov 2026, from the phone playtest)
+
+The player could not tell whether being in the wall mattered, and the
+leader died fast with every enemy on him. Changes, all in `CombatRules`:
+
+- `locked_shields_bonus` 1 → 2, full only with a shield-bearer on both
+  sides, half with one.
+- `locked_braces_against_shove`: a man with a locked neighbour cannot be
+  shoved by a glancing blow; his neighbours brace him.
+- `morale_alone` −1: a man with no friend beside him loses heart each round.
+- `guard_min_tier` VETERAN: veterans as well as champions step in when the
+  leader has `guard_threats` (2) or more enemies on him.
+- "Push!" advances the line as a line (every man steps toward the enemy's
+  centre), and the line forms on where the leader is *going* when the
+  player steps, so the wall moves with him.
+- `push_min_margin` 3 → 4.
+
+Measured after: veterans win 100% of 200 green-versus-veteran fights in
+17.9 rounds; equal green bands 61.5% to 35.0% with 3.5% draws.

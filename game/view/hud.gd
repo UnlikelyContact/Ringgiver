@@ -198,7 +198,10 @@ func _refresh() -> void:
 	status.text = "Round %d   wall %d/%d   theirs %d/%d%s%s" % [b.round, mine[0], mine[1], theirs[0], theirs[1],
 			("   order: " + CombatTypes.SHOUT_NAMES[order]) if order != CombatTypes.Shout.NONE else "",
 			("   they call: " + CombatTypes.SHOUT_NAMES[their_order]) if their_order != CombatTypes.Shout.NONE else ""]
-	you_label.text = ("you: " + view.player_line) if view.player_line != "" else "tap a cell to step or an enemy to strike; tap yourself to act with the line"
+	var warn := ""
+	if view.player.is_active() and b.round > 0 and view._locked_neighbours(view.player).is_empty():
+		warn = "   (you are out of the wall)"
+	you_label.text = (("you: " + view.player_line) if view.player_line != "" else "tap a cell to step or an enemy to strike; tap yourself to act with the line") + warn
 	if view.is_manual():
 		pulse_label.text = "turns "
 		next_btn.text = "Next round"

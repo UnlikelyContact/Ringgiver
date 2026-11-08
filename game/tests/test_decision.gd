@@ -312,3 +312,21 @@ func _summary(runs: Array[int], cap: int) -> Array:
 		total += r
 		capped += 1 if r >= cap else 0
 	return [float(total) / runs.size(), sorted[sorted.size() / 2], capped]
+
+
+func test_a_veteran_guards_a_beset_leader() -> void:
+	var g := BattleGrid.new(16, 12)
+	var leader := _man("jarl", 0, Vector2i(8, 6), g, CombatTypes.Tier.VETERAN)
+	leader.is_leader = true
+	var vet := _man("vet", 0, Vector2i(7, 7), g, CombatTypes.Tier.VETERAN)
+	vet.heard_order = CombatTypes.Shout.HOLD
+	var e1 := _man("e1", 1, Vector2i(8, 5), g)
+	var e2 := _man("e2", 1, Vector2i(9, 5), g)
+	var all: Array[Warrior] = [leader, vet, e1, e2]
+	var a := _choose(vet, leader, g, all)
+	assert_true(a.kind == K.MOVE or a.kind == K.ATTACK, "the veteran moves to or strikes a threat: %s" % a.describe())
+	var green := _man("green", 0, Vector2i(9, 7), g, CombatTypes.Tier.GREEN)
+	green.heard_order = CombatTypes.Shout.HOLD
+	all.append(green)
+	var b := _choose(green, leader, g, all)
+	assert_true(b.kind == K.BRACE or b.kind == K.ATTACK, "a green man holds his place instead: %s" % b.describe())

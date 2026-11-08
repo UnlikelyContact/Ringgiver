@@ -120,10 +120,14 @@ static func score(rules: CombatRules, grid: BattleGrid, me: Warrior,
 		s += rules.second_rank_support_bonus
 	if _shield_ok(me) and BattleGrid.shield_covers(BattleGrid.arc_of(me, foe.pos)):
 		s += rules.shield_defense_bonus
+		var locked := 0
 		for n in grid.line_neighbors(me):
 			if _shield_ok(n):
-				s += rules.locked_shields_bonus
-				break
+				locked += 1
+		if locked >= 2:
+			s += rules.locked_shields_bonus
+		elif locked == 1:
+			s += rules.locked_shields_bonus / 2
 	if braced:
 		s += rules.brace_defense_bonus
 	return s
@@ -163,9 +167,21 @@ static func _damage_shield(rules: CombatRules, r: ExchangeResult) -> void:
 	r.shield_broke = r.loser.shield_hp <= 0
 
 
+static func is_locked(grid: BattleGrid, w: Warrior) -> bool:
+	if not _shield_ok(w):
+		return false
+	for n in grid.line_neighbors(w):
+		if _shield_ok(n):
+			return true
+	return false
+
+
 static func _apply_glancing(rules: CombatRules, grid: BattleGrid, r: ExchangeResult) -> void:
 	if _shield_takes(r):
 		_damage_shield(rules, r)
+		return
+	if rules.locked_braces_against_shove and is_locked(grid, r.loser):
+		r.shove_blocked = true  # braced by the men beside him
 		return
 	var cell := r.loser.pos + BattleGrid.direction_to(r.winner.pos, r.loser.pos)
 	if grid.is_free(cell):

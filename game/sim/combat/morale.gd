@@ -65,6 +65,8 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 			delta += rules.morale_leader_adjacent
 		if is_flanked(grid, w):
 			delta += rules.morale_flanked
+		if grid.adjacent_warriors(w.pos, w.side).is_empty():
+			delta += rules.morale_alone
 		_shift(w, delta)
 
 	# Rallying: broken men whose heart has come back near their leader.

@@ -31,7 +31,11 @@ var shield_hp := 3
 
 # --- Melee exchange and absorption (attack.gd) ----------------------------
 var shield_defense_bonus := 2
-var locked_shields_bonus := 1
+## Locked shields: the full bonus with a shield-bearer on both sides, half
+## with one. A locked man is also braced by his neighbours: a glancing blow
+## cannot shove him.
+var locked_shields_bonus := 2
+var locked_braces_against_shove := true
 var second_rank_support_bonus := 1
 var brace_defense_bonus := 1
 var flank_attack_bonus := 2
@@ -76,6 +80,8 @@ var morale_ally_down_adjacent := -2
 var morale_ally_down_visible := -1
 var morale_enemy_down_visible := 1
 var morale_flanked := -1
+## A man with no friend beside him loses heart each round.
+var morale_alone := -1
 var morale_leader_down := -3
 var morale_banner_lost := -2
 var morale_break_threshold := 3
@@ -113,6 +119,10 @@ var mishear_blooded := 0.25
 var mishear_veteran := 0.1
 var green_lag_chance := 0.35
 var green_panic_ignore_chance := 0.3
+## Men of this tier or better step in when the leader has `guard_threats`
+## or more enemies on him (champions always do, at two).
+var guard_min_tier := CombatTypes.Tier.VETERAN
+var guard_threats := 2
 ## A man falling back who finds himself this far from his leader rejoins him instead.
 var fall_back_regroup_distance := 3
 ## An active banner-bearer on the side widens the certain-hearing radius.

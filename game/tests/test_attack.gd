@@ -73,11 +73,11 @@ func test_score_components() -> void:
 	assert_eq(MeleeExchange.score(r, g, a, b, true, true), 4 + r.shield_defense_bonus + r.brace_defense_bonus)
 	# A shield-bearing line neighbor locks shields.
 	_man(r, g, "f", 0, Vector2i(4, 6), N)
-	assert_eq(MeleeExchange.score(r, g, a, b, true, false), 4 + r.shield_defense_bonus + r.locked_shields_bonus)
+	assert_eq(MeleeExchange.score(r, g, a, b, true, false), 4 + r.shield_defense_bonus + r.locked_shields_bonus / 2)  # one neighbour: half
 	# A spear directly behind supports.
 	_man(r, g, "s", 0, Vector2i(5, 7), N)
 	assert_eq(MeleeExchange.score(r, g, a, b, true, false),
-			4 + r.shield_defense_bonus + r.locked_shields_bonus + r.second_rank_support_bonus)
+			4 + r.shield_defense_bonus + r.locked_shields_bonus / 2 + r.second_rank_support_bonus)
 
 
 func test_score_flank_and_rear_bonus() -> void:
@@ -404,3 +404,53 @@ func test_shield_stops_shots_from_front_not_rear() -> void:
 				hits += 1
 		rates.append(float(hits) / 6000)
 	assert_true(rates[1] > rates[0] + 0.1, "back turned is easier: %s" % str(rates))
+
+
+func test_locked_shields_full_with_both_sides_half_with_one() -> void:
+	var r := CombatRules.new()
+	var g := BattleGrid.new(8, 8)
+	var me := Warrior.make("me", 0, [4, 4, 4, 4, 4])
+	var foe := Warrior.make("foe", 1, [4, 4, 4, 4, 4])
+	var left := Warrior.make("l", 0, [4, 4, 4, 4, 4])
+	var right := Warrior.make("r", 0, [4, 4, 4, 4, 4])
+	for w in [me, foe, left, right]:
+		w.reset_for_battle(r)
+	me.facing = Vector2i(0, -1)
+	g.place(me, Vector2i(4, 4))
+	g.place(foe, Vector2i(4, 3))
+	var alone := MeleeExchange.score(r, g, me, foe, false, false)
+	g.place(left, Vector2i(3, 4))
+	var one := MeleeExchange.score(r, g, me, foe, false, false)
+	g.place(right, Vector2i(5, 4))
+	var both := MeleeExchange.score(r, g, me, foe, false, false)
+	assert_eq(one - alone, r.locked_shields_bonus / 2, "one neighbour: half")
+	assert_eq(both - alone, r.locked_shields_bonus, "both sides: full")
+
+
+func test_locked_man_is_not_shoved_by_a_glancing_blow() -> void:
+	var r := CombatRules.new()
+	var g := BattleGrid.new(8, 8)
+	var me := Warrior.make("me", 0, [4, 4, 4, 4, 4])
+	var foe := Warrior.make("foe", 1, [4, 9, 4, 4, 4])
+	var left := Warrior.make("l", 0, [4, 4, 4, 4, 4])
+	for w in [me, foe, left]:
+		w.reset_for_battle(r)
+	me.facing = Vector2i(0, 1)  # facing away: no shield cover, so a glancing blow would shove
+	g.place(me, Vector2i(4, 4))
+	g.place(foe, Vector2i(4, 3))
+	g.place(left, Vector2i(3, 4))
+	left.facing = Vector2i(0, 1)
+	var shoved := 0
+	var blocked := 0
+	var log := PackedStringArray()
+	for i in 300:
+		me.wound = CombatTypes.Wound.UNHURT
+		me.shield_hp = r.shield_hp
+		var res := MeleeExchange.resolve(SimRng.new(i), r, g, foe, me, true, false, false, false, log)
+		if res.loser == me and res.tier == OpposedRoll.Tier.GLANCING:
+			if res.shove_to != Vector2i(-1, -1):
+				shoved += 1
+			elif res.shove_blocked:
+				blocked += 1
+	assert_eq(shoved, 0, "a locked man is braced by his neighbour")
+	assert_true(blocked > 0, "glancing blows happened and were braced: %d" % blocked)

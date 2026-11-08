@@ -159,6 +159,7 @@ func test_morale_clamps_to_scale() -> void:
 func test_leader_adjacent_and_flanked_modifiers() -> void:
 	var rules := CombatRules.new()
 	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
+	rules.morale_alone = 0  # this test places men apart on purpose
 	var grid := BattleGrid.new(10, 10)
 	var log := PackedStringArray()
 	var lead := _man("lead", 0, 1, rules, [4, 4, 4, 8, 4])
@@ -229,6 +230,7 @@ func test_break_rate_and_steady_bonus() -> void:
 func test_men_above_threshold_do_not_check() -> void:
 	var rules := CombatRules.new()
 	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
+	rules.morale_alone = 0  # this test places men apart on purpose
 	rules.morale_check_target = 100  # anyone who checks breaks
 	var grid := BattleGrid.new(8, 8)
 	var log := PackedStringArray()
@@ -324,6 +326,7 @@ func test_lull_restores_breath() -> void:
 func test_round_update_rallies_near_leader() -> void:
 	var rules := CombatRules.new()
 	rules.morale_start_bonus = 0  # these scenarios calibrate morale against raw Nerve
+	rules.morale_alone = 0  # this test places men apart on purpose
 	var grid := BattleGrid.new(12, 12)
 	var log := PackedStringArray()
 	var lead := _man("lead", 0, 1, rules, [4, 4, 4, 8, 4])
@@ -379,3 +382,22 @@ func test_to_me_rally() -> void:
 func test_round_update_is_deterministic() -> void:
 	assert_eq(_gate_run(42, true), _gate_run(42, true))
 	assert_eq(_gate_run(42, false), _gate_run(42, false))
+
+
+func test_a_lone_man_loses_heart() -> void:
+	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0
+	var g := BattleGrid.new(8, 8)
+	var lone := Warrior.make("lone", 0, [4, 4, 4, 8, 4])
+	var paired := Warrior.make("paired", 0, [4, 4, 4, 8, 4])
+	var friend := Warrior.make("friend", 0, [4, 4, 4, 8, 4])
+	for w in [lone, paired, friend]:
+		w.reset_for_battle(rules)
+	g.place(lone, Vector2i(1, 1))
+	g.place(paired, Vector2i(5, 5))
+	g.place(friend, Vector2i(6, 5))
+	var all: Array[Warrior] = [lone, paired, friend]
+	var log := PackedStringArray()
+	Morale.round_update(SimRng.new(1), rules, g, all, {}, true, log)
+	assert_eq(lone.morale, 8 + rules.morale_alone, "alone: loses heart")
+	assert_eq(paired.morale, 8, "with a friend beside him: unchanged")
