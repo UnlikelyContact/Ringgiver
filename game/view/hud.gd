@@ -6,6 +6,7 @@ var view: BattleView
 var main: Node
 var log_label: RichTextLabel
 var status: Label
+var form_btn: Button
 var you_label: Label
 var next_btn: Button
 var follow_btn: Button
@@ -42,7 +43,7 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	top.add_child(left)
 	status = Label.new()
 	status.add_theme_color_override("font_color", Palette.TEXT)
-	status.add_theme_font_size_override("font_size", 17)
+	status.add_theme_font_size_override("font_size", 15)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status.custom_minimum_size = Vector2(200, 0)
 	left.add_child(status)
@@ -53,6 +54,14 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	you_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	you_label.custom_minimum_size = Vector2(200, 0)
 	left.add_child(you_label)
+	form_btn = Button.new()
+	form_btn.custom_minimum_size = Vector2(110, 40)
+	form_btn.pressed.connect(func() -> void:
+		view.cycle_formation()
+		for k in shout_buttons:
+			(shout_buttons[k] as Button).button_pressed = (k == view.pending_shout)
+		_refresh())
+	top.add_child(form_btn)
 	var adv := Button.new()
 	adv.text = "Advance"
 	adv.custom_minimum_size = Vector2(92, 40)
@@ -255,11 +264,21 @@ func _refresh() -> void:
 	var b := view.battle
 	var mine := view.wall_count(0)
 	var theirs := view.wall_count(1)
+	var arms := view.arms_count(0)
 	var order := b.last_shout(0)
 	var their_order := b.last_shout(1)
-	status.text = "Round %d   wall %d/%d   theirs %d/%d%s%s" % [b.round, mine[0], mine[1], theirs[0], theirs[1],
-			("   order: " + CombatTypes.SHOUT_NAMES[order]) if order != CombatTypes.Shout.NONE else "",
-			("   they call: " + CombatTypes.SHOUT_NAMES[their_order]) if their_order != CombatTypes.Shout.NONE else ""]
+	var arms_text := ""
+	if arms[0] > 0:
+		arms_text += " +%d spears" % arms[0]
+	if arms[1] > 0:
+		arms_text += " +%d bows" % arms[1]
+	var calls := ""
+	if order != CombatTypes.Shout.NONE:
+		calls += "  you: " + CombatTypes.SHOUT_NAMES[order]
+	if their_order != CombatTypes.Shout.NONE:
+		calls += "  they: " + CombatTypes.SHOUT_NAMES[their_order]
+	status.text = "Round %d  wall %d/%d%s  theirs %d/%d%s" % [b.round, mine[0], mine[1], arms_text, theirs[0], theirs[1], calls]
+	form_btn.text = "Form: " + view.formation_name()
 	var warn := ""
 	if view.player.is_active() and b.round > 0 and view.wall_count(0)[0] < 2:
 		warn = "   (nobody stands with you)"

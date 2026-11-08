@@ -188,7 +188,7 @@ func test_veteran_covers_gap() -> void:
 
 func test_bowman_shoots_instead_of_moving() -> void:
 	var g := BattleGrid.new(16, 12)
-	var leader := _man("jarl", 0, Vector2i(8, 2), g)
+	var leader := _man("jarl", 0, Vector2i(8, 5), g)  # near enough that he need not keep up
 	var bow := _man("bow", 0, Vector2i(8, 8), g)
 	bow.weapon = CombatTypes.Weapon.BOW
 	bow.has_shield = false

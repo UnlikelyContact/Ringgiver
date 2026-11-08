@@ -245,7 +245,8 @@ func chain(leader: Warrior, max_turn := DEFAULT_LINK_TURN, max_bend := DEFAULT_M
 		out.append(w)
 		for c in neighbors(w.pos):
 			var n := occupant(c)
-			if n == null or seen.has(n) or n.side != leader.side or not n.is_active() or n.broken:
+			if n == null or seen.has(n) or n.side != leader.side or not n.is_active() or n.broken \
+					or n.role == CombatTypes.Role.MISSILE:  # bows stand off; they are never the wall
 				continue
 			var w_facing: Vector2i = wf if w == leader else w.facing
 			if facing_steps(wf, n.facing) > max_bend or not linked_at(w.pos, w_facing, n.pos, n.facing, max_turn):

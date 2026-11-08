@@ -129,6 +129,23 @@ spear and shield, no armor) take on average 4–7 exchanges for one to go
 Down; mail roughly doubles that; an attack from the REAR roughly halves it.
 Write those as tests with ranges.
 
+## Formations and arms (`formation_template.gd`, `formation.gd`, roles)
+
+A `Warrior.role` is SHIELD, SPEAR or MISSILE. `FormationTemplate` is a
+named shape (LINE or WEDGE) with a rank per role: 1 the line through the
+leader, 2 straight behind it, 3 two behind, loose. `Formation
+.template_slots(grid, leader, band, template)` assigns every man a cell;
+`BandFactory.make_mixed_band` and `deploy_formation` build and place mixed
+bands; `Decision._form` forms on the leader's `formation` (null is the
+line). The wall (`BattleGrid.chain`) is the shields and spears; MISSILE men
+are never in it. Second-rank spears strike at reach (`Decision._in_reach`,
+`MeleeExchange.can_reach`). Shield-bearers carry `javelins`; a wall closing
+with spears to throw halts one round within `javelin_range` and throws
+(`Battle._plan_wall`, `Decision._throw`, `MeleeExchange.resolve_shot` with
+`thrown`), and a spear caught on a shield costs it `javelin_shield_damage`.
+Bowmen shoot under any order but Break them, and step away from an enemy
+at arm's length (`Decision._step_away`).
+
 ## Module B — morale and the push (`morale.gd`, `push.gd`)
 
 Owner builds: `sim/combat/morale.gd` (`class_name Morale`),

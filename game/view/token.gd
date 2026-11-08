@@ -71,6 +71,21 @@ func _draw() -> void:
 		# No shield: a bare tunic disc, weapon shown as a bar.
 		draw_circle(Vector2.ZERO, R, side.darkened(0.35))
 		draw_line(Vector2(-R, 4), Vector2(R, -4), Palette.IRON, 3.0)
+	# Arms: a spearman's shaft across the shield, a bowman's bow at his side,
+	# and a tick on the rim for each throwing spear still in hand.
+	if warrior.role == CombatTypes.Role.SPEAR:
+		var sh := f * (R + 14)
+		draw_line(-f * (R + 4), sh, Palette.WALNUT, 3.0)
+		draw_line(sh, sh + f * 6, Palette.IRON, 3.0)
+	elif warrior.role == CombatTypes.Role.MISSILE:
+		var bside := Vector2(-f.y, f.x) * (R + 2)
+		draw_arc(bside, 9, atan2(f.y, f.x) - 1.3, atan2(f.y, f.x) + 1.3, 10, Palette.WALNUT, 2.5)
+		var ends := [bside + Vector2(cos(atan2(f.y, f.x) - 1.3), sin(atan2(f.y, f.x) - 1.3)) * 9, bside + Vector2(cos(atan2(f.y, f.x) + 1.3), sin(atan2(f.y, f.x) + 1.3)) * 9]
+		draw_line(ends[0], ends[1], Palette.BONE, 1.0)
+	for j in warrior.javelins:
+		var a := -PI / 2 + 0.35 * (j - 0.5 * (warrior.javelins - 1))
+		var p := Vector2(cos(a), sin(a)) * (R + 3)
+		draw_line(p, p + Vector2(cos(a), sin(a)) * 5, Palette.IRON, 2.0)
 	if warrior.armor == CombatTypes.Armor.MAIL:
 		draw_arc(Vector2.ZERO, R + 1, 0, TAU, 32, Palette.IRON, 2.0)
 	if warrior.is_leader:

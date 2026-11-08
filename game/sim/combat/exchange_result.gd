@@ -18,6 +18,7 @@ var tier: OpposedRoll.Tier = OpposedRoll.Tier.LOCKED
 ## Positive: `a` won. Negative: `b` won.
 var margin := 0
 var is_shot := false
+var is_thrown := false
 ## False when the pair could not fight (out of reach, out of range).
 var happened := false
 ## Wound steps actually applied to the loser after absorption.
@@ -43,7 +44,7 @@ func describe() -> String:
 		return "%s and %s cannot reach each other" % [_n(a), _n(b)]
 	if winner == null:
 		return "%s and %s lock, neither gives ground" % [_n(a), _n(b)]
-	var verb := "shoots" if is_shot else "beats"
+	var verb := ("spears" if is_thrown else "shoots") if is_shot else "beats"
 	var s := "%s %s %s (%s, margin %d)" % [_n(winner), verb, _n(loser), OpposedRoll.tier_name(tier), absi(margin)]
 	var parts := PackedStringArray()
 	if wound_steps_dealt > 0:

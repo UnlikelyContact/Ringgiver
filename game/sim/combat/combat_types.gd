@@ -13,6 +13,11 @@ enum Wound { UNHURT, BRUISED, WOUNDED, GRIEVOUS, DOWN }
 
 enum Weapon { SPEAR, BEARDED_AXE, SWORD, LONG_AXE, BOW }
 
+## What a man is for in a formation: a shield-bearer in the line, a spearman
+## who fights over a shield-bearer's shoulder from the second rank, or a
+## missile man (bow) who stands off behind.
+enum Role { SHIELD, SPEAR, MISSILE }
+
 enum Armor { NONE, LEATHER, MAIL }
 
 ## Leader shouts (concept.md, Combat > Shouts). NONE means "no new order".
@@ -37,3 +42,4 @@ const TIER_NAMES := ["green", "blooded", "veteran", "champion"]
 const WOUND_NAMES := ["unhurt", "bruised", "wounded", "grievous", "down"]
 const SHOUT_NAMES := ["-", "shield wall", "hold", "push", "to me", "break them", "fall back", "svinfylking"]
 const STAT_NAMES := ["might", "skill", "grit", "nerve", "wits"]
+const ROLE_NAMES := ["shield", "spear", "bow"]

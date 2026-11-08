@@ -60,32 +60,44 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	if r.tier == OpposedRoll.Tier.GLANCING:
 		_apply_glancing(rules, grid, r)
 	else:
-		_apply_wound(rng, rules, r)
+		_apply_wound(rng, rules, grid, r)
 	log.append(r.describe())
 	return r
 
 
 ## Resolves one shot. Only HIT and HEAVY do anything; a bow never shoves.
+## A thrown spear (`thrown`) is Might's business, carries javelin_range, and
+## caught on a shield it sticks there and spoils it.
 static func resolve_shot(rng: SimRng, rules: CombatRules, grid: BattleGrid,
-		archer: Warrior, target: Warrior, log: PackedStringArray) -> ExchangeResult:
+		archer: Warrior, target: Warrior, log: PackedStringArray, thrown := false) -> ExchangeResult:
 	var r := ExchangeResult.new()
 	r.a = archer
 	r.b = target
 	r.is_shot = true
+	r.is_thrown = thrown
 	var dist := BattleGrid.chebyshev(archer.pos, target.pos)
-	if dist < 1 or dist > rules.missile_range:
+	if dist < 1 or dist > (rules.javelin_range if thrown else rules.missile_range):
 		log.append(r.describe())
 		return r
 	r.happened = true
+	if thrown:
+		archer.javelins = maxi(0, archer.javelins - 1)
 
-	var sa := archer.skill + rules.bow_shot_bonus - archer.condition_penalty(rules)
-	if dist > rules.missile_free_range:
-		sa -= (dist - rules.missile_free_range) / maxi(1, rules.missile_range_penalty_per)
-	if rules.raining:
+	var sa: int
+	if thrown:
+		sa = archer.might + rules.javelin_bonus - archer.condition_penalty(rules)
+	else:
+		sa = archer.skill + rules.bow_shot_bonus - archer.condition_penalty(rules)
+		if dist > rules.missile_free_range:
+			sa -= (dist - rules.missile_free_range) / maxi(1, rules.missile_range_penalty_per)
+	if rules.raining and not thrown:
 		sa -= rules.rain_bow_penalty
 	var sb := target.skill - target.condition_penalty(rules)
-	if _shield_ok(target) and BattleGrid.shield_covers(BattleGrid.arc_of(target, archer.pos)):
+	var is_covered := covered(grid, target, archer.pos)
+	if is_covered:
 		sb += rules.shield_defense_bonus
+		if not thrown and is_locked(grid, target):
+			sb += rules.arrow_vs_locked_bonus  # a wall of shields: arrows rattle off it
 	archer.spend_breath(rules.breath_cost_attack)
 
 	var roll := OpposedRoll.resolve(rng, sa, sb)
@@ -94,13 +106,22 @@ static func resolve_shot(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	if roll.attacker_won() and r.tier >= OpposedRoll.Tier.HIT:
 		r.winner = archer
 		r.loser = target
-		archer.add_effort(CombatTypes.Stat.SKILL)
-		_apply_wound(rng, rules, r)
+		archer.add_effort(CombatTypes.Stat.SKILL if not thrown else CombatTypes.Stat.MIGHT)
+		_apply_wound(rng, rules, grid, r)
 		log.append(r.describe())
+	elif thrown and is_covered and roll.attacker_won():
+		# Caught on the shield: the spear sticks there and the shield is the worse for it.
+		r.tier = OpposedRoll.Tier.LOCKED
+		r.winner = archer
+		r.loser = target
+		r.shield_damage = rules.javelin_shield_damage
+		target.shield_hp = maxi(0, target.shield_hp - rules.javelin_shield_damage)
+		r.shield_broke = target.shield_hp == 0
+		log.append("%s's spear sticks in %s's shield%s" % [archer.display_name, target.display_name, ", and it is done for" if r.shield_broke else ""])
 	else:
 		# A miss, a graze or a shot caught on the shield: nothing happens.
 		r.tier = OpposedRoll.Tier.LOCKED
-		log.append("%s shoots at %s: misses" % [archer.display_name, target.display_name])
+		log.append("%s %s %s: misses" % [archer.display_name, "throws at" if thrown else "shoots at", target.display_name])
 	return r
 
 
@@ -118,7 +139,7 @@ static func score(rules: CombatRules, grid: BattleGrid, me: Warrior,
 	if behind != null and behind != foe and behind.side == me.side and behind.is_active() \
 			and behind.weapon == CombatTypes.Weapon.SPEAR:
 		s += rules.second_rank_support_bonus
-	if _shield_ok(me) and BattleGrid.shield_covers(BattleGrid.arc_of(me, foe.pos)):
+	if covered(grid, me, foe.pos):
 		s += rules.shield_defense_bonus
 		var locked := 0
 		for n in grid.line_neighbors(me):
@@ -153,8 +174,23 @@ static func _shield_ok(w: Warrior) -> bool:
 
 
 ## Does the loser's shield face the winner's blow?
-static func _shield_takes(r: ExchangeResult) -> bool:
-	return _shield_ok(r.loser) and BattleGrid.shield_covers(BattleGrid.arc_of(r.loser, r.winner.pos))
+static func _shield_takes(grid: BattleGrid, r: ExchangeResult) -> bool:
+	return covered(grid, r.loser, r.winner.pos)
+
+
+## Whether a man's shield, or the shield of the man at his right shoulder,
+## stands between him and a blow or shot from `from_pos`. His own covers his
+## front and left; his open front-right is covered by the man to his right
+## in a wall ("the man to your right covers your open side").
+static func covered(grid: BattleGrid, me: Warrior, from_pos: Vector2i) -> bool:
+	var arc := BattleGrid.arc_of(me, from_pos)
+	if _shield_ok(me) and BattleGrid.shield_covers(arc):
+		return true
+	if arc == CombatTypes.Arc.FRONT_RIGHT:
+		var right := grid.occupant(me.pos + BattleGrid.rotate(me.facing, 2))
+		return right != null and right.side == me.side and right.is_active() and _shield_ok(right) \
+				and BattleGrid.facing_steps(right.facing, me.facing) <= BattleGrid.DEFAULT_LINK_TURN
+	return false
 
 
 static func _damage_shield(rules: CombatRules, r: ExchangeResult) -> void:
@@ -177,7 +213,7 @@ static func is_locked(grid: BattleGrid, w: Warrior) -> bool:
 
 
 static func _apply_glancing(rules: CombatRules, grid: BattleGrid, r: ExchangeResult) -> void:
-	if _shield_takes(r):
+	if _shield_takes(grid, r):
 		_damage_shield(rules, r)
 		return
 	if rules.locked_braces_against_shove and is_locked(grid, r.loser):
@@ -190,7 +226,7 @@ static func _apply_glancing(rules: CombatRules, grid: BattleGrid, r: ExchangeRes
 		r.shove_blocked = true
 
 
-static func _apply_wound(rng: SimRng, rules: CombatRules, r: ExchangeResult) -> void:
+static func _apply_wound(rng: SimRng, rules: CombatRules, grid: BattleGrid, r: ExchangeResult) -> void:
 	var steps := rules.steps_heavy if r.tier == OpposedRoll.Tier.HEAVY else rules.steps_hit
 	var chance := 0.0
 	match r.loser.armor:
@@ -203,7 +239,7 @@ static func _apply_wound(rng: SimRng, rules: CombatRules, r: ExchangeResult) -> 
 	if steps > 0 and chance > 0.0 and rng.randf() < chance:
 		steps -= 1
 		r.absorbed = true
-		if _shield_takes(r):
+		if _shield_takes(grid, r):
 			_damage_shield(rules, r)
 	r.loser.take_wound_steps(steps)
 	r.wound_steps_dealt = steps

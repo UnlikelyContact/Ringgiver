@@ -288,6 +288,63 @@ Measured over forty fights: 98% of standing men still in the wall after a
 round, up from 96%, with the men who did leave mostly beside a man who
 fell.
 
+**Eighth playtest, same day (mixed arms):** the field now carries three
+roles. Shield-bearers make the line and each carries a throwing spear;
+spearmen stand in a second rank and strike over a shoulder at reach;
+bowmen stand two ranks back, shoot at anything within six hexes, and give
+ground toward the leader when closed with. A wall closing with spears to
+throw halts one round at two hexes to loose them, then comes on; a spear
+caught on a shield sticks there and spoils it. Formations are templates
+(`FormationTemplate`): a named shape and a rank per role. The presets are
+*ranks* (shields, spears behind, bows two behind), *line* (everyone in the
+one line), *bows behind*, and the *boar's snout*; the HUD's Form button
+cycles them and "Shield wall!" forms the chosen one. The wall is the
+shields and the spears; bows are counted apart ("wall 10/10 +2 spears +2
+bows"). Your band is eight shields, two spears and two bows; the enemy's
+mix varies about the same strength. Two rules came with the arms: the man at your
+right shoulder's shield covers your open front-right against blows and
+shots alike (as the formation rules always said), and arrows against a
+man whose shield is locked mostly rattle off, so archers pick the exposed
+man first and a wall is the answer to them. Archers keep within five hexes
+of their leader before they shoot. First numbers, equal strength in mixed
+arms against the steady enemy: a charge ("Break them!") into ranks loses
+nineteen fights in twenty, where it won seven in ten against a plain line;
+pushing into ranks wins 38% and holding to receive them 58%, with the
+steady AI on your side at 49%. The defender's second rank strikes the
+arriving line before it can strike back, and his archers get twice the
+shots. That is history, and it is also a problem for a skirmish with no
+objective: the side that stands still is favoured, and the enemy AI still
+walks into it. Open: give the field something to take or hold, and teach
+the AI to hold ranks against ranks unless it has the numbers.
+
+### Drill, custom formations and custom shouts (decided 8 Nov 2026)
+
+The shouts and shapes above are the ones every leader knows. The rest a
+band learns in the winter drill yard, and this is how:
+
+- **A formation is a template**: a name, a shape, and where each role
+  stands (rank per role now; later a drawn arrangement of slots relative to
+  the leader, so a player can lay out a refused flank, a hollow square, a
+  skirmish screen, or a wedge with bows in its tail). The sim already forms
+  on templates, so a custom one is only a new template.
+- **Drill makes it theirs.** In winter a man's task may be drill; the band
+  drills a template, and its *familiarity* with it rises with the men who
+  drilled and the seasons it has been used. Familiarity is what the wall's
+  single test rolls against for that shape (a green band forms a shape it
+  has never drilled slowly and raggedly; a drilled one forms it like the
+  plain line), and it decays for men who were not there. New men learn by
+  standing in it.
+- **A custom shout names a template and an order.** "Hedgehog!" might be
+  *refused flanks, hold*; "Swine!" the boar's snout and push. The shout
+  system is unchanged: it carries by distance, can be misheard, and a man
+  who has not drilled the shape hears a word he does not know and does
+  what the men beside him do. Learned shouts replace the single fixed
+  "Svínfylking (learned)" entry.
+- **What the player does on the field** stays the same: pick a shout, step
+  his own man, wheel. Drill is where the thinking happens; the field is
+  where it pays. Named lieutenants later carry a template of their own for
+  the flank they lead.
+
 If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop
@@ -304,6 +361,7 @@ changes.
 | Break them! | Charge, abandon formation |
 | Fall back! | Controlled retreat (steady men only) |
 | Svínfylking (learned) | Boar's-snout wedge; unlocked by winter drill |
+| Custom (learned) | A drilled formation plus an order, under the band's own name; see "Drill, custom formations and custom shouts" |
 
 Shouts carry by distance. Near men hear clearly; far men may miss or mishear
 in the noise. A horn-blower and banner-bearer extend range. As the band grows,

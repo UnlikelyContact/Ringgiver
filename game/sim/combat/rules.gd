@@ -176,6 +176,19 @@ var wall_link_turn := BattleGrid.DEFAULT_LINK_TURN
 var wall_max_bend := BattleGrid.DEFAULT_MAX_BEND
 var stall_quit_fraction := 0.5
 var missile_range := 6
+## Throwing spears: how many a shield-bearer carries, how far he throws
+## (hexes), what he adds to Might for the throw, and what a spear stuck in a
+## shield does to it.
+var javelins_per_man := 1
+var javelin_range := 2
+var javelin_bonus := 2
+var javelin_shield_damage := 1
+## A bowman further than this from his leader stops shooting and keeps up.
+var missile_keep_distance := 5
+## Arrows against a man whose shield is locked with a neighbour's mostly
+## rattle off: this is added to his defence against a shot (not a thrown
+## spear). A wall is the answer to archers; loose men are their meat.
+var arrow_vs_locked_bonus := 3
 ## LeaderAI doctrine thresholds.
 var ai_form_rounds := 2
 var ai_hold_rounds_before_push := 2

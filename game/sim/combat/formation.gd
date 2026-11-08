@@ -83,6 +83,62 @@ static func wedge_slots(grid: BattleGrid, leader: Warrior, count: int) -> Array[
 	return out
 
 
+## Where every man of `band` (the leader excluded) should stand for
+## `template`, as Warrior -> cell. Rank 1 fills the line through the leader
+## as `line_slots`; rank 2 the cells straight behind rank 1 and the leader,
+## centre outward; rank 3 the cells two behind, spread one in two. A rank
+## with more men than cells spills its surplus into the line. Each rank is
+## assigned greedily within itself. Null template is the plain line.
+static func template_slots(grid: BattleGrid, leader: Warrior, band: Array[Warrior],
+		template: FormationTemplate) -> Dictionary:
+	var out := {}
+	if leader == null or band.is_empty():
+		return out
+	if template != null and template.shape == FormationTemplate.Shape.WEDGE:
+		return assign(wedge_slots(grid, leader, band.size()), band)
+	var by_rank := {1: [] as Array[Warrior], 2: [] as Array[Warrior], 3: [] as Array[Warrior]}
+	for m in band:
+		var r := 1 if template == null else clampi(template.rank(m.role), 1, 3)
+		(by_rank[r] as Array[Warrior]).append(m)
+	var wf := leader.wall_facing()
+	var back := BattleGrid.rotate(wf, 3)
+	var front: Array[Warrior] = by_rank[1]
+	var second: Array[Warrior] = by_rank[2]
+	var third: Array[Warrior] = by_rank[3]
+	# Rank 2 stands behind the line, so the line must be at least as wide as
+	# the second rank needs, the leader's own back included.
+	var line_width := maxi(front.size(), second.size() - 1)
+	var line := line_slots(grid, leader, line_width)
+	var behind: Array[Vector2i] = []
+	for c in [leader.pos] + line:
+		var b: Vector2i = c + back
+		if _usable(grid, leader, b):
+			behind.append(b)
+	var far: Array[Vector2i] = []
+	var i := 0
+	for c in [leader.pos] + line:
+		if i % 2 == 0:
+			var b: Vector2i = c + back + back
+			if _usable(grid, leader, b):
+				far.append(b)
+		i += 1
+	# Surplus of the rear ranks goes into the line.
+	var spill: Array[Warrior] = []
+	if second.size() > behind.size():
+		spill.append_array(second.slice(behind.size()))
+		second = second.slice(0, behind.size())
+	if third.size() > far.size():
+		spill.append_array(third.slice(far.size()))
+		third = third.slice(0, far.size())
+	front = front + spill
+	if front.size() > line.size():
+		line = line_slots(grid, leader, front.size())
+	out.merge(assign(line.slice(0, front.size()) if line.size() >= front.size() else line, front))
+	out.merge(assign(behind.slice(0, second.size()), second))
+	out.merge(assign(far.slice(0, third.size()), third))
+	return out
+
+
 ## Greedy nearest-first assignment: of all (man, slot) pairs, the closest is
 ## matched first, then the next closest among those left, and so on. A man
 ## already on a slot therefore keeps it, and a man walking toward his slot

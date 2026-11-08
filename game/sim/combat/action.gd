@@ -9,6 +9,8 @@ var target_cell := Vector2i.ZERO
 var target: Warrior = null
 ## New facing after the action, or Vector2i.ZERO to keep the current one.
 var new_facing := Vector2i.ZERO
+## For SHOOT: a thrown spear rather than an arrow.
+var thrown := false
 
 
 static func brace(facing := Vector2i.ZERO) -> Action:
@@ -42,6 +44,12 @@ static func shoot(enemy: Warrior) -> Action:
 	return a
 
 
+static func throw_at(enemy: Warrior) -> Action:
+	var a := shoot(enemy)
+	a.thrown = true
+	return a
+
+
 static func flee(cell: Vector2i) -> Action:
 	var a := Action.new()
 	a.kind = CombatTypes.ActionKind.FLEE
@@ -62,7 +70,7 @@ func describe() -> String:
 		CombatTypes.ActionKind.ATTACK:
 			return "attack %s" % (target.display_name if target else "?")
 		CombatTypes.ActionKind.SHOOT:
-			return "shoot %s" % (target.display_name if target else "?")
+			return "%s %s" % ["throw at" if thrown else "shoot", target.display_name if target else "?"]
 		CombatTypes.ActionKind.FLEE:
 			return "flee to %s" % target_cell
 	return "idle"

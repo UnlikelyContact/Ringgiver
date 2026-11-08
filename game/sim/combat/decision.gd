@@ -23,9 +23,12 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	# wall's single test has already been made.
 	if w.wall_move != Warrior.NO_WALL_MOVE:
 		if w.wall_move == w.pos:
-			var foe := _front_or_beside(w, enemies)
+			var foe := _front_or_beside(w, enemies, leader, grid)
 			if foe != null:
 				return Action.attack(foe)
+			var volley := _throw(rules, grid, w, enemies)
+			if volley != null:
+				return volley
 			return Action.brace(w.facing)  # the wall stands fast
 		return Action.move_to(w.wall_move, w.wall_face if w.wall_face != Vector2i.ZERO else w.facing)
 
@@ -54,6 +57,13 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		if guard != null:
 			return guard
 
+	# 5b. A bowman with an enemy at arm's length gives ground toward his
+	# leader rather than fight; cornered, he fights.
+	if w.role == CombatTypes.Role.MISSILE and not _adjacent(w, enemies).is_empty():
+		var away := _step_away(grid, w, enemies, leader)
+		if away != null:
+			return away
+
 	# 7 (and 8). The heard order, with archers shooting rather than moving.
 	var act := _by_order(rules, grid, w, leader, all, enemies, w.heard_order, log)
 
@@ -77,9 +87,10 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 	match order:
 		CombatTypes.Shout.NONE:
 			if w.tier == CombatTypes.Tier.GREEN:
-				# No orders: a green man stands where he is, but strikes at what is in his face.
-				var at_him := _front(w, enemies)
-				act = Action.attack(_pick_target(w, at_him, leader)) if not at_him.is_empty() else Action.brace()
+				# No orders: a green man stands where he is, but strikes at what
+				# is in his face, or in his spear's reach.
+				var at_him := _front_or_beside(w, enemies, leader, grid)
+				act = Action.attack(at_him) if at_him != null else Action.brace()
 			else:
 				act = _hold(grid, w, enemies, leader)
 		CombatTypes.Shout.SHIELD_WALL:
@@ -114,20 +125,87 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 		_:
 			act = _hold(grid, w, enemies, leader)
 
-	# 8. Bowmen with nobody at arm's length shoot instead of moving or waiting.
-	if w.weapon == CombatTypes.Weapon.BOW and order != CombatTypes.Shout.BREAK_THEM \
+	# 8. Bowmen with nobody at arm's length shoot instead of moving or
+	# waiting, unless the line has drawn too far ahead of them: then they
+	# keep up first.
+	var strayed := leader != null and leader.is_active() and leader != w \
+			and BattleGrid.chebyshev(w.pos, leader.pos) > rules.missile_keep_distance
+	if w.weapon == CombatTypes.Weapon.BOW and order != CombatTypes.Shout.BREAK_THEM and not strayed \
 			and (act.kind == CombatTypes.ActionKind.MOVE or act.kind == CombatTypes.ActionKind.BRACE or act.kind == CombatTypes.ActionKind.IDLE) \
 			and _adjacent(w, enemies).is_empty():
-		var mark := _nearest(w.pos, enemies)
-		if mark != null and BattleGrid.chebyshev(w.pos, mark.pos) <= rules.missile_range:
+		var mark := _best_mark(grid, w, enemies, rules.missile_range)
+		if mark != null:
 			return Action.shoot(mark)
+	# 9. A man standing his ground with the enemy a throw away looses a spear.
+	if act.kind == CombatTypes.ActionKind.BRACE and order != CombatTypes.Shout.BREAK_THEM:
+		var volley := _throw(rules, grid, w, enemies)
+		if volley != null:
+			return volley
 	return act
+
+
+## The man an archer shoots at: within `range`, the most exposed first (no
+## shield toward him, then a shield but no neighbour locking it, then a
+## locked wall), the nearest among equals, then the lowest id. Null if
+## nobody is in range.
+static func _best_mark(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], range: int) -> Warrior:
+	var best: Warrior = null
+	var best_key := []
+	for e in enemies:
+		var d := BattleGrid.chebyshev(w.pos, e.pos)
+		if d > range or not e.is_active():
+			continue
+		var covered := MeleeExchange.covered(grid, e, w.pos)
+		var exposure := 0 if not covered else (1 if grid.line_neighbors(e).is_empty() else 2)
+		var key := [exposure, d, e.id]
+		if best == null or _less(key, best_key):
+			best = e
+			best_key = key
+	return best
+
+
+## A throwing spear at the nearest enemy within javelin_range, if he has one
+## and nobody is at arm's length. Null otherwise.
+static func _throw(rules: CombatRules, _grid: BattleGrid, w: Warrior, enemies: Array[Warrior]) -> Action:
+	if w.javelins <= 0 or not _adjacent(w, enemies).is_empty():
+		return null
+	var mark := _nearest(w.pos, enemies)
+	if mark == null or BattleGrid.chebyshev(w.pos, mark.pos) > rules.javelin_range:
+		return null
+	return Action.throw_at(mark)
+
+
+## A step that puts more ground between a man and the enemies at arm's
+## length, toward his leader for choice. Null if there is none.
+static func _step_away(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior) -> Action:
+	var near := _nearest(w.pos, enemies)
+	if near == null:
+		return null
+	var best := Vector2i(Warrior.NO_WALL_MOVE)
+	var best_key := [0, 0]
+	for d in BattleGrid.DIRS:
+		var c := w.pos + d
+		if not grid.is_free(c):
+			continue
+		var gap := 99
+		for e in enemies:
+			gap = mini(gap, BattleGrid.chebyshev(c, e.pos))
+		if gap < 2:
+			continue
+		var to_leader := BattleGrid.chebyshev(c, leader.pos) if leader != null and leader.is_active() else 0
+		var key := [-gap, to_leader]
+		if best == Vector2i(Warrior.NO_WALL_MOVE) or _less(key, best_key):
+			best = c
+			best_key = key
+	if best == Vector2i(Warrior.NO_WALL_MOVE):
+		return null
+	return Action.move_to(best, BattleGrid.direction_to(best, near.pos))
 
 
 ## HOLD: strike a man in front (a wounded one first), else brace toward the
 ## nearest enemy.
 static func _hold(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior) -> Action:
-	var foe := _front_or_beside(w, enemies, leader)
+	var foe := _front_or_beside(w, enemies, leader, grid)
 	if foe != null:
 		return Action.attack(foe)
 	var near := _nearest(w.pos, enemies)
@@ -161,12 +239,9 @@ static func _in_wall(grid: BattleGrid, w: Warrior) -> bool:
 
 
 static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior, all: Array[Warrior] = []) -> Action:
-	var front := _front(w, enemies)
-	if not front.is_empty():
-		return Action.attack(_pick_target(w, front, leader))
-	var adj := _adjacent(w, enemies)
-	if not adj.is_empty():
-		return Action.attack(_pick_target(w, adj, leader))
+	var foe := _front_or_beside(w, enemies, leader, grid)
+	if foe != null:
+		return Action.attack(foe)
 	# Drive forward means the whole line steps toward the enemy together:
 	# every man steps the same way, from his side's centre toward theirs,
 	# so the wall advances as a wall. A man with nobody beside him closes
@@ -229,17 +304,14 @@ static func _form(grid: BattleGrid, w: Warrior, leader: Warrior, all: Array[Warr
 	for m in all:
 		if m != leader and m.side == w.side and m.is_active() and not m.broken and not members.has(m):
 			band.append(m)
-	var slots := Formation.wedge_slots(grid, leader, band.size()) if wedge \
-			else Formation.line_slots(grid, leader, band.size() + members.size())
+	var template: FormationTemplate = FormationTemplate.wedge() if wedge else leader.formation
+	var plan := Formation.template_slots(grid, leader, band, template)
 	if not members.is_empty():
-		# Cells held by men already in the engaged wall are not open slots.
-		var open: Array[Vector2i] = []
-		for c in slots:
-			var o := grid.occupant(c)
-			if o == null or band.has(o):
-				open.append(c)
-		slots = open
-	var plan := Formation.assign(slots, band)
+		# A slot held by a man of the engaged wall is not open: drop it.
+		for m in plan.keys():
+			var o := grid.occupant(plan[m])
+			if o != null and not band.has(o):
+				plan.erase(m)
 	if plan.has(w) and plan[w] != w.pos:
 		var step := _step_toward(grid, w, plan[w], leader.wall_facing())
 		if step != null:
@@ -412,14 +484,33 @@ static func _adjacent(w: Warrior, men: Array[Warrior]) -> Array[Warrior]:
 ## failing that, one at his flank or back, since a man who is being cut at
 ## from behind turns to fight whatever it costs the line. Null if nobody is
 ## at arm's length.
-static func _front_or_beside(w: Warrior, enemies: Array[Warrior], leader: Warrior = null) -> Warrior:
+static func _front_or_beside(w: Warrior, enemies: Array[Warrior], leader: Warrior = null, grid: BattleGrid = null) -> Warrior:
 	var front := _front(w, enemies)
 	if not front.is_empty():
 		return _pick_target(w, front, leader)
 	var adj := _adjacent(w, enemies)
 	if not adj.is_empty():
 		return _pick_target(w, adj, leader)
+	if grid != null:
+		var reach := _in_reach(grid, w, enemies)
+		if not reach.is_empty():
+			return _pick_target(w, reach, leader)
 	return null
+
+
+## Enemies a spearman can strike over a friend's shoulder: two cells off,
+## with an active friend in the cell between (MeleeExchange.can_reach).
+static func _in_reach(grid: BattleGrid, w: Warrior, enemies: Array[Warrior]) -> Array[Warrior]:
+	var out: Array[Warrior] = []
+	if w.weapon != CombatTypes.Weapon.SPEAR:
+		return out
+	for e in enemies:
+		if BattleGrid.chebyshev(w.pos, e.pos) != 2:
+			continue
+		var between := grid.occupant(w.pos + BattleGrid.direction_to(w.pos, e.pos))
+		if between != null and between.side == w.side and between.is_active():
+			out.append(e)
+	return out
 
 
 ## Adjacent enemies ahead of him: FRONT or FRONT_RIGHT (anything not on his

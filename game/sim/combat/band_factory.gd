@@ -48,6 +48,71 @@ static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier
 	return out
 
 
+## A band of mixed arms: `shields` shield-bearers (the leader, banner and
+## horn among them, each with a throwing spear), `spears` second-rank
+## spearmen and `bows` archers, in that order of ids.
+static func make_mixed_band(rng: SimRng, side: int, shields: int, spears: int, bows: int,
+		tier: CombatTypes.Tier, rules: CombatRules, armor: CombatTypes.Armor = CombatTypes.Armor.NONE,
+		name_offset := 0, first_id := 1) -> Array[Warrior]:
+	var out := make_band(rng, side, shields + spears + bows, tier, armor, name_offset, first_id)
+	for i in out.size():
+		var w: Warrior = out[i]
+		if i < shields:
+			w.role = CombatTypes.Role.SHIELD
+			w.javelins = rules.javelins_per_man
+		elif i < shields + spears:
+			w.role = CombatTypes.Role.SPEAR
+			w.weapon = CombatTypes.Weapon.SPEAR
+		else:
+			w.role = CombatTypes.Role.MISSILE
+			w.weapon = CombatTypes.Weapon.BOW
+			w.has_shield = false
+	return out
+
+
+## Deploys a band in `template` (null: the plain line) through `anchor`, the
+## leader on it, facing `facing`.
+static func deploy_formation(grid: BattleGrid, band: Array[Warrior], anchor: Vector2i, facing: Vector2i,
+		rules: CombatRules, template: FormationTemplate) -> void:
+	var leader: Warrior = null
+	var others: Array[Warrior] = []
+	for w in band:
+		w.reset_for_battle(rules)
+		w.facing = facing
+		if w.is_leader:
+			w.line_facing = facing
+			w.formation = template
+		if w.is_leader and leader == null:
+			leader = w
+		else:
+			others.append(w)
+	if leader == null:
+		leader = others.pop_front()
+		leader.line_facing = facing
+		leader.formation = template
+	grid.place(leader, anchor)
+	var plan := Formation.template_slots(grid, leader, others, template)
+	var unplaced: Array[Warrior] = []
+	for w in others:
+		if plan.has(w) and grid.is_free(plan[w]):
+			grid.place(w, plan[w])
+		else:
+			unplaced.append(w)
+	# Anyone without a cell takes the nearest free one to the leader.
+	for w in unplaced:
+		var seen := {anchor: true}
+		var queue: Array[Vector2i] = [anchor]
+		while not queue.is_empty():
+			var c: Vector2i = queue.pop_front()
+			if grid.is_free(c):
+				grid.place(w, c)
+				break
+			for n in grid.neighbors(c):
+				if not seen.has(n) and grid.in_bounds(n):
+					seen[n] = true
+					queue.append(n)
+
+
 ## Deploys a band as a line through the cell at offset column `column` and
 ## the map's middle row, facing `facing` (east for side 0, west for side 1
 ## is the usual). The leader stands at the anchor; the rest fill the line's

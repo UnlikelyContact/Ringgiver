@@ -19,6 +19,7 @@ var _last_shout := {}  # side -> Shout actually given
 var _standing := {}  # side -> the last order given that was not NONE
 var _contact_logged := {}  # side -> bool, so "in contact" is logged once per spell
 var _wall_step := {}  # side -> true when the leader asks his wall to step forward this round
+var _volleyed := {}  # side -> true once the wall has paused to throw its spears
 var _blows_ever := false
 var _rounds_without_blow := 0
 var _player_action := {}  # side -> Action for that side's leader this round (presentation hook)
@@ -138,6 +139,21 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 			_contact_logged[side] = true
 		_hold_wall(members)
 		return
+	# A wall closing with spears to throw pauses one round at a throw's
+	# distance to loose them, then comes on.
+	if not back and not _volleyed.get(side, false) and engaged.is_empty():
+		var spears := 0
+		var in_range := false
+		for w in members:
+			spears += w.javelins
+			for e in theirs:
+				if BattleGrid.distance(w.pos, e.pos) <= rules.javelin_range:
+					in_range = true
+		if spears > 0 and in_range:
+			_volleyed[side] = true
+			log.append("%s's line halts and looses its spears" % leader.display_name)
+			_hold_wall(members)
+			return
 	var horn := false
 	for w in active(side):
 		horn = horn or w.is_horn
@@ -262,6 +278,19 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	_hold_wall(members)
 	for w in carried:
 		w.wall_move = carried[w]
+	# The second rank goes with the line: a friend standing straight behind
+	# a stepping man, not in the wall himself, takes the same step if the
+	# cell is his for the taking.
+	if not back:
+		var back_dir := BattleGrid.rotate(leader.wall_facing(), 3)
+		for w in targets:
+			var m := grid.occupant(w.pos + back_dir)
+			if m == null or m.side != side or members.has(m) or not m.is_active() or m.broken or m.role == CombatTypes.Role.MISSILE:
+				continue
+			var his: Vector2i = m.pos + (targets[w] - w.pos)
+			if his == w.pos or (grid.is_free(his) and not claimed.has(his)):
+				m.wall_move = his
+				claimed[his] = true
 	var stepped := 0
 	for w in targets:
 		# The exceptions to moving as one: a man who falls, and a man whose
@@ -516,8 +545,12 @@ func run_round() -> void:
 	# Blows landed this round?
 	var any_blow := false
 	for i in range(round_log_start, log.size()):
-		if log[i].contains(" beats ") and not log[i].contains("glancing") and log[i].begins_with(log[i].split(" beats ")[0]):
+		var line := log[i]
+		if line.contains(" beats ") and not line.contains("glancing") and line.begins_with(line.split(" beats ")[0]):
 			any_blow = true
+			break
+		if (line.contains(" shoots ") or line.contains(" spears ")) and not line.contains("misses"):
+			any_blow = true  # an arrow or a thrown spear that bit is a blow too
 			break
 	_rounds_without_blow = 0 if any_blow else _rounds_without_blow + 1
 	_blows_ever = _blows_ever or any_blow
@@ -734,7 +767,7 @@ func _resolve_missiles(mr: SimRng, actions: Dictionary) -> void:
 		var a: Action = actions[w]
 		if a.kind != CombatTypes.ActionKind.SHOOT or a.target == null or not a.target.is_active():
 			continue
-		var r := MeleeExchange.resolve_shot(mr.fork("shot:%d" % w.id), rules, grid, w, a.target, log)
+		var r := MeleeExchange.resolve_shot(mr.fork("shot:%d" % w.id), rules, grid, w, a.target, log, a.thrown)
 		_after_exchange(r)
 
 

@@ -20,8 +20,10 @@ var wits := 3
 var tier: CombatTypes.Tier = CombatTypes.Tier.GREEN
 var personality: Array[CombatTypes.Personality] = []
 
-# Gear.
+# Gear and place in the formation.
+var role: CombatTypes.Role = CombatTypes.Role.SHIELD
 var weapon: CombatTypes.Weapon = CombatTypes.Weapon.SPEAR
+var javelins := 0  # throwing spears he still carries
 var has_shield := true
 var shield_hp := 3
 var armor: CombatTypes.Armor = CombatTypes.Armor.NONE
@@ -39,6 +41,8 @@ var facing := Vector2i(0, -1)
 ## facing". Set by the player (wheel left/right) or the leader AI, never by
 ## a step or a blow, so the wall does not wheel every time he turns.
 var line_facing := Vector2i.ZERO
+## For a leader: the formation his band forms on his shout. Null is the plain line.
+var formation: FormationTemplate = null
 var wound: CombatTypes.Wound = CombatTypes.Wound.UNHURT
 var breath := 0
 var morale := 0

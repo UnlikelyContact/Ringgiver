@@ -111,8 +111,8 @@ func run(strat: String, n: int, seed_in: int, scenario: String, per_fight := fal
 		else:
 			wins[res.winner] += 1
 		rounds += b.round
-		our_lost += 8 - b.active(0).size()
-		their_lost += 8 - b.active(1).size()
+		our_lost += b.result.started[0] - b.active(0).size()
+		their_lost += b.result.started[1] - b.active(1).size()
 		for line in b.log:
 			if line.contains("hesitates") and line.begins_with("You"):
 				hesitations += 1

@@ -176,6 +176,27 @@ func _animate(before: Dictionary, lines: PackedStringArray) -> void:
 	# Beat 1: everyone steps.
 	if _tween_to(battle.after_movement, 0.4):
 		await _wait(0.45)
+	# Beat 1b: arrows and thrown spears fly.
+	var shots := 0
+	for line in lines:
+		var shooter: Warrior = null
+		var mark: Warrior = null
+		if line.contains(" shoots at ") or line.contains(" throws at "):
+			var sep := " shoots at " if line.contains(" shoots at ") else " throws at "
+			shooter = _by_name.get(line.split(sep)[0].strip_edges(), null)
+			mark = _by_name.get(line.split(sep)[1].split(":")[0].strip_edges(), null)
+		elif line.contains(" shoots ") or line.contains(" spears "):
+			var sep := " shoots " if line.contains(" shoots ") else " spears "
+			shooter = _by_name.get(line.split(sep)[0].strip_edges(), null)
+			mark = _by_name.get(line.split(sep)[1].split(" (")[0].strip_edges(), null)
+		elif line.contains("'s spear sticks in "):
+			shooter = _by_name.get(line.split("'s spear sticks in ")[0].strip_edges(), null)
+			mark = _by_name.get(line.split("'s spear sticks in ")[1].split("'s shield")[0].strip_edges(), null)
+		if shooter != null and mark != null and tokens.has(shooter) and tokens.has(mark):
+			_flash_shot((tokens[shooter] as Token).position, (tokens[mark] as Token).position, line.contains("misses"))
+			shots += 1
+	if shots > 0:
+		await _wait(0.5)
 	# Beat 2: blows land one at a time; the winner lunges, the loser flashes.
 	for line in lines:
 		if not line.contains(" beats "):
@@ -271,15 +292,45 @@ func _side_of_line(line: String) -> int:
 	return -1
 
 
-## How many of a side's men stand with a locked shield beside a friend.
-## [men in the leader's wall, men standing]: the wall is the unit that
-## moves as one, so this is what "wall 6/8" means.
+## [men in the leader's wall, men standing who belong in it]: bows stand
+## off and are counted apart, so this is what "wall 6/8" means.
 func wall_count(side: int) -> Array[int]:
 	var total := 0
 	for w in battle.active(side):
-		if not w.broken:
+		if not w.broken and w.role != CombatTypes.Role.MISSILE:
 			total += 1
 	return [battle.wall_members(side).size(), total]
+
+
+## [spearmen standing in the wall, bows still standing] for a side.
+func arms_count(side: int) -> Array[int]:
+	var spears := 0
+	for w in battle.wall_members(side):
+		if w.role == CombatTypes.Role.SPEAR:
+			spears += 1
+	var bows := 0
+	for w in battle.active(side):
+		if not w.broken and w.role == CombatTypes.Role.MISSILE:
+			bows += 1
+	return [spears, bows]
+
+
+## The shape your band forms on "Shield wall!"; cycles the presets and
+## queues the shout so the next round forms it.
+func cycle_formation() -> void:
+	var presets := FormationTemplate.presets()
+	var cur: FormationTemplate = player.formation
+	var idx := 0
+	for i in presets.size():
+		if cur != null and presets[i].name == cur.name:
+			idx = (i + 1) % presets.size()
+	player.formation = presets[idx]
+	pending_shout = CombatTypes.Shout.SHIELD_WALL
+	queue_redraw()
+
+
+func formation_name() -> String:
+	return player.formation.name if player != null and player.formation != null else "line"
 
 
 func in_wall(w: Warrior) -> bool:
@@ -493,6 +544,22 @@ func _draw_shield_locks() -> void:
 				col = col.darkened(0.45)
 			draw_line(a, b, Palette.OUTLINE, 7.0)
 			draw_line(a, b, col, 4.0)
+
+
+## A missile's flight: a thin line that fades, red-tipped when it lands.
+func _flash_shot(from: Vector2, to: Vector2, missed: bool) -> void:
+	if anim_scale <= 0.0:
+		return
+	var l := Line2D.new()
+	l.width = 2.0
+	l.default_color = Palette.BONE if missed else Palette.BLOOD
+	l.points = PackedVector2Array([from, from])
+	l.z_index = 20
+	add_child(l)
+	var tw := create_tween()
+	tw.tween_method(func(t: float) -> void: l.points = PackedVector2Array([from.lerp(to, maxf(0.0, t - 0.3)), from.lerp(to, t)]), 0.0, 1.0, 0.3 * anim_scale)
+	tw.tween_property(l, "modulate:a", 0.0, 0.2 * anim_scale)
+	tw.tween_callback(l.queue_free)
 
 
 func _arrow(from: Vector2, to: Vector2, col: Color, width := 3.0) -> void:
