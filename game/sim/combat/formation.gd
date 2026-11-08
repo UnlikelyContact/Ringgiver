@@ -14,12 +14,13 @@ static func line_slots(grid: BattleGrid, leader: Warrior, count: int) -> Array[V
 	if leader == null or count <= 0:
 		return out
 	var wf := leader.wall_facing()
+	var ax := leader.wall_axis()
 	var right := leader.pos
 	var left := leader.pos
 	var reach := maxi(grid.width, grid.height)
 	for k in range(1, reach + 1):
-		right = BattleGrid.along_line(right, wf, true)
-		left = BattleGrid.along_line(left, wf, false)
+		right = BattleGrid.along(right, ax, wf, true)
+		left = BattleGrid.along(left, ax, wf, false)
 		for c in [right, left]:
 			if _usable(grid, leader, c):
 				out.append(c)
@@ -35,12 +36,13 @@ static func open_line_slots(grid: BattleGrid, leader: Warrior, count: int) -> Ar
 	if leader == null or count <= 0:
 		return out
 	var wf := leader.wall_facing()
+	var ax := leader.wall_axis()
 	var right := leader.pos
 	var left := leader.pos
 	var reach := maxi(grid.width, grid.height)
 	for k in range(1, reach + 1):
-		right = BattleGrid.along_line(right, wf, true)
-		left = BattleGrid.along_line(left, wf, false)
+		right = BattleGrid.along(right, ax, wf, true)
+		left = BattleGrid.along(left, ax, wf, false)
 		for c in [right, left]:
 			if grid.is_free(c):
 				out.append(c)
@@ -105,6 +107,7 @@ static func template_slots(grid: BattleGrid, leader: Warrior, band: Array[Warrio
 		var r := 1 if template == null else clampi(template.rank(m.role), 1, 3)
 		(by_rank[r] as Array[Warrior]).append(m)
 	var wf := leader.wall_facing()
+	var ax := leader.wall_axis()
 	var back_facing := BattleGrid.rotate(wf, 3)
 	var front: Array[Warrior] = by_rank[1]
 	var second: Array[Warrior] = by_rank[2]
@@ -115,15 +118,15 @@ static func template_slots(grid: BattleGrid, leader: Warrior, band: Array[Warrio
 	var line := line_slots(grid, leader, line_width)
 	var behind: Array[Vector2i] = []
 	for c in [leader.pos] + line:
-		var b: Vector2i = c + BattleGrid.advance_step(c, back_facing)  # straight behind
+		var b: Vector2i = c + BattleGrid.forward(c, ax, back_facing)  # straight behind
 		if _usable(grid, leader, b):
 			behind.append(b)
 	var far: Array[Vector2i] = []
 	var i := 0
 	for c in [leader.pos] + line:
 		if i % 2 == 0:
-			var b1: Vector2i = c + BattleGrid.advance_step(c, back_facing)
-			var b: Vector2i = b1 + BattleGrid.advance_step(b1, back_facing)
+			var b1: Vector2i = c + BattleGrid.forward(c, ax, back_facing)
+			var b: Vector2i = b1 + BattleGrid.forward(b1, ax, back_facing)
 			if _usable(grid, leader, b):
 				far.append(b)
 		i += 1

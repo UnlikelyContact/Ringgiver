@@ -272,3 +272,42 @@ func test_a_taunted_aggressive_leader_comes_on() -> void:
 	b.set_shout(0, CombatTypes.Shout.HOLD)
 	b.run_round()
 	assert_eq(b.standing_order(1), CombatTypes.Shout.PUSH, "taunted, he comes on")
+
+
+func test_a_wall_can_stand_eight_ways_and_slant_lines_are_straight() -> void:
+	var rules := CombatRules.new()
+	var g := BattleGrid.new(16, 12)
+	var band := _band(rules, 0, 7, 0, 0)
+	var leader := band[0]
+	# Level, facing up: wheel right once and the line runs on the slant rising to the left, facing north-east.
+	BandFactory.deploy_formation(g, band, BattleGrid.from_offset(8, 6), NORTH, rules, FormationTemplate.line())
+	assert_eq(leader.wall_axis(), BattleGrid.Axis.LEVEL)
+	leader.wheel_wall(1)
+	assert_eq(leader.wall_axis(), BattleGrid.Axis.SLANT_L)
+	assert_eq(leader.wall_facing(), Vector2i(1, -1), "facing north-east")
+	var slots := Formation.line_slots(g, leader, 6)
+	for c in slots:
+		assert_eq(c.x, leader.pos.x, "a north-west/south-east slant keeps q: a straight hex axis")
+	# Its forward step straddles north-east and east, one each per two cells across the line.
+	var pair := BattleGrid.forward_pair(BattleGrid.Axis.SLANT_L, Vector2i(1, -1))
+	assert_true(pair.has(Vector2i(1, -1)) and pair.has(Vector2i(1, 0)))
+	# Every man in the slant line takes the same step.
+	var step := BattleGrid.forward(leader.pos, leader.wall_axis(), leader.wall_facing())
+	for c in slots:
+		assert_eq(BattleGrid.forward(c, leader.wall_axis(), leader.wall_facing()), step, "one step for the whole line")
+	# Wheel on: plumb facing east, then the other slant, then level facing down; eight turns come home.
+	leader.wheel_wall(1)
+	assert_eq(leader.wall_axis(), BattleGrid.Axis.PLUMB)
+	assert_eq(leader.wall_facing(), Vector2i(1, 0))
+	leader.wheel_wall(1)
+	assert_eq(leader.wall_axis(), BattleGrid.Axis.SLANT_R)
+	leader.wheel_wall(1)
+	assert_eq(leader.wall_axis(), BattleGrid.Axis.LEVEL)
+	assert_eq(leader.wall_facing(), Vector2i(0, 1), "facing down")
+	leader.wheel_wall(4)
+	assert_eq(leader.wall_axis(), BattleGrid.Axis.LEVEL)
+	assert_eq(leader.wall_facing(), NORTH, "eight wheels round brings it home")
+	# The stance toward a bearing: an enemy due east wants a plumb line facing east.
+	var toward := BattleGrid.state_toward(Vector2(100, 0))
+	assert_eq(toward[0], BattleGrid.Axis.PLUMB)
+	assert_eq(toward[1], Vector2i(1, 0))

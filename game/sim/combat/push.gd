@@ -22,7 +22,7 @@ extends RefCounted
 ## and the fight goes on. Empty means every side drives.
 static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		all: Array[Warrior], log: PackedStringArray, may_advance: Dictionary = {},
-		wall_facing: Dictionary = {}, driving: Dictionary = {}) -> PushResult:
+		wall_facing: Dictionary = {}, driving: Dictionary = {}, wall_axis: Dictionary = {}) -> PushResult:
 	var result := PushResult.new()
 	var men: Array[Warrior] = all.duplicate()
 	men.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
@@ -78,21 +78,21 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 
 	for w in winners:
 		w.add_effort(CombatTypes.Stat.MIGHT)
-	_shove(rules, grid, losers, result, log, wall_facing)
+	_shove(rules, grid, losers, result, log, wall_facing, wall_axis)
 	if not result.shoved.is_empty() or not result.driven_off.is_empty():
 		for w in winners:
 			w.morale = clampi(w.morale + rules.push_won_morale, 0, 10)
 	if rules.push_winners_advance:
 		if may_advance.is_empty():
 			if driving.is_empty():  # nobody named: anyone follows up
-				_advance(grid, winners, losers, result, log, wall_facing)
+				_advance(grid, winners, losers, result, log, wall_facing, wall_axis)
 		else:
 			var allowed: Array[Warrior] = []
 			for w in winners:
 				if may_advance.has(w):
 					allowed.append(w)
 			if allowed.size() == winners.size():
-				_advance(grid, winners, losers, result, log, wall_facing)
+				_advance(grid, winners, losers, result, log, wall_facing, wall_axis)
 	result.winning_side = _top_side(wins)
 	return result
 
@@ -101,7 +101,7 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 ## ahead is now free moves into it, so the lines stay in contact and a push
 ## actually drives the line forward (concept.md, "Push!").
 static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Warrior],
-		result: PushResult, log: PackedStringArray, wall_facing: Dictionary = {}) -> void:
+		result: PushResult, log: PackedStringArray, wall_facing: Dictionary = {}, wall_axis: Dictionary = {}) -> void:
 	if losers.is_empty() or (result.shoved.is_empty() and not result.blocked.is_empty()):
 		return
 	# The winning line follows as a line: every man steps square to his
@@ -114,7 +114,8 @@ static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Wa
 		# The line follows up along its wall's facing, every man by the same
 		# step (the first man's zigzag), so a bent line keeps its shape.
 		if not side_step.has(w.side):
-			side_step[w.side] = BattleGrid.advance_step(w.pos, wall_facing.get(w.side, w.facing))
+			var f: Vector2i = wall_facing.get(w.side, w.facing)
+			side_step[w.side] = BattleGrid.forward(w.pos, wall_axis.get(w.side, BattleGrid.default_axis(f)), f)
 		var ahead: Vector2i = w.pos + side_step[w.side]
 		var occ := grid.occupant(ahead)
 		if not grid.in_bounds(ahead) or grid.terrain_at(ahead) == CombatTypes.Terrain.WATER \
@@ -194,7 +195,7 @@ static func _touch(a: Array[Warrior], b: Array[Warrior]) -> bool:
 ## cell behind is freed by a friend giving ground move too; the rest are
 ## blocked and lose breath.
 static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
-		result: PushResult, log: PackedStringArray, wall_facing: Dictionary = {}) -> void:
+		result: PushResult, log: PackedStringArray, wall_facing: Dictionary = {}, wall_axis: Dictionary = {}) -> void:
 	var pending: Array[Warrior] = losers.duplicate()
 	# Straight back, square to the line: the same zigzag a wall advances by,
 	# so a line shoved twice ends up where it started, not two cells aside.
@@ -206,7 +207,7 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 		# from his own front.
 		var f: Vector2i = wall_facing.get(w.side, w.facing)
 		if not side_step.has(w.side):
-			side_step[w.side] = BattleGrid.advance_step(w.pos, BattleGrid.rotate(f, 3))
+			side_step[w.side] = BattleGrid.forward(w.pos, wall_axis.get(w.side, BattleGrid.default_axis(f)), BattleGrid.rotate(f, 3))
 		back[w] = w.pos + side_step[w.side]
 	pending.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
 	# A line gives ground together: if fewer than push_line_fraction of its

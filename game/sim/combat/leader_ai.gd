@@ -25,16 +25,16 @@ func _wheel_if_needed(battle: Battle, leader: Warrior, theirs: Array[Warrior]) -
 	var sum := Vector2.ZERO
 	for e in theirs:
 		sum += BattleGrid.to_cart(Vector2(e.pos))
-	var want := BattleGrid.snap_direction(sum / theirs.size() - BattleGrid.to_cart(Vector2(leader.pos)))
-	var have := leader.wall_facing()
-	var diff := posmod(BattleGrid.dir_index(want) - BattleGrid.dir_index(have), 6)
+	var want := BattleGrid.state_toward(sum / theirs.size() - BattleGrid.to_cart(Vector2(leader.pos)))
+	var n := BattleGrid.STATES.size()
+	var diff := posmod(BattleGrid.state_of(want[0], want[1]) - BattleGrid.state_of(leader.wall_axis(), leader.wall_facing()), n)
 	if battle.round - _last_wheel_round < battle.rules.ai_wheel_cooldown:
 		return
-	if diff >= battle.rules.ai_wheel_min_steps and diff <= 6 - battle.rules.ai_wheel_min_steps:
+	if diff >= battle.rules.ai_wheel_min_steps and diff <= n - battle.rules.ai_wheel_min_steps:
 		_last_wheel_round = battle.round
-		# One facing a round: the line follows the wheel over the rounds after.
-		leader.line_facing = BattleGrid.rotate(have, 1 if diff <= 3 else -1)
-		battle.log.append("%s wheels his line toward %s" % [leader.display_name, str(want)])
+		# One stance a round: the line follows the wheel over the rounds after.
+		leader.wheel_wall(1 if diff <= n / 2 else -1)
+		battle.log.append("%s wheels his line toward %s" % [leader.display_name, BattleGrid.AXIS_NAMES[leader.wall_axis()]])
 
 
 func _within(leader: Warrior, theirs: Array[Warrior], range: int) -> bool:

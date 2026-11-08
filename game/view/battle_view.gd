@@ -73,7 +73,7 @@ func advance() -> void:
 		pending_action = null
 		queue_redraw()
 		return
-	var cell := player.pos + BattleGrid.advance_step(player.pos, player.wall_facing())
+	var cell := player.pos + BattleGrid.forward(player.pos, player.wall_axis(), player.wall_facing())
 	if battle.grid.is_free(cell):
 		pending_action = Action.move_to(cell, player.wall_facing())
 		queue_redraw()
@@ -84,16 +84,18 @@ func advance_targets() -> Dictionary:
 	var out := {}
 	if player == null or not in_wall(player):
 		return out
+	var step := BattleGrid.forward(player.pos, player.wall_axis(), player.wall_facing())
 	for w in battle.wall_members(player.side):
-		out[w] = w.pos + BattleGrid.advance_step(w.pos, player.wall_facing())
+		out[w] = w.pos + step
 	return out
 
 
-## Wheels the wall one facing (60 degrees) left or right.
+## Wheels the wall one stance left or right round the eight it can stand
+## in: level, the two slants and plumb, facing either way.
 func wheel(steps: int) -> void:
 	if player == null:
 		return
-	player.line_facing = BattleGrid.rotate(player.wall_facing(), steps)
+	player.wheel_wall(steps)
 	queue_redraw()
 
 
@@ -186,18 +188,21 @@ func _compute_tighten() -> void:
 					depth[n] = depth[m] + 1
 					queue.append(n)
 		var centre := Iso.to_screen(leader.pos)
-		var plumb := BattleGrid.line_is_plumb(leader.wall_facing())
+		var plumb := leader.wall_axis() == BattleGrid.Axis.PLUMB
+		var leader_col := BattleGrid.to_offset(leader.pos).x
+		var col_px := Iso.SIZE * sqrt(3.0)
 		for m in members:
 			if not depth.has(m) or m == leader:
 				continue
 			var mine := Iso.to_screen(m.pos)
 			var pull := Vector2.ZERO
-			if plumb and m.role != CombatTypes.Role.MISSILE:
-				# A plumb line zigzags on the hexes; on the screen it stands
-				# straight under its leader, second rank one column back.
-				var ranks_back := roundi((mine.x - centre.x) / (Iso.SIZE * sqrt(3.0)) * (1.0 if leader.wall_facing() == BattleGrid.DIRS[5] else -1.0))
-				var want_x := centre.x - ranks_back * Iso.SIZE * sqrt(3.0) * (1.0 if leader.wall_facing() == BattleGrid.DIRS[5] else -1.0)
-				pull.x = want_x - mine.x
+			if plumb:
+				# A plumb line zigzags on the hexes; on the screen each man
+				# stands straight in his own column (the leader's for the
+				# line, one back for the second rank), never more than half
+				# a cell from where his hex is drawn.
+				var want_x := centre.x + (BattleGrid.to_offset(m.pos).x - leader_col) * col_px
+				pull.x = clampf(want_x - mine.x, -col_px / 2.0, col_px / 2.0)
 			var toward := centre - mine
 			if toward.length() >= 1.0:
 				pull += toward.normalized() * minf(WALL_TIGHTEN * depth[m], WALL_TIGHTEN_MAX)
@@ -528,7 +533,7 @@ func _tap(local: Vector2) -> void:
 	if BattleGrid.chebyshev(cell, player.pos) != 1:
 		return
 	if in_wall(player) and battle.wall_members(player.side).size() >= 2 \
-			and cell == player.pos + BattleGrid.advance_step(player.pos, player.wall_facing()):
+			and cell == player.pos + BattleGrid.forward(player.pos, player.wall_axis(), player.wall_facing()):
 		pending_advance = true  # a tap ahead takes the wall forward, not the man
 		pending_action = null
 		queue_redraw()

@@ -335,14 +335,22 @@ overlap while the hex stays each man's slot in the rules; the line
 visibly closes up as the wall forms and opens as it breaks. When real
 models come, the formation pose (shoulder to shoulder, shields
 overlapped) is this same offset, applied to the model rather than the
-disc. **Lines run level or plumb** (same day): a wall never forms slantwise
-across the hexes. Facing up or down (the four diagonal hex facings) the
-line is a level row and the step zigzags; facing east or west the line is
-plumb, a zigzag of neighbouring cells drawn straight on the screen, and
-the step is the plain hex step. "Straight behind" follows the same rule,
-so the second rank stands directly behind in both cases. Wheel still turns
-one facing at a time; a line swaps between level and plumb at the sixty-
-degree steps between.
+disc. **A wall stands one of eight ways** (same day). Its line runs on one of
+four axes on the screen: level (a row of cells), plumb (up and down: a
+zigzag of neighbouring cells drawn straight), or either slant (the two
+true hex axes, rising to the right or to the left). Its men face one side
+of the axis or the other. Wheel steps round the eight stances in turn, so
+a right wheel from level-facing-up goes to the left-rising slant facing
+north-east, then plumb facing east, then the right-rising slant facing
+south-east, then level facing down. The facing is still a hex direction
+(what shields and arcs use), thirty degrees off the true perpendicular for
+level and slanted lines, which is as near as hexes come. Every stance has
+a "straight forward" step: the plain hex step for plumb, and for the rest
+a pair of straddling steps keyed on the coordinate that is constant along
+the line, so every man in the line steps the same way and keeps his own
+place across it; "straight behind" is the same step the other way. The
+enemy's leader wheels through the same stances toward your band. The HUD
+names the stance beside the wall count.
 
 ### Drill, custom formations and custom shouts (decided 8 Nov 2026)
 

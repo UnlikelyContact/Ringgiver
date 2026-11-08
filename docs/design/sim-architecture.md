@@ -131,14 +131,20 @@ Write those as tests with ranges.
 
 ## Line geometry (`battle_grid.gd`)
 
-Lines run level or plumb, never slantwise. `line_is_plumb(facing)` is true
-for east and west. `along_line(pos, facing, right)` gives the next cell
-along a man's line (along the row for a level line, down or up the zigzag
-for a plumb one); `advance_step(pos, facing)` is the plain hex step facing
-east or west and the row-keyed zigzag facing up or down; `behind(w)` is
-the cell straight behind by the same rule. `Formation.line_slots`,
-`BandFactory.deploy_line` and `Decision._gap_cell` build on `along_line`.
-The view straightens a plumb line on the screen.
+A wall runs on one of four axes (`BattleGrid.Axis`: LEVEL, SLANT_R, PLUMB,
+SLANT_L) and faces one side of it: eight stances (`STATES`), each with
+the bearing of its front. A leader carries `line_axis` and `line_facing`
+(`Warrior.wall_axis()`, `wall_facing()`, `wheel_wall(steps)`); a lone
+man's axis follows his facing (`default_axis`). `along(pos, axis, facing,
+right)` is the next cell along the line; `forward(pos, axis, facing)` the
+straight step (`forward_pair` gives the two straddling steps, `across_key`
+the coordinate whose parity picks between them, constant along the line);
+`state_toward(bearing)` the stance that best fronts a direction;
+`state_of`, `wheel_state`, `state_steps` work on the eight-cycle. The old
+`along_line`/`advance_step`/`behind` use the default axis. Formation,
+deployment, the wall step, shoves, follow-ups, relief and the view all
+go through these. The view straightens a plumb line by column, never
+more than half a cell.
 
 ## Formations and arms (`formation_template.gd`, `formation.gd`, roles)
 

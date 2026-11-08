@@ -43,6 +43,9 @@ var facing := Vector2i(0, -1)
 var line_facing := Vector2i.ZERO
 ## For a leader: the formation his band forms on his shout. Null is the plain line.
 var formation: FormationTemplate = null
+## For a leader: the axis his line runs on (BattleGrid.Axis), or -1 to
+## follow his wall facing (level, or plumb facing east or west).
+var line_axis := -1
 var wound: CombatTypes.Wound = CombatTypes.Wound.UNHURT
 var breath := 0
 var morale := 0
@@ -92,6 +95,19 @@ func stat(s: CombatTypes.Stat) -> int:
 ## The facing a line formed on this man takes.
 func wall_facing() -> Vector2i:
 	return line_facing if line_facing != Vector2i.ZERO else facing
+
+
+## The axis a line formed on this man runs on.
+func wall_axis() -> int:
+	return line_axis if line_axis >= 0 else BattleGrid.default_axis(wall_facing())
+
+
+## Turns his wall `steps` right-hand stances round (BattleGrid.STATES).
+func wheel_wall(steps: int) -> void:
+	var s := BattleGrid.wheel_state(wall_axis(), wall_facing(), steps)
+	line_axis = s[0]
+	line_facing = s[1]
+	facing = line_facing
 
 
 func is_down() -> bool:

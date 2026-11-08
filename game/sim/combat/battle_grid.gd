@@ -182,50 +182,160 @@ static func shield_covers(arc: CombatTypes.Arc) -> bool:
 	return arc == CombatTypes.Arc.FRONT or arc == CombatTypes.Arc.LEFT
 
 
-## Lines run level or plumb on the screen, never slantwise, whatever the
-## hexes do. A man facing up or down (the four diagonal hex facings) stands
-## in a level row of cells; a man facing east or west stands in a plumb
-## line, which on pointy-top hexes is a zigzag of neighbouring cells drawn
-## straight. The two directions along his line are "right" and "left" of
-## his facing. (`line_dirs` is kept for callers that only need the two raw
-## hex axes nearest the line.)
+# --- Lines: four ways a wall can run, eight ways it can stand -----------------
+## A wall runs along one of four axes on the screen: LEVEL (a row of cells),
+## PLUMB (up and down: a zigzag of neighbouring cells drawn straight),
+## SLANT_R (the hex axis rising to the right, north-east/south-west) or
+## SLANT_L (the hex axis rising to the left, north-west/south-east). Its men
+## face one side of it or the other, so a wall stands one of eight ways;
+## wheeling steps round them. The facing is a hex direction (what shields
+## and arcs use); for a level or slanted line it is thirty degrees off the
+## true perpendicular, which is as near as hexes come.
+enum Axis { LEVEL, SLANT_R, PLUMB, SLANT_L }
+const AXIS_NAMES := ["level", "slant right", "plumb", "slant left"]
+## [axis, facing index, bearing of the front in degrees], right-hand turns
+## going down the list.
+const STATES := [
+	[Axis.LEVEL, 0, 90], [Axis.SLANT_L, 1, 30], [Axis.PLUMB, 2, 0], [Axis.SLANT_R, 3, 330],
+	[Axis.LEVEL, 3, 270], [Axis.SLANT_L, 4, 210], [Axis.PLUMB, 5, 180], [Axis.SLANT_R, 0, 150],
+]
+
+
+## The two raw hex axes nearest a man's line (kept for old callers).
 static func line_dirs(facing: Vector2i) -> Array[Vector2i]:
 	return [rotate(facing, 2), rotate(facing, 5)]
 
 
-## Does a man with this facing stand in a plumb (up-and-down) line?
+## The axis a lone man's line runs on, from his facing alone: level unless
+## he faces east or west, then plumb.
+static func default_axis(facing: Vector2i) -> int:
+	var i := dir_index(facing)
+	return Axis.PLUMB if i == 2 or i == 5 else Axis.LEVEL
+
+
+## Whether a facing is on the first-listed side of an axis (up, up-right,
+## east, up-left respectively) rather than the other.
+static func side_a(axis: int, facing: Vector2i) -> bool:
+	var i := dir_index(facing)
+	match axis:
+		Axis.LEVEL:
+			return i == 0 or i == 1 or i == 2  # north-west, north-east (east breaks the tie upward)
+		Axis.PLUMB:
+			return i == 1 or i == 2 or i == 3  # east and its neighbours
+		Axis.SLANT_R:
+			return i == 0 or i == 5 or i == 1  # north-west, west (north-east along the axis counts as up-left)
+		_:
+			return i == 1 or i == 2 or i == 0  # north-east, east (north-west along the axis counts as up-right)
+
+
+## The two hex steps that straddle "straight forward" for a man facing
+## `facing` on `axis`, [the one taken from an even perpendicular coordinate,
+## the one from odd]. Plumb has one step, given twice.
+static func forward_pair(axis: int, facing: Vector2i) -> Array[Vector2i]:
+	var a := side_a(axis, facing)
+	var i: Array
+	match axis:
+		Axis.LEVEL:
+			i = [1, 0] if a else [3, 4]
+		Axis.PLUMB:
+			i = [2, 2] if a else [5, 5]
+		Axis.SLANT_R:
+			i = [0, 5] if a else [3, 2]
+		_:
+			i = [1, 2] if a else [4, 5]
+	var out: Array[Vector2i] = [DIRS[i[0]], DIRS[i[1]]]
+	return out
+
+
+## The coordinate that is constant along a line on `axis`: its parity keys
+## the zigzag, so every man in the line steps the same way and each keeps
+## his own place across the line.
+static func across_key(pos: Vector2i, axis: int) -> int:
+	match axis:
+		Axis.LEVEL:
+			return pos.y
+		Axis.PLUMB:
+			return 0
+		Axis.SLANT_R:
+			return pos.x + pos.y
+		_:
+			return pos.x
+
+
+## The step a man at `pos` takes to advance straight forward from a line on
+## `axis`, facing `facing`.
+static func forward(pos: Vector2i, axis: int, facing: Vector2i) -> Vector2i:
+	var pair := forward_pair(axis, facing)
+	return pair[0] if posmod(across_key(pos, axis), 2) == 0 else pair[1]
+
+
+## The next cell along a man's line to his right (or left).
+static func along(pos: Vector2i, axis: int, facing: Vector2i, right: bool) -> Vector2i:
+	var a := side_a(axis, facing)
+	match axis:
+		Axis.LEVEL:
+			return pos + (DIRS[2] if a == right else DIRS[5])  # facing up, the right hand is east
+		Axis.SLANT_R:
+			return pos + (DIRS[1] if a == right else DIRS[4])  # facing up-left, the right hand is north-east
+		Axis.SLANT_L:
+			return pos + (DIRS[3] if a == right else DIRS[0])  # facing up-right, the right hand is south-east
+		_:
+			# Facing east, the right hand is south: down the zigzag, keeping the column.
+			var down := a == right
+			return pos + forward(pos, Axis.LEVEL, DIRS[3] if down else DIRS[0])
+
+
+## The state (index into STATES) a wall stands in, from its axis and facing.
+static func state_of(axis: int, facing: Vector2i) -> int:
+	var best := 0
+	var best_d := 9
+	for i in STATES.size():
+		if STATES[i][0] != axis:
+			continue
+		var d := facing_steps(DIRS[STATES[i][1]], facing)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+
+## The wall's stance `steps` right-hand turns round from (axis, facing):
+## [axis, facing].
+static func wheel_state(axis: int, facing: Vector2i, steps: int) -> Array:
+	var s: Array = STATES[posmod(state_of(axis, facing) + steps, STATES.size())]
+	return [s[0], DIRS[s[1]]]
+
+
+## The stance whose front points nearest along a cartesian bearing: [axis, facing].
+static func state_toward(bearing: Vector2) -> Array:
+	var ang := rad_to_deg(atan2(-bearing.y, bearing.x))  # screen y runs down
+	var best: Array = STATES[0]
+	var best_d := 999.0
+	for s in STATES:
+		var d: float = absf(wrapf(ang - float(s[2]), -180.0, 180.0))
+		if d < best_d:
+			best_d = d
+			best = s
+	return [best[0], DIRS[best[1]]]
+
+
+## How many wheel steps apart two stances are, the short way round (0..4).
+static func state_steps(axis_a: int, facing_a: Vector2i, axis_b: int, facing_b: Vector2i) -> int:
+	var d := posmod(state_of(axis_b, facing_b) - state_of(axis_a, facing_a), STATES.size())
+	return mini(d, STATES.size() - d)
+
+
+## Old names, for a lone man whose line axis follows his facing.
 static func line_is_plumb(facing: Vector2i) -> bool:
-	var i := dir_index(facing)
-	return i == 2 or i == 5
+	return default_axis(facing) == Axis.PLUMB
 
 
-## The next cell along a man's line to his right (or left): along the row
-## for a level line, down or up the zigzag for a plumb one.
 static func along_line(pos: Vector2i, facing: Vector2i, right: bool) -> Vector2i:
-	var i := dir_index(facing)
-	if line_is_plumb(facing):
-		# Facing east, his right hand is south; facing west, north.
-		var down := (i == 2) == right
-		return pos + advance_step(pos, DIRS[3] if down else DIRS[0])
-	# Facing up (north-west or north-east), his right hand is east.
-	var up := i == 0 or i == 1
-	return pos + (DIRS[2] if up == right else DIRS[5])
+	return along(pos, default_axis(facing), facing, right)
 
 
-## The step a wall takes to advance square to its line. Facing east or
-## west it is the plain hex step. Facing up or down no hex step is square,
-## so "straight" alternates the two that straddle it, keyed on the row, so
-## every man in a level row steps the same way and keeps his column.
 static func advance_step(pos: Vector2i, facing: Vector2i) -> Vector2i:
-	var i := dir_index(facing)
-	if i == 2 or i == 5:
-		return facing
-	# With odd rows shoved right, the cell straight above an even row is to
-	# the north-east and above an odd row to the north-west; straight below,
-	# south-east and south-west. Each step keeps the man's own column.
-	if i == 0 or i == 1:  # up
-		return DIRS[1] if posmod(pos.y, 2) == 0 else DIRS[0]
-	return DIRS[3] if posmod(pos.y, 2) == 0 else DIRS[4]  # down
+	return forward(pos, default_axis(facing), facing)
 
 
 ## The cell straight behind `w` (for second-rank support).

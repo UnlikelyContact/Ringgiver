@@ -166,9 +166,10 @@ var retreat_stall_rounds := 4
 ## a side with fewer standing men than this fraction of the other's quits
 ## and loses, otherwise both draw off.
 var stall_rounds := 6
-## A pushing wall whose enemy is this many facings (60 degrees each) or more
-## off its front wheels toward them rather than marching away.
-var wall_wheel_min_steps := 2
+## A pushing wall whose enemy is this many wheel steps or more off its front
+## (BattleGrid.STATES: eight stances round the clock) wheels toward them
+## rather than marching away.
+var wall_wheel_min_steps := 3
 ## A wall bends: two men stay linked while their facings differ by at most
 ## this many hex facings, and a man stays in the wall while he faces no more
 ## than `wall_max_bend` facings off the leader's. Bend further and it breaks.
@@ -196,7 +197,7 @@ var ai_fall_back_percent := 35
 var ai_break_them_percent := 40
 var ai_scatter_mean_distance := 3
 ## The AI wheels its wall when the enemy is this many facings (60 degrees each) off it.
-var ai_wheel_min_steps := 2
+var ai_wheel_min_steps := 3
 var ai_wheel_cooldown := 3
 ## A STEADY leader waits this many rounds without contact before pushing.
 var ai_patience_rounds := 6

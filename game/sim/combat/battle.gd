@@ -168,21 +168,20 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	# enemy lies a little to one side the whole line takes the slant toward
 	# them instead of the zigzag, and slides across as it comes on rather
 	# than marching past.
-	var slant := false
-	if not back and not theirs.is_empty():
-		var lf := leader.wall_facing()
-		var near_l := _nearest_enemy(leader.pos, theirs)
-		var zig_step := BattleGrid.advance_step(leader.pos, lf)
-		var zig: Vector2i = leader.pos + zig_step
-		var zag: Vector2i = leader.pos + (lf if zig_step != lf else BattleGrid.rotate(lf, 1))
-		slant = BattleGrid.distance(zag, near_l.pos) < BattleGrid.distance(zig, near_l.pos)
-	# One step for the whole wall, the leader's: square to the wall's facing
-	# by the zigzag that keeps his column (or the slant), forward or back,
-	# so the shape of the line, bends and all, moves as a piece.
+	# One step for the whole wall, the leader's: straight forward (or back)
+	# from the line's axis by the zigzag that keeps every man's place across
+	# the line, so the shape of the line, bends and all, moves as a piece.
+	# Coming on with the enemy a little to one side, the whole line takes
+	# the straddling step toward them instead, and slides across as it comes.
 	var lf := leader.wall_facing()
-	var step := BattleGrid.advance_step(leader.pos, BattleGrid.rotate(lf, 3) if back else lf)
-	if slant and not back:
-		step = lf if step != lf else BattleGrid.rotate(lf, 1)
+	var ax := leader.wall_axis()
+	var step := BattleGrid.forward(leader.pos, ax, BattleGrid.rotate(lf, 3) if back else lf)
+	if not back and not theirs.is_empty():
+		var near_l := _nearest_enemy(leader.pos, theirs)
+		var pair := BattleGrid.forward_pair(ax, lf)
+		var other: Vector2i = pair[1] if step == pair[0] else pair[0]
+		if other != step and BattleGrid.distance(leader.pos + other, near_l.pos) < BattleGrid.distance(leader.pos + step, near_l.pos):
+			step = other
 	for w in members:
 		if engaged.has(w) and not back:
 			continue
@@ -283,9 +282,10 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	# a stepping man, not in the wall himself, takes the same step if the
 	# cell is his for the taking.
 	if not back:
-		var back_dir := BattleGrid.rotate(leader.wall_facing(), 3)
+		var back_facing := BattleGrid.rotate(leader.wall_facing(), 3)
+		var ax2 := leader.wall_axis()
 		for w in targets:
-			var m := grid.occupant(w.pos + back_dir)
+			var m := grid.occupant(w.pos + BattleGrid.forward(w.pos, ax2, back_facing))
 			if m == null or m.side != side or members.has(m) or not m.is_active() or m.broken or m.role == CombatTypes.Role.MISSILE:
 				continue
 			var his: Vector2i = m.pos + (targets[w] - w.pos)
@@ -386,13 +386,15 @@ func _wheel_toward_enemy(side: int, leader: Warrior, members: Array[Warrior]) ->
 	var sum := Vector2.ZERO
 	for e in theirs:
 		sum += BattleGrid.to_cart(Vector2(e.pos))
-	var want := BattleGrid.snap_direction(sum / theirs.size() - BattleGrid.to_cart(Vector2(leader.pos)))
-	var diff := posmod(BattleGrid.dir_index(want) - BattleGrid.dir_index(leader.wall_facing()), 6)
-	if diff < rules.wall_wheel_min_steps or diff > 6 - rules.wall_wheel_min_steps:
+	var want := BattleGrid.state_toward(sum / theirs.size() - BattleGrid.to_cart(Vector2(leader.pos)))
+	var have_i := BattleGrid.state_of(leader.wall_axis(), leader.wall_facing())
+	var want_i := BattleGrid.state_of(want[0], want[1])
+	var diff := posmod(want_i - have_i, BattleGrid.STATES.size())
+	var n := BattleGrid.STATES.size()
+	if diff < rules.wall_wheel_min_steps or diff > n - rules.wall_wheel_min_steps:
 		return false
-	var step := 1 if diff <= 3 else -1
-	leader.line_facing = BattleGrid.rotate(leader.wall_facing(), step)
-	leader.facing = leader.line_facing
+	var step := 1 if diff <= n / 2 else -1
+	leader.wheel_wall(step)
 	log.append("%s's line wheels %s to face the enemy" % [leader.display_name, "right" if step == 1 else "left"])
 	return true
 
@@ -526,6 +528,7 @@ func run_round() -> void:
 	if _push_called():
 		var may_advance := {}
 		var wall_facing := {}
+		var wall_axis := {}
 		var driving := {0: false, 1: false}
 		for side in 2:
 			# Only a line driving forward throws the enemy back and follows
@@ -539,7 +542,8 @@ func run_round() -> void:
 			var l := leader_of(side)
 			if l != null:
 				wall_facing[side] = l.wall_facing()
-		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance, wall_facing, driving)
+				wall_axis[side] = l.wall_axis()
+		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance, wall_facing, driving, wall_axis)
 		for w in push.driven_off:
 			result.fled[w.side] += 1
 		if push.winning_side >= 0:
@@ -673,12 +677,13 @@ func _taunt(side: int, leader: Warrior) -> void:
 func _relieve_shieldless(side: int, leader: Warrior) -> void:
 	if leader == null:
 		return
-	var back := BattleGrid.rotate(leader.wall_facing(), 3)
+	var back_facing := BattleGrid.rotate(leader.wall_facing(), 3)
+	var ax := leader.wall_axis()
 	var swapped := {}
 	for w in wall_members(side):
 		if swapped.has(w) or w.shield_usable() or w.role == CombatTypes.Role.MISSILE or w == leader:
 			continue
-		var relief := grid.occupant(w.pos + back)
+		var relief := grid.occupant(w.pos + BattleGrid.forward(w.pos, ax, back_facing))
 		if relief == null or swapped.has(relief) or relief.side != side or not relief.is_active() or relief.broken \
 				or not relief.shield_usable() or relief.role == CombatTypes.Role.MISSILE:
 			continue
