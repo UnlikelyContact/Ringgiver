@@ -53,9 +53,11 @@ func start(p_scenario: String, p_seed: int) -> void:
 	# A little mud so the ground has texture.
 	var mr := SimRng.new(p_seed).fork("mud")
 	for i in 6:
-		battle.grid.set_terrain(BattleGrid.from_offset(mr.randi_range(6, 9), mr.randi_range(1, 10)), CombatTypes.Terrain.MUD)
-	BandFactory.deploy_column(battle.grid, ours, 5, Vector2i(1, 0), rules)
-	BandFactory.deploy_column(battle.grid, theirs, 10, Vector2i(-1, 0), rules)
+		battle.grid.set_terrain(BattleGrid.from_offset(mr.randi_range(2, 13), mr.randi_range(4, 7)), CombatTypes.Terrain.MUD)
+	# Lines run across the screen: ours below facing north-west, theirs
+	# above facing south-east, five rows apart.
+	BandFactory.deploy_line(battle.grid, ours, BattleGrid.from_offset(8, 8), Vector2i(0, -1), rules)
+	BandFactory.deploy_line(battle.grid, theirs, BattleGrid.from_offset(8, 3), Vector2i(0, 1), rules)
 	battle.add_band(ours)
 	battle.add_band(theirs)
 	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY))

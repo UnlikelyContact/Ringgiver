@@ -53,7 +53,12 @@ static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier
 ## is the usual). The leader stands at the anchor; the rest fill the line's
 ## slots outward, right first, exactly as Formation.line_slots orders them.
 static func deploy_column(grid: BattleGrid, band: Array[Warrior], column: int, facing: Vector2i, rules: CombatRules) -> void:
-	var anchor := BattleGrid.from_offset(column, grid.height / 2)
+	deploy_line(grid, band, BattleGrid.from_offset(column, grid.height / 2), facing, rules)
+
+
+## Deploys a band as a line through `anchor` (axial), the leader on it,
+## facing `facing`.
+static func deploy_line(grid: BattleGrid, band: Array[Warrior], anchor: Vector2i, facing: Vector2i, rules: CombatRules) -> void:
 	var leader: Warrior = null
 	var others: Array[Warrior] = []
 	for w in band:
