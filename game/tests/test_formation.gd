@@ -22,9 +22,9 @@ func test_line_slots_alternate_right_left() -> void:
 func test_line_slots_follow_facing() -> void:
 	var g := BattleGrid.new(16, 12)
 	var leader := _man("jarl", 0, Vector2i(8, 5), g)
-	leader.facing = Vector2i(1, 0)  # east: right hand is south
+	leader.facing = Vector2i(1, 0)  # east: right hand is south-west, left north-east
 	var slots := Formation.line_slots(g, leader, 2)
-	var expected: Array[Vector2i] = [Vector2i(8, 6), Vector2i(8, 4)]
+	var expected: Array[Vector2i] = [Vector2i(7, 6), Vector2i(9, 4)]
 	assert_eq(slots, expected)
 
 
@@ -52,10 +52,14 @@ func test_wedge_slots_shape() -> void:
 	var leader := _man("jarl", 0, Vector2i(8, 2), g)
 	leader.facing = Vector2i(0, -1)
 	var slots := Formation.wedge_slots(g, leader, 9)
+	# Facing north-west the tip's back cells are south-west (left) and
+	# south-east (right); each rank runs east along the line between them.
+	# Rank 1 right then left; rank 2 middle (directly behind the tip), right,
+	# left; rank 3 the two middle cells right first, then the edges.
 	var expected: Array[Vector2i] = [
-		Vector2i(9, 3), Vector2i(7, 3),
-		Vector2i(8, 4), Vector2i(10, 4), Vector2i(6, 4),
-		Vector2i(9, 5), Vector2i(7, 5), Vector2i(11, 5), Vector2i(5, 5),
+		Vector2i(8, 3), Vector2i(7, 3),
+		Vector2i(7, 4), Vector2i(8, 4), Vector2i(6, 4),
+		Vector2i(7, 5), Vector2i(6, 5), Vector2i(8, 5), Vector2i(5, 5),
 	]
 	assert_eq(slots, expected)
 
@@ -63,13 +67,13 @@ func test_wedge_slots_shape() -> void:
 func test_wedge_slots_diagonal_facing_is_packed() -> void:
 	var g := BattleGrid.new(16, 12)
 	var leader := _man("jarl", 0, Vector2i(8, 5), g)
-	leader.facing = Vector2i(1, -1)  # north-east
+	leader.facing = Vector2i(1, -1)  # north-east: the wedge turns with him
 	var slots := Formation.wedge_slots(g, leader, 5)
 	assert_eq(slots.size(), 5)
-	# Rank 1: west and south of the tip. Rank 2: the packed diagonal behind it,
-	# its middle cell directly behind the leader.
-	var expected: Array[Vector2i] = [Vector2i(8, 6), Vector2i(7, 5),
-			Vector2i(7, 6), Vector2i(8, 7), Vector2i(6, 5)]
+	# Rank 1: south-west (right) and west (left) of the tip. Rank 2: the
+	# packed rank behind it, its middle cell directly behind the leader.
+	var expected: Array[Vector2i] = [Vector2i(7, 6), Vector2i(7, 5),
+			Vector2i(6, 6), Vector2i(6, 7), Vector2i(6, 5)]
 	assert_eq(slots, expected)
 	for c in slots:
 		assert_eq(BattleGrid.arc_of(leader, c), CombatTypes.Arc.REAR, "behind the tip")

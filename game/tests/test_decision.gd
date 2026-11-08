@@ -45,7 +45,8 @@ func test_broken_man_hemmed_in_idles() -> void:
 	var w := _man("w", 0, Vector2i(8, 6), g)
 	var e := _man("e", 1, Vector2i(8, 5), g)
 	var all: Array[Warrior] = [w, e]
-	for c in [Vector2i(7, 7), Vector2i(8, 7), Vector2i(9, 7)]:
+	# Straight away from e is south-east; either side of that, south-west and east.
+	for c in [Vector2i(8, 7), Vector2i(7, 7), Vector2i(9, 6)]:
 		all.append(_man("f", 0, c, g))
 	w.broken = true
 	assert_eq(_choose(w, null, g, all).kind, K.IDLE)
@@ -64,7 +65,7 @@ func test_reckless_charges_regardless_of_order() -> void:
 		assert_eq(a.kind, K.MOVE, "order %s" % CombatTypes.SHOUT_NAMES[order])
 		assert_eq(a.target_cell, Vector2i(8, 5), "straight at the enemy")
 		# Adjacent: he attacks, even under Fall back!
-		g.place(e, Vector2i(9, 7))
+		g.place(e, Vector2i(7, 7))  # beside him, behind
 		a = _choose(w, leader, g, all)
 		assert_eq(a.kind, K.ATTACK)
 		assert_eq(a.target, e)
@@ -121,7 +122,7 @@ func test_hold_attacks_wounded_front_enemy() -> void:
 	var w := _man("w", 0, Vector2i(8, 6), g)
 	w.heard_order = CombatTypes.Shout.HOLD
 	var a1 := _man("a1", 1, Vector2i(8, 5), g)
-	var a2 := _man("a2", 1, Vector2i(7, 5), g)
+	var a2 := _man("a2", 1, Vector2i(9, 5), g)  # front-right
 	var behind := _man("behind", 1, Vector2i(8, 7), g)
 	a2.wound = CombatTypes.Wound.WOUNDED
 	behind.wound = CombatTypes.Wound.GRIEVOUS
@@ -138,7 +139,7 @@ func test_boastful_seeks_champion() -> void:
 	w.heard_order = CombatTypes.Shout.BREAK_THEM
 	var wounded := _man("wounded", 1, Vector2i(8, 5), g)
 	wounded.wound = CombatTypes.Wound.GRIEVOUS
-	var champ := _man("champ", 1, Vector2i(9, 7), g, CombatTypes.Tier.CHAMPION)
+	var champ := _man("champ", 1, Vector2i(8, 7), g, CombatTypes.Tier.CHAMPION)
 	var all: Array[Warrior] = [w, wounded, champ]
 	var a := _choose(w, null, g, all)
 	assert_eq(a.target, champ)
@@ -151,8 +152,8 @@ func test_champion_guards_beset_leader() -> void:
 	var leader := _man("jarl", 0, Vector2i(8, 6), g)
 	var champ := _man("champ", 0, Vector2i(6, 7), g, CombatTypes.Tier.CHAMPION)
 	champ.heard_order = CombatTypes.Shout.HOLD
-	var e1 := _man("e1", 1, Vector2i(7, 5), g)
-	var e2 := _man("e2", 1, Vector2i(9, 5), g)
+	var e1 := _man("e1", 1, Vector2i(8, 5), g)  # the leader's front
+	var e2 := _man("e2", 1, Vector2i(9, 5), g)  # and front-right
 	var all: Array[Warrior] = [leader, champ, e1, e2]
 	var a := _choose(champ, leader, g, all)
 	assert_eq(a.kind, K.MOVE)
@@ -199,7 +200,7 @@ func test_bowman_shoots_instead_of_moving() -> void:
 	assert_eq(a.target, e)
 	bow.heard_order = CombatTypes.Shout.BREAK_THEM
 	assert_eq(_choose(bow, leader, g, all).kind, K.MOVE, "ordered to charge, he charges")
-	g.place(e, Vector2i(15, 11))
+	assert_true(g.place(e, BattleGrid.from_offset(0, 11)), "the far corner, 13 away, is on the map")
 	bow.heard_order = CombatTypes.Shout.TO_ME
 	assert_eq(_choose(bow, leader, g, all).kind, K.MOVE, "out of range: obeys")
 
