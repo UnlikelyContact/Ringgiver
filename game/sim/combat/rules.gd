@@ -104,10 +104,11 @@ var push_as_a_line := true
 var push_line_fraction := 0.5
 ## Being pressed back with nowhere to go costs heart as well as breath.
 var push_pressed_morale := -1
-## Every step back costs heart: a wall that falls back on its leader's
-## order, and a line driven back by a push.
-var fall_back_morale := -1
+## An ordered fall back costs no heart; being driven back by a push does,
+## and driving the enemy back gives it.
+var fall_back_morale := 0
 var push_shoved_morale := -1
+var push_won_morale := 1
 ## Chebyshev radius within which a man sees a friend or foe go down.
 var morale_visible_radius := 3
 ## A man at or below the break threshold rolls 2d6 + Nerve + personality

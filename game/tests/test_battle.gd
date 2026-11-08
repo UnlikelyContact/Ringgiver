@@ -203,7 +203,7 @@ func test_falling_back_costs_heart_and_the_edge_means_retreat() -> void:
 	if stepped:
 		for w in ours:
 			if w.is_active() and not w.is_leader:
-				assert_eq(w.morale, 8 + b.rules.fall_back_morale, "%s lost heart stepping back" % w.display_name)
+				assert_eq(w.morale, 8 + b.rules.fall_back_morale, "%s keeps heart on an ordered fall back" % w.display_name)
 	# Keep falling back: the wall starts on row 9 of 12, so the edge comes soon.
 	var rounds := 0
 	while not b.is_over() and rounds < 8:

@@ -64,6 +64,9 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	for w in winners:
 		w.add_effort(CombatTypes.Stat.MIGHT)
 	_shove(rules, grid, losers, result, log)
+	if not result.shoved.is_empty() or not result.driven_off.is_empty():
+		for w in winners:
+			w.morale = clampi(w.morale + rules.push_won_morale, 0, 10)
 	if rules.push_winners_advance:
 		if may_advance.is_empty():
 			_advance(grid, winners, losers, result, log)

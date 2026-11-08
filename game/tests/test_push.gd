@@ -229,3 +229,22 @@ func test_push_is_deterministic() -> void:
 		var r := Push.resolve(SimRng.new(1234), rules, grid, all, log)
 		out.append([r.winning_side, r.shoved.size(), "\n".join(log)])
 	assert_eq(out[0], out[1])
+
+
+func test_driving_the_enemy_back_lifts_heart() -> void:
+	var rules := CombatRules.new()
+	rules.morale_start_bonus = 0
+	var grid := BattleGrid.new(16, 12)
+	var log := PackedStringArray()
+	var strong := _man("strong", 0, 1, rules, [10, 4, 4, 4, 4])
+	strong.morale = 5
+	var weak := _man("weak", 1, 2, rules, [1, 4, 4, 4, 4])
+	weak.morale = 5
+	_put(grid, strong, Vector2i(5, 6), NORTH)
+	_put(grid, weak, Vector2i(5, 5), SOUTH)
+	var all: Array[Warrior] = [strong, weak]
+	var r := Push.resolve(SimRng.new(9), rules, grid, all, log)
+	assert_eq(r.winning_side, 0)
+	assert_eq(r.shoved, [weak] as Array[Warrior])
+	assert_eq(strong.morale, 5 + rules.push_won_morale, "the winner takes heart")
+	assert_eq(weak.morale, 5 + rules.push_shoved_morale, "the man driven back loses it")
