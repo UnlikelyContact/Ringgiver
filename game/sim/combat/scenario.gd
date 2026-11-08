@@ -18,8 +18,8 @@ const TIERS := {
 ## Returns {battle, ours, theirs, doctrine, offset}. With `vary` false the
 ## enemy is eight shield-bearers, centred, steady: the symmetric field the
 ## batches calibrate on. Your band is eight shield-bearers, two spearmen
-## and two bowmen; a varied enemy brings seven to ten shields, one to three
-## spears and up to three bows. Both form in ranks.
+## and two bowmen; a varied enemy brings seven to nine shields, one or two
+## spears and one or two bows. Both form in ranks.
 static func build(name: String, seed_in: int, rules: CombatRules, vary := true) -> Dictionary:
 	var t: Array = TIERS.get(name, TIERS["equal_green"])
 	var battle := Battle.new(rules, seed_in)
@@ -32,9 +32,9 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true) 
 	var doctrine := LeaderAI.Doctrine.STEADY
 	if vary:
 		# About your own strength on average (twelve men), mixed differently.
-		their_shields = frng.randi_range(7, 10)
-		their_spears = frng.randi_range(1, 3)
-		their_bows = frng.randi_range(0, 3)
+		their_shields = frng.randi_range(7, 9)
+		their_spears = frng.randi_range(1, 2)
+		their_bows = frng.randi_range(1, 2)
 		offset = frng.randi_range(-3, 3)
 		doctrine = LeaderAI.Doctrine.AGGRESSIVE if frng.randf() < 0.4 else LeaderAI.Doctrine.STEADY
 	var ours := BandFactory.make_mixed_band(brng.fork("a"), 0, 8, 2 if vary else 0, 2 if vary else 0, t[0], rules, CombatTypes.Armor.NONE, 0, 1)

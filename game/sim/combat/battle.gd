@@ -449,6 +449,7 @@ func run_round() -> void:
 		if leader != null and leader.line_facing != Vector2i.ZERO:
 			leader.facing = leader.line_facing
 		_dress_line(side, leader)
+		_relieve_shieldless(side, leader)
 		var shout: CombatTypes.Shout = CombatTypes.Shout.NONE
 		if _pending_shout.has(side):
 			shout = _pending_shout[side]
@@ -619,6 +620,36 @@ func _withdrawn(side: int) -> bool:
 ## Every man with a friend beside him along the wall's axis faces the wall's
 ## facing, so a man who turned to strike or to watch an enemy is back in
 ## the line next round. A lone man keeps whatever way he was facing.
+## Relief: a man in the line whose shield is gone changes places with a
+## shielded man standing straight behind him. The fresh shield steps up
+## into the line and the shieldless man drops back, where his spear still
+## reaches over the shoulder. The wall closes itself. Once per pair a round.
+func _relieve_shieldless(side: int, leader: Warrior) -> void:
+	if leader == null:
+		return
+	var back := BattleGrid.rotate(leader.wall_facing(), 3)
+	var swapped := {}
+	for w in wall_members(side):
+		if swapped.has(w) or w.shield_usable() or w.role == CombatTypes.Role.MISSILE or w == leader:
+			continue
+		var relief := grid.occupant(w.pos + back)
+		if relief == null or swapped.has(relief) or relief.side != side or not relief.is_active() or relief.broken \
+				or not relief.shield_usable() or relief.role == CombatTypes.Role.MISSILE:
+			continue
+		var front_cell := w.pos
+		var back_cell := relief.pos
+		grid.remove(w)
+		grid.remove(relief)
+		grid.place(relief, front_cell)
+		grid.place(w, back_cell)
+		relief.facing = w.facing
+		relief.spend_breath(rules.breath_cost_move)
+		w.spend_breath(rules.breath_cost_move)
+		swapped[w] = true
+		swapped[relief] = true
+		log.append("%s's shield is gone: %s steps up into the line and he drops back behind" % [w.display_name, relief.display_name])
+
+
 ## Each man in the wall minds his own front. With an enemy before him he
 ## keeps his facing; with one at his flank and none before him he turns a
 ## facing toward him, hinging the line; with nobody at arm's length he

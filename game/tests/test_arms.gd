@@ -161,3 +161,41 @@ func test_a_bowman_gives_ground_when_closed_with() -> void:
 	var a := Decision.choose(SimRng.new(1), rules, g, bow, leader, [leader, bow, foe] as Array[Warrior])
 	assert_eq(a.kind, CombatTypes.ActionKind.MOVE, "he steps away rather than fight")
 	assert_true(BattleGrid.distance(a.target_cell, foe.pos) >= 2, "out of arm's reach")
+
+
+func test_a_shieldless_man_is_relieved_by_the_man_behind() -> void:
+	var rules := CombatRules.new()
+	var b := Battle.new(rules, 7)
+	var ours := _band(rules, 0, 4, 2, 0, 1)
+	var theirs := _band(rules, 1, 4, 0, 0, 101)
+	for w in ours + theirs:
+		w.javelins = 0
+	BandFactory.deploy_formation(b.grid, ours, BattleGrid.from_offset(8, 8), NORTH, rules, FormationTemplate.ranks())
+	BandFactory.deploy_formation(b.grid, theirs, BattleGrid.from_offset(8, 2), SOUTH, rules, FormationTemplate.line())
+	b.add_band(ours)
+	b.add_band(theirs)
+	# A front man with a spearman straight behind him loses his shield.
+	var back := BattleGrid.rotate(NORTH, 3)
+	var front: Warrior = null
+	var behind: Warrior = null
+	for w in ours:
+		if w.role == CombatTypes.Role.SHIELD and not w.is_leader:
+			var m := b.grid.occupant(w.pos + back)
+			if m != null and m.role == CombatTypes.Role.SPEAR:
+				front = w
+				behind = m
+				break
+	assert_true(front != null and behind != null, "a spearman stands behind a shield-bearer")
+	var front_cell := front.pos
+	var back_cell := behind.pos
+	front.shield_hp = 0
+	b.set_shout(0, CombatTypes.Shout.HOLD)
+	b.set_shout(1, CombatTypes.Shout.HOLD)
+	b.run_round()
+	assert_eq(behind.pos, front_cell, "the shielded man steps up into the line")
+	assert_eq(front.pos, back_cell, "the shieldless man drops back behind him")
+	var said := false
+	for line in b.log:
+		said = said or line.contains("steps up into the line")
+	assert_true(said, "and the log says so")
+	assert_true(b.wall_members(0).has(behind), "the relief is in the wall")

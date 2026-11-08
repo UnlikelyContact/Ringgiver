@@ -302,6 +302,22 @@ func wall_count(side: int) -> Array[int]:
 	return [battle.wall_members(side).size(), total]
 
 
+## Men standing in the front of the wall without a shield to lock: the gaps
+## in it. A shieldless man relieved into the second rank is no gap.
+func shieldless_count(side: int) -> int:
+	var n := 0
+	var leader := battle.leader_of(side)
+	var ahead := leader.wall_facing() if leader != null else Vector2i(0, -1)
+	for w in battle.wall_members(side):
+		if w.shield_usable():
+			continue
+		var front := battle.grid.occupant(w.pos + ahead)
+		if front != null and front.side == side and front.is_active():
+			continue  # he stands behind a man; the line is closed in front of him
+		n += 1
+	return n
+
+
 ## [spearmen standing in the wall, bows still standing] for a side.
 func arms_count(side: int) -> Array[int]:
 	var spears := 0
@@ -532,11 +548,18 @@ func _draw_shield_locks() -> void:
 	for w in battle.warriors:
 		if not w.is_active() or w.broken:
 			continue
-		for n in _locked_neighbours(w):
-			if n.id < w.id:
+		for n in battle.grid.line_neighbors(w):
+			if n.id < w.id or n.broken:
 				continue
 			var a := Iso.to_screen(w.pos) + Iso.jitter(w.id)
 			var b := Iso.to_screen(n.pos) + Iso.jitter(n.id)
+			var locked := w.shield_usable() and n.shield_usable()
+			if not locked:
+				# Linked but not locked: a shield is gone here. A thin dark
+				# thread shows the gap in the wall.
+				draw_line(a, b, Palette.OUTLINE, 3.0)
+				draw_line(a, b, Palette.BLOOD.darkened(0.3), 1.5)
+				continue
 			# The leader's wall is bright; a broken-off fragment is dim.
 			var whole := in_wall(w) and in_wall(n)
 			var col := Palette.BONE if w.side == player.side else Palette.UNDYED.darkened(0.3)

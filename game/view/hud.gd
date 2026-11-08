@@ -268,6 +268,9 @@ func _refresh() -> void:
 	var order := b.last_shout(0)
 	var their_order := b.last_shout(1)
 	var arms_text := ""
+	var bare := view.shieldless_count(0)
+	if bare > 0:
+		arms_text += " (%d shieldless)" % bare
 	if arms[0] > 0:
 		arms_text += " +%d spears" % arms[0]
 	if arms[1] > 0:

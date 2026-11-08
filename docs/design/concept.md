@@ -315,7 +315,15 @@ arriving line before it can strike back, and his archers get twice the
 shots. That is history, and it is also a problem for a skirmish with no
 objective: the side that stands still is favoured, and the enemy AI still
 walks into it. Open: give the field something to take or hold, and teach
-the AI to hold ranks against ranks unless it has the numbers.
+the AI to hold ranks against ranks unless it has the numbers. A shield
+spoiled (three points gone, to spears or axes) leaves its man in the wall
+but unlocked: no cover, shoved by glancing blows, the archers' first mark,
+and a gap in his neighbours' lock. *Relief*: a shielded man standing
+straight behind him changes places with him at the start of the next
+round, stepping up into the line while he drops back and fights at reach,
+so the wall closes itself. The HUD reads "wall 8/8 (1 shieldless)" and
+draws the gap as a dark thread until it is relieved. Passing spare shields
+forward waits for the campaign's gear.
 
 ### Drill, custom formations and custom shouts (decided 8 Nov 2026)
 
