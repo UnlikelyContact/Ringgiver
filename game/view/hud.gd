@@ -138,7 +138,10 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	root.add_child(log_label)
 
 	result_panel = PanelContainer.new()
-	result_panel.set_anchors_preset(Control.PRESET_CENTER)
+	result_panel.anchor_left = 0.14
+	result_panel.anchor_right = 0.86
+	result_panel.anchor_top = 0.2
+	result_panel.anchor_bottom = 0.8
 	result_panel.visible = false
 	root.add_child(result_panel)
 
@@ -202,6 +205,18 @@ func _on_auto_paused(reason: String) -> void:
 	_refresh()
 
 
+## The outcome in plain words rather than the sim's summary line.
+func _result_text(r: BattleResult) -> String:
+	var why := ""
+	for line in r.log:
+		if line.begins_with("==="):
+			why = line.trim_prefix("=== ").trim_suffix(" ===").replace("side 0", "your band").replace("side 1", "their band")
+	return "%s after %d rounds.\nYours: %d of %d down, %d broke, %d fled, %d dead.\nTheirs: %d of %d down, %d broke, %d fled, %d dead." % [
+		why.capitalize() if why != "" else "The fight is over", r.rounds,
+		r.downed[0], r.started[0], r.broken[0], r.fled[0], r.dead[0],
+		r.downed[1], r.started[1], r.broken[1], r.fled[1], r.dead[1]]
+
+
 func _on_finished(result: BattleResult) -> void:
 	result_panel.visible = true
 	for c in result_panel.get_children():
@@ -213,7 +228,8 @@ func _on_finished(result: BattleResult) -> void:
 	title.add_theme_font_size_override("font_size", 28)
 	box.add_child(title)
 	var body := Label.new()
-	body.text = result.summary()
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.text = _result_text(result)
 	box.add_child(body)
 	var again := Button.new()
 	again.text = "Fight again"

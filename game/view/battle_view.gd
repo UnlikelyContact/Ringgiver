@@ -361,6 +361,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _zoom_by(factor: float) -> void:
+	follow = false  # a pinch is the player taking the camera
+	camera_moved.emit()
 	if camera == null:
 		return
 	var z := clampf(camera.zoom.x * factor, MIN_ZOOM, MAX_ZOOM)

@@ -261,7 +261,8 @@ func chain(leader: Warrior, max_turn := DEFAULT_LINK_TURN, max_bend := DEFAULT_M
 			var n := occupant(c)
 			if n == null or seen.has(n) or n.side != leader.side or not n.is_active() or n.broken:
 				continue
-			if facing_steps(wf, n.facing) > max_bend or not linked(w, n, max_turn):
+			var w_facing: Vector2i = wf if w == leader else w.facing
+			if facing_steps(wf, n.facing) > max_bend or not linked_at(w.pos, w_facing, n.pos, n.facing, max_turn):
 				continue
 			seen[n] = true
 			queue.append(n)
@@ -273,12 +274,18 @@ func chain(leader: Warrior, max_turn := DEFAULT_LINK_TURN, max_bend := DEFAULT_M
 ## `max_turn` of each other: a hinge where a wing has swung forward of the
 ## man beside it still holds, a second rank straight behind does not.
 static func linked(a: Warrior, b: Warrior, max_turn := DEFAULT_LINK_TURN) -> bool:
-	if a == b or a.side != b.side or distance(a.pos, b.pos) != 1:
+	if a == b or a.side != b.side:
 		return false
-	if facing_steps(a.facing, b.facing) > max_turn:
+	return linked_at(a.pos, a.facing, b.pos, b.facing, max_turn)
+
+
+static func linked_at(a_pos: Vector2i, a_facing: Vector2i, b_pos: Vector2i, b_facing: Vector2i, max_turn := DEFAULT_LINK_TURN) -> bool:
+	if distance(a_pos, b_pos) != 1:
 		return false
-	var ab := posmod(dir_index(direction_to(a.pos, b.pos)) - dir_index(a.facing), 6)
-	var ba := posmod(dir_index(direction_to(b.pos, a.pos)) - dir_index(b.facing), 6)
+	if facing_steps(a_facing, b_facing) > max_turn:
+		return false
+	var ab := posmod(dir_index(direction_to(a_pos, b_pos)) - dir_index(a_facing), 6)
+	var ba := posmod(dir_index(direction_to(b_pos, a_pos)) - dir_index(b_facing), 6)
 	return (ab != 0 and ab != 3) or (ba != 0 and ba != 3)
 
 

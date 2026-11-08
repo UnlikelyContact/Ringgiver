@@ -20,23 +20,51 @@ func _ready() -> void:
 	start(scenario, seed_in)
 
 
-## Where the camera looks: between the two bands, leaning toward your man.
-func focus_point() -> Vector2:
-	var sum := Vector2.ZERO
-	var n := 0
+const HUD_TOP := 46.0  # the top bar, in design pixels
+const HUD_BOTTOM := 66.0  # the shout row
+const EDGE_MARGIN := 40.0  # world pixels kept clear round the outermost men
+
+
+## The box round every man standing: [min, max] in world pixels.
+func _men_bounds() -> Array[Vector2]:
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
 	for w in battle.warriors:
-		if w.is_active():
-			sum += Iso.to_screen(w.pos)
-			n += 1
-	var centre := sum / maxf(1.0, n)
-	if player != null and player.is_active():
-		centre = centre.lerp(Iso.to_screen(player.pos), 0.4)
-	return centre + Vector2(0, -60)
+		if w.is_active() and not w.broken:  # men running for the edge are leaving the fight
+			var p := Iso.to_screen(w.pos)
+			lo = lo.min(p)
+			hi = hi.max(p)
+	if lo.x == INF:
+		return [Vector2.ZERO, Vector2.ZERO]
+	return [lo, hi]
+
+
+## The zoom that fits every man between the top bar and the shout row, no
+## closer than the default and no further than the view allows.
+func fit_zoom() -> float:
+	var b := _men_bounds()
+	var size := get_viewport_rect().size
+	var band := size.y - HUD_TOP - HUD_BOTTOM
+	var span_y: float = b[1].y - b[0].y + 2.0 * EDGE_MARGIN
+	var span_x: float = b[1].x - b[0].x + 2.0 * EDGE_MARGIN
+	var z := minf(band / maxf(1.0, span_y), size.x / maxf(1.0, span_x))
+	return clampf(z, BattleView.MIN_ZOOM, 2.0)
+
+
+## Where the camera looks: the middle of everyone standing, set so that the
+## middle sits in the clear band between the top bar and the shout row.
+func focus_point(zoom: float) -> Vector2:
+	var b := _men_bounds()
+	var centre: Vector2 = (b[0] + b[1]) / 2.0
+	return centre + Vector2(0, (HUD_BOTTOM - HUD_TOP) / 2.0 / zoom)
 
 
 func _process(delta: float) -> void:
 	if camera != null and battle != null and view != null and view.follow:
-		camera.position = camera.position.lerp(focus_point(), minf(1.0, delta * 3.0))
+		var k := minf(1.0, delta * 3.0)
+		var z := lerpf(camera.zoom.x, fit_zoom(), k)
+		camera.zoom = Vector2(z, z)
+		camera.position = camera.position.lerp(focus_point(z), k)
 
 
 func start(p_scenario: String, p_seed: int) -> void:
@@ -57,7 +85,9 @@ func start(p_scenario: String, p_seed: int) -> void:
 	view = BattleView.new()
 	add_child(view)
 	view.setup(battle, player, camera)
-	camera.position = focus_point()
+	var z0 := fit_zoom()
+	camera.zoom = Vector2(z0, z0)
+	camera.position = focus_point(z0)
 	hud = preload("res://view/hud.gd").new()
 	add_child(hud)
 	hud.setup(view, self)

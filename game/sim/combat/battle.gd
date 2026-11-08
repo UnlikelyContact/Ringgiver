@@ -449,6 +449,11 @@ func run_round() -> void:
 		var may_advance := {}
 		var wall_facing := {}
 		for side in 2:
+			# Only a line driving forward follows up a won shove; a line told
+			# to hold keeps its ground and does not chase.
+			var order := standing_order(side)
+			if order != CombatTypes.Shout.PUSH and order != CombatTypes.Shout.BREAK_THEM and order != CombatTypes.Shout.SVINFYLKING:
+				continue
 			for w in wall_members(side):
 				may_advance[w] = true
 			var l := leader_of(side)
