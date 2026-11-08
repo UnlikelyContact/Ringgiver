@@ -161,7 +161,16 @@ at a time, the line heaves, then breaks); locked shields are drawn as bars
 between neighbours and the HUD counts "wall 6/8"; the player's own man gets
 a preview arrow and a one-line account of his round; and under Shield Wall
 or Push the line forms on where the leader is *going*, so stepping forward
-takes the wall with you. "Push!" now advances the line as a line. If the prototype finds pulses still feel like turns,
+takes the wall with you. "Push!" now advances the line as a line.
+
+**Second playtest, same day:** on hexes, a diagonal step turned the leader
+and the wall re-formed square to his new facing, throwing the line into
+chaos. The wall now has its own facing, separate from the leader's: it
+changes only with "Wheel left" and "Wheel right" (one hex facing, 60
+degrees, each), a step never turns it, "Push!" advances the wall the way
+it faces, and a leader who turned to strike faces his wall again next
+round. Enemy leaders wheel only when the player's band is two or more
+facings round their flank. If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop
 changes.

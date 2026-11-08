@@ -149,6 +149,8 @@ var ai_hold_rounds_before_push := 2
 var ai_fall_back_percent := 35
 var ai_break_them_percent := 40
 var ai_scatter_mean_distance := 3
+## The AI wheels its wall when the enemy is this many facings (60 degrees each) off it.
+var ai_wheel_min_steps := 2
 ## A STEADY leader waits this many rounds without contact before pushing.
 var ai_patience_rounds := 6
 

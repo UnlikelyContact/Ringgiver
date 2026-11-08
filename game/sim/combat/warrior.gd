@@ -35,6 +35,10 @@ var is_horn := false
 # Battle state.
 var pos := Vector2i.ZERO
 var facing := Vector2i(0, -1)
+## For a leader: the direction his line forms to face. Zero means "his own
+## facing". Set by the player (wheel left/right) or the leader AI, never by
+## a step or a blow, so the wall does not wheel every time he turns.
+var line_facing := Vector2i.ZERO
 var wound: CombatTypes.Wound = CombatTypes.Wound.UNHURT
 var breath := 0
 var morale := 0
@@ -73,6 +77,11 @@ func stat(s: CombatTypes.Stat) -> int:
 		CombatTypes.Stat.NERVE:
 			return nerve
 	return wits
+
+
+## The facing a line formed on this man takes.
+func wall_facing() -> Vector2i:
+	return line_facing if line_facing != Vector2i.ZERO else facing
 
 
 func is_down() -> bool:

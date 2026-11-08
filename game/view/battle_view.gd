@@ -59,6 +59,14 @@ func is_manual() -> bool:
 	return pulse_seconds <= 0.0
 
 
+## Wheels the wall one facing (60 degrees) left or right.
+func wheel(steps: int) -> void:
+	if player == null:
+		return
+	player.line_facing = BattleGrid.rotate(player.wall_facing(), steps)
+	queue_redraw()
+
+
 func set_paused(p: bool) -> void:
 	if paused == p:
 		return
@@ -342,7 +350,7 @@ func _tap(local: Vector2) -> void:
 		return
 	var occ := battle.grid.occupant(cell)
 	if occ == null and battle.grid.is_free(cell):
-		pending_action = Action.move_to(cell, BattleGrid.direction_to(player.pos, cell))
+		pending_action = Action.move_to(cell, player.wall_facing())  # a step does not turn the wall
 	elif occ != null and occ.side != player.side and occ.is_active():
 		pending_action = Action.attack(occ)
 	else:
@@ -371,6 +379,11 @@ func _draw() -> void:
 	_draw_shield_locks()
 	if player != null and player.is_active():
 		draw_colored_polygon(Iso.hexagon(player.pos, 3), Color(Palette.GOLD, 0.25))
+		# The wall's facing: a chevron ahead of your man.
+		var f := Iso.to_screen_f(Vector2(player.wall_facing())).normalized()
+		var tip := Iso.to_screen(player.pos) + f * 42
+		var side_v := Vector2(-f.y, f.x) * 9
+		draw_polyline(PackedVector2Array([tip - f * 10 + side_v, tip, tip - f * 10 - side_v]), Palette.GOLD, 3.0)
 		if not animating:
 			for n in g.neighbors(player.pos):
 				var occ := g.occupant(n)

@@ -113,11 +113,13 @@ func run_round() -> void:
 	log.append("--- round %d ---" % round)
 	var rr := rng.fork("round:%d" % round)
 
-	# 1. Shouts.
+	# 1. Shouts. A leader who turned to strike last round faces his wall again.
 	var leaders := {}
 	for side in 2:
 		var leader := leader_of(side)
 		leaders[side] = leader
+		if leader != null and leader.line_facing != Vector2i.ZERO:
+			leader.facing = leader.line_facing
 		var shout: CombatTypes.Shout = CombatTypes.Shout.NONE
 		if _pending_shout.has(side):
 			shout = _pending_shout[side]

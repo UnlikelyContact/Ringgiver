@@ -15,12 +15,30 @@ func _init(p_doctrine: Doctrine = Doctrine.STEADY) -> void:
 	doctrine = p_doctrine
 
 
+## Turns the wall toward the enemy's centre only when they are two or more
+## steps (120 degrees or more) off its facing; a 60-degree offset is within
+## the front arcs and not worth the shuffle of wheeling.
+func _wheel_if_needed(battle: Battle, leader: Warrior, theirs: Array[Warrior]) -> void:
+	if theirs.is_empty():
+		return
+	var sum := Vector2.ZERO
+	for e in theirs:
+		sum += BattleGrid.to_cart(Vector2(e.pos))
+	var want := BattleGrid.snap_direction(sum / theirs.size() - BattleGrid.to_cart(Vector2(leader.pos)))
+	var have := leader.wall_facing()
+	var diff := posmod(BattleGrid.dir_index(want) - BattleGrid.dir_index(have), 6)
+	if diff >= battle.rules.ai_wheel_min_steps and diff <= 6 - battle.rules.ai_wheel_min_steps:
+		leader.line_facing = want
+		battle.log.append("%s wheels his line to face %s" % [leader.display_name, str(want)])
+
+
 func choose(battle: Battle, side: int) -> CombatTypes.Shout:
 	var mine := battle.active(side)
 	var theirs := battle.active(1 - side)
 	var leader := battle.leader_of(side)
 	if mine.is_empty() or leader == null:
 		return CombatTypes.Shout.NONE
+	_wheel_if_needed(battle, leader, theirs)
 	var started := battle.result.started[side]
 	var unbroken := 0
 	for w in mine:

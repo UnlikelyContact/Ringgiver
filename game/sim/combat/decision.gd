@@ -140,7 +140,8 @@ static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 	if not grid.line_neighbors(w).is_empty():
 		# One direction for the whole line, taken from the leader's position.
 		var anchor := leader if leader != null and leader.is_active() and leader.side == w.side else w
-		var advance := _advance_direction(anchor, enemies)
+		# A wall advances the way it faces; without a set wall facing, toward the enemy.
+		var advance := anchor.line_facing if anchor.line_facing != Vector2i.ZERO else _advance_direction(anchor, enemies)
 		if _line_in_contact(grid, w, enemies):
 			return Action.brace(advance)  # the line is engaged: hold it together
 		var ahead := w.pos + advance
@@ -183,15 +184,15 @@ static func _form(grid: BattleGrid, w: Warrior, leader: Warrior, all: Array[Warr
 			else Formation.line_slots(grid, leader, band.size())
 	var plan := Formation.assign(slots, band)
 	if plan.has(w) and plan[w] != w.pos:
-		var step := _step_toward(grid, w, plan[w], leader.facing)
+		var step := _step_toward(grid, w, plan[w], leader.wall_facing())
 		if step != null:
 			return step
-		return Action.brace(leader.facing)
+		return Action.brace(leader.wall_facing())
 	if wedge:
 		return _push(grid, w, enemies, leader)
 	var act := _hold(w, enemies, leader)
 	if act.kind == CombatTypes.ActionKind.BRACE and enemies.is_empty():
-		act.new_facing = leader.facing
+		act.new_facing = leader.wall_facing()
 	return act
 
 

@@ -27,7 +27,7 @@ func focus_point() -> Vector2:
 	var centre := sum / maxf(1.0, n)
 	if player != null and player.is_active():
 		centre = centre.lerp(Iso.to_screen(player.pos), 0.4)
-	return centre + Vector2(0, -10)
+	return centre + Vector2(0, 22)
 
 
 func _process(delta: float) -> void:

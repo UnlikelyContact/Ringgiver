@@ -105,3 +105,17 @@ func test_assign_more_men_than_slots() -> void:
 	assert_eq(plan.size(), 1)
 	assert_eq(plan.get(near), Vector2i(9, 5))
 	assert_true(not plan.has(far))
+
+
+func test_line_forms_on_the_wall_facing_not_the_leaders_turn() -> void:
+	var g := BattleGrid.new(16, 12)
+	var leader := Warrior.make("jarl", 0, [4, 4, 4, 4, 4])
+	leader.is_leader = true
+	g.place(leader, Vector2i(8, 6))
+	leader.line_facing = Vector2i(0, -1)
+	leader.facing = Vector2i(1, -1)  # he turned to strike north-east
+	var slots := Formation.line_slots(g, leader, 2)
+	assert_eq(slots, [Vector2i(9, 6), Vector2i(7, 6)] as Array[Vector2i], "the line still runs east-west")
+	leader.line_facing = Vector2i.ZERO
+	var turned := Formation.line_slots(g, leader, 2)
+	assert_true(turned != slots, "without a wall facing the line follows his own facing")

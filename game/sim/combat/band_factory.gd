@@ -64,6 +64,8 @@ static func deploy_line(grid: BattleGrid, band: Array[Warrior], anchor: Vector2i
 	for w in band:
 		w.reset_for_battle(rules)
 		w.facing = facing
+		if w.is_leader:
+			w.line_facing = facing
 		if w.is_leader and leader == null:
 			leader = w
 		else:

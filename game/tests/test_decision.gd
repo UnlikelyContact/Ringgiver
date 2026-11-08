@@ -331,3 +331,18 @@ func test_a_veteran_guards_a_beset_leader() -> void:
 	all.append(green)
 	var b := _choose(green, leader, g, all)
 	assert_true(b.kind == K.BRACE or b.kind == K.ATTACK, "a green man holds his place instead: %s" % b.describe())
+
+
+func test_push_advances_in_the_wall_facing() -> void:
+	var g := BattleGrid.new(16, 12)
+	var leader := _man("jarl", 0, Vector2i(8, 8), g, CombatTypes.Tier.VETERAN)
+	leader.is_leader = true
+	leader.line_facing = Vector2i(0, -1)
+	var w := _man("w", 0, Vector2i(9, 8), g, CombatTypes.Tier.BLOODED)
+	w.heard_order = CombatTypes.Shout.PUSH
+	# The enemy is off to the east, but the wall faces north-west: it steps north-west.
+	var e := _man("e", 1, Vector2i(14, 8), g)
+	var all: Array[Warrior] = [leader, w, e]
+	var a := _choose(w, leader, g, all)
+	assert_eq(a.kind, K.MOVE)
+	assert_eq(a.target_cell, Vector2i(9, 7), "one step the way the wall faces")

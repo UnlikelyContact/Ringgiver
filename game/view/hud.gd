@@ -52,6 +52,16 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	you_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	you_label.custom_minimum_size = Vector2(200, 0)
 	left.add_child(you_label)
+	var wheel_l := Button.new()
+	wheel_l.text = "Wheel L"
+	wheel_l.custom_minimum_size = Vector2(84, 40)
+	wheel_l.pressed.connect(func() -> void: view.wheel(-1))
+	top.add_child(wheel_l)
+	var wheel_r := Button.new()
+	wheel_r.text = "Wheel R"
+	wheel_r.custom_minimum_size = Vector2(84, 40)
+	wheel_r.pressed.connect(func() -> void: view.wheel(1))
+	top.add_child(wheel_r)
 	follow_btn = Button.new()
 	follow_btn.text = "Follow"
 	follow_btn.toggle_mode = true
