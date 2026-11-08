@@ -244,7 +244,14 @@ push weighs a bent line as one line. "Shield wall!" straightens a line
 that is not engaged and holds an engaged one as it stands. On the screen
 each man stands a little off the centre of his hex, so the lock bars run
 as a chain rather than a rail. Enemy leaders now wheel a facing a round
-too.
+too. The bend was then measured rather than seen: two equal eight-man lines
+meeting dead centre bend about twice a fight, since every man is engaged
+at once; lines that overlap unevenly bend seven times with nine hinge
+turns. So the prototype's field now varies with the seed
+(`sim/combat/scenario.gd`): the enemy brings six to ten men, their line
+stands up to three hexes off yours, and two leaders in five are
+aggressive. The HUD shows the build it was made from, so a stale cached
+build is easy to spot.
 
 If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own

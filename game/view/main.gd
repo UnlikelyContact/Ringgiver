@@ -45,32 +45,10 @@ func start(p_scenario: String, p_seed: int) -> void:
 	for c in get_children():
 		c.queue_free()
 	var rules := CombatRules.new()
-	battle = Battle.new(rules, p_seed)
-	var brng := SimRng.new(p_seed).fork("bands")
-	var tiers := {
-		"equal_green": [CombatTypes.Tier.GREEN, CombatTypes.Tier.GREEN],
-		"green_vs_veteran": [CombatTypes.Tier.GREEN, CombatTypes.Tier.VETERAN],
-		"veteran_vs_green": [CombatTypes.Tier.VETERAN, CombatTypes.Tier.GREEN],
-		"equal_veteran": [CombatTypes.Tier.VETERAN, CombatTypes.Tier.VETERAN],
-	}
-	var t: Array = tiers.get(p_scenario, tiers["equal_green"])
-	var ours := BandFactory.make_band(brng.fork("a"), 0, 8, t[0], CombatTypes.Armor.NONE, 0, 1)
-	var theirs := BandFactory.make_band(brng.fork("b"), 1, 8, t[1], CombatTypes.Armor.NONE, 16, 101)
-	# A little mud so the ground has texture.
-	var mr := SimRng.new(p_seed).fork("mud")
-	for i in 6:
-		battle.grid.set_terrain(BattleGrid.from_offset(mr.randi_range(2, 13), mr.randi_range(4, 7)), CombatTypes.Terrain.MUD)
-	# Lines run across the screen: ours below facing north-west, theirs
-	# above facing south-east, five rows apart.
-	BandFactory.deploy_line(battle.grid, ours, BattleGrid.from_offset(8, 8), Vector2i(0, -1), rules)
-	BandFactory.deploy_line(battle.grid, theirs, BattleGrid.from_offset(8, 3), Vector2i(0, 1), rules)
-	battle.add_band(ours)
-	battle.add_band(theirs)
-	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY))
-	for side in 2:
-		battle.result.started[side] = battle.active(side).size()
+	var field := Scenario.build(p_scenario, p_seed, rules)
+	battle = field.battle
+	var ours: Array[Warrior] = field.ours
 	player = ours[0]
-	player.display_name = "You"
 
 	camera = Camera2D.new()
 	camera.zoom = Vector2(2.0, 2.0)

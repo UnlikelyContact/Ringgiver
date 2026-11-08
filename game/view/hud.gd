@@ -94,6 +94,16 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	next_btn.add_theme_font_size_override("font_size", 18)
 	next_btn.pressed.connect(_on_next)
 
+	var stamp := Label.new()
+	stamp.text = "build " + _build_stamp()
+	stamp.add_theme_font_size_override("font_size", 10)
+	stamp.add_theme_color_override("font_color", Palette.DIM)
+	stamp.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	stamp.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	stamp.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	stamp.offset_right = -6
+	stamp.offset_bottom = -64
+	root.add_child(stamp)
 	var bottom := HBoxContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	bottom.offset_left = 10
@@ -211,6 +221,18 @@ func _on_finished(result: BattleResult) -> void:
 	again.pressed.connect(func() -> void: main.start(main.scenario, main.seed_in + 1))
 	box.add_child(again)
 	_refresh()
+
+
+## The short commit the web build was made from (scripts/export-web.sh
+## writes it); "dev" when running from the editor or a tool.
+func _build_stamp() -> String:
+	if FileAccess.file_exists("res://build.txt"):
+		var f := FileAccess.open("res://build.txt", FileAccess.READ)
+		if f != null:
+			var text := f.get_as_text().strip_edges()
+			if text != "":
+				return text
+	return "dev"
 
 
 func _refresh() -> void:

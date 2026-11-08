@@ -22,29 +22,7 @@ func _init() -> void:
 
 
 func build(seed_in: int, scenario: String, rules: CombatRules) -> Battle:
-	var tiers := {
-		"equal_green": [CombatTypes.Tier.GREEN, CombatTypes.Tier.GREEN],
-		"green_vs_veteran": [CombatTypes.Tier.GREEN, CombatTypes.Tier.VETERAN],
-		"veteran_vs_green": [CombatTypes.Tier.VETERAN, CombatTypes.Tier.GREEN],
-		"equal_veteran": [CombatTypes.Tier.VETERAN, CombatTypes.Tier.VETERAN],
-	}
-	var t: Array = tiers[scenario]
-	var battle := Battle.new(rules, seed_in)
-	var brng := SimRng.new(seed_in).fork("bands")
-	var ours := BandFactory.make_band(brng.fork("a"), 0, 8, t[0], CombatTypes.Armor.NONE, 0, 1)
-	var theirs := BandFactory.make_band(brng.fork("b"), 1, 8, t[1], CombatTypes.Armor.NONE, 16, 101)
-	var mr := SimRng.new(seed_in).fork("mud")
-	for i in 6:
-		battle.grid.set_terrain(BattleGrid.from_offset(mr.randi_range(2, 13), mr.randi_range(4, 7)), CombatTypes.Terrain.MUD)
-	BandFactory.deploy_line(battle.grid, ours, BattleGrid.from_offset(8, 8), Vector2i(0, -1), rules)
-	BandFactory.deploy_line(battle.grid, theirs, BattleGrid.from_offset(8, 3), Vector2i(0, 1), rules)
-	battle.add_band(ours)
-	battle.add_band(theirs)
-	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY))
-	for side in 2:
-		battle.result.started[side] = battle.active(side).size()
-	ours[0].display_name = "You"
-	return battle
+	return Scenario.build(scenario, seed_in, rules).battle
 
 
 func in_contact(b: Battle) -> bool:
