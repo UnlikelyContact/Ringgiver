@@ -69,18 +69,18 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 			if w.tier == CombatTypes.Tier.GREEN:
 				act = Action.brace()
 			else:
-				act = _hold(w, enemies, leader)
+				act = _hold(grid, w, enemies, leader)
 		CombatTypes.Shout.SHIELD_WALL:
 			act = _form(grid, w, leader, all, enemies, false)
 		CombatTypes.Shout.HOLD:
-			act = _hold(w, enemies, leader)
+			act = _hold(grid, w, enemies, leader)
 		CombatTypes.Shout.PUSH:
 			act = _push(grid, w, enemies, leader)
 		CombatTypes.Shout.TO_ME:
 			if has_leader and BattleGrid.chebyshev(w.pos, leader.pos) > 1:
 				act = _step_toward(grid, w, leader.pos, Vector2i.ZERO)
 			if act == null:
-				act = _hold(w, enemies, leader)
+				act = _hold(grid, w, enemies, leader)
 		CombatTypes.Shout.BREAK_THEM:
 			act = _break_them(grid, w, enemies, leader)
 		CombatTypes.Shout.FALL_BACK:
@@ -98,7 +98,7 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 		CombatTypes.Shout.SVINFYLKING:
 			act = _form(grid, w, leader, all, enemies, true)
 		_:
-			act = _hold(w, enemies, leader)
+			act = _hold(grid, w, enemies, leader)
 
 	# 8. Bowmen with nobody at arm's length shoot instead of moving or waiting.
 	if w.weapon == CombatTypes.Weapon.BOW and order != CombatTypes.Shout.BREAK_THEM \
@@ -112,14 +112,27 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 
 ## HOLD: strike a man in front (a wounded one first), else brace toward the
 ## nearest enemy.
-static func _hold(w: Warrior, enemies: Array[Warrior], leader: Warrior) -> Action:
+static func _hold(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior) -> Action:
 	var front := _front(w, enemies)
 	if not front.is_empty():
 		return Action.attack(_pick_target(w, front, leader))
 	var near := _nearest(w.pos, enemies)
 	if near == null:
 		return Action.brace()
+	# In a wall, hold the wall's facing; the line is dressed each round.
+	if leader != null and leader.is_active() and leader.side == w.side and leader != w \
+			and _in_wall(grid, w, leader.wall_facing()):
+		return Action.brace(leader.wall_facing())
 	return Action.brace(BattleGrid.direction_to(w.pos, near.pos))
+
+
+## True when a friend stands beside w along the axis of a wall facing `wf`.
+static func _in_wall(grid: BattleGrid, w: Warrior, wf: Vector2i) -> bool:
+	for d in BattleGrid.line_dirs(wf):
+		var n := grid.occupant(w.pos + d)
+		if n != null and n.side == w.side and n.is_active():
+			return true
+	return false
 
 
 static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior) -> Action:
@@ -162,7 +175,7 @@ static func _break_them(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], l
 		return Action.attack(_pick_target(w, adj, leader))
 	var near := _nearest(w.pos, enemies)
 	if near == null:
-		return _hold(w, enemies, leader)
+		return _hold(grid, w, enemies, leader)
 	var step := _step_toward(grid, w, near.pos, Vector2i.ZERO)
 	if step == null:
 		return Action.brace(BattleGrid.direction_to(w.pos, near.pos))
@@ -175,7 +188,7 @@ static func _break_them(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], l
 static func _form(grid: BattleGrid, w: Warrior, leader: Warrior, all: Array[Warrior],
 		enemies: Array[Warrior], wedge: bool) -> Action:
 	if leader == null or leader == w or not leader.is_active() or leader.side != w.side:
-		return _push(grid, w, enemies, leader) if wedge else _hold(w, enemies, leader)
+		return _push(grid, w, enemies, leader) if wedge else _hold(grid, w, enemies, leader)
 	var band: Array[Warrior] = []
 	for m in all:
 		if m != leader and m.side == w.side and m.is_active() and not m.broken:
@@ -190,7 +203,7 @@ static func _form(grid: BattleGrid, w: Warrior, leader: Warrior, all: Array[Warr
 		return Action.brace(leader.wall_facing())
 	if wedge:
 		return _push(grid, w, enemies, leader)
-	var act := _hold(w, enemies, leader)
+	var act := _hold(grid, w, enemies, leader)
 	if act.kind == CombatTypes.ActionKind.BRACE and enemies.is_empty():
 		act.new_facing = leader.wall_facing()
 	return act

@@ -64,3 +64,26 @@ func test_equal_bands_are_not_one_sided_by_seed() -> void:
 			if r.winner == 0:
 				a_wins += 1
 	assert_true(decided >= n / 2, "most equal fights are decided inside max_rounds (%d of %d)" % [decided, n])
+
+
+func test_the_line_is_dressed_each_round() -> void:
+	var rules := CombatRules.new()
+	var b := Battle.new(rules, 3)
+	var ours := BandFactory.make_band(SimRng.new(3).fork("a"), 0, 6, CombatTypes.Tier.BLOODED, CombatTypes.Armor.NONE, 0, 1)
+	var theirs := BandFactory.make_band(SimRng.new(3).fork("b"), 1, 6, CombatTypes.Tier.BLOODED, CombatTypes.Armor.NONE, 16, 101)
+	BandFactory.deploy_line(b.grid, ours, BattleGrid.from_offset(8, 8), Vector2i(0, -1), rules)
+	BandFactory.deploy_line(b.grid, theirs, BattleGrid.from_offset(8, 3), Vector2i(0, 1), rules)
+	b.add_band(ours)
+	b.add_band(theirs)
+	b.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY))
+	# Turn every man of ours some other way, as a blow or a glance would.
+	for w in ours:
+		if not w.is_leader:
+			w.facing = Vector2i(1, -1)
+	b.set_shout(0, CombatTypes.Shout.HOLD)
+	b.run_round()
+	var in_wall := 0
+	for w in ours:
+		if w.is_active() and not b.grid.line_neighbors(w).is_empty():
+			in_wall += 1
+	assert_true(in_wall >= 5, "men standing in the row are back on the wall's facing: %d of 6" % in_wall)

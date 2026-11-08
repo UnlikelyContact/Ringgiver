@@ -120,6 +120,7 @@ func run_round() -> void:
 		leaders[side] = leader
 		if leader != null and leader.line_facing != Vector2i.ZERO:
 			leader.facing = leader.line_facing
+		_dress_line(side, leader)
 		var shout: CombatTypes.Shout = CombatTypes.Shout.NONE
 		if _pending_shout.has(side):
 			shout = _pending_shout[side]
@@ -223,6 +224,24 @@ func _withdrawn(side: int) -> bool:
 			if BattleGrid.chebyshev(w.pos, e.pos) < rules.withdraw_distance:
 				return false
 	return true
+
+
+## Every man with a friend beside him along the wall's axis faces the wall's
+## facing, so a man who turned to strike or to watch an enemy is back in
+## the line next round. A lone man keeps whatever way he was facing.
+func _dress_line(side: int, leader: Warrior) -> void:
+	if leader == null:
+		return
+	var wf := leader.wall_facing()
+	var dirs := BattleGrid.line_dirs(wf)
+	for w in active(side):
+		if w.broken or w == leader:
+			continue
+		for d in dirs:
+			var n := grid.occupant(w.pos + d)
+			if n != null and n.side == side and n.is_active():
+				w.facing = wf
+				break
 
 
 func _log_action_counts(actions: Dictionary) -> void:
