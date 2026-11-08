@@ -138,7 +138,11 @@ static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 		return Action.brace()
 	var toward := BattleGrid.direction_to(w.pos, near.pos)
 	if not grid.line_neighbors(w).is_empty():
-		var advance := _advance_direction(w, enemies)
+		# One direction for the whole line, taken from the leader's position.
+		var anchor := leader if leader != null and leader.is_active() and leader.side == w.side else w
+		var advance := _advance_direction(anchor, enemies)
+		if _line_in_contact(grid, w, enemies):
+			return Action.brace(advance)  # the line is engaged: hold it together
 		var ahead := w.pos + advance
 		if grid.is_free(ahead):
 			return Action.move_to(ahead, advance)
@@ -241,6 +245,23 @@ static func _gap_cell(grid: BattleGrid, w: Warrior, enemies: Array[Warrior]) -> 
 			if BattleGrid.chebyshev(c, e.pos) == 1:
 				return c
 	return Vector2i(-1, -1)
+
+
+## True when any man connected to w through locked line neighbours has an
+## enemy adjacent: the line is engaged and should not walk apart.
+static func _line_in_contact(grid: BattleGrid, w: Warrior, enemies: Array[Warrior]) -> bool:
+	var seen := {w: true}
+	var queue: Array[Warrior] = [w]
+	while not queue.is_empty():
+		var m: Warrior = queue.pop_front()
+		for e in enemies:
+			if e.is_active() and BattleGrid.chebyshev(m.pos, e.pos) == 1:
+				return true
+		for n in grid.line_neighbors(m):
+			if not seen.has(n):
+				seen[n] = true
+				queue.append(n)
+	return false
 
 
 ## The direction a line advances: from this man toward the enemy's centre,

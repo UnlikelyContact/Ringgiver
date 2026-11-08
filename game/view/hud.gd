@@ -43,10 +43,14 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	status = Label.new()
 	status.add_theme_color_override("font_color", Palette.TEXT)
 	status.add_theme_font_size_override("font_size", 17)
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.custom_minimum_size = Vector2(200, 0)
 	left.add_child(status)
 	you_label = Label.new()
 	you_label.add_theme_color_override("font_color", Palette.GOLD)
 	you_label.add_theme_font_size_override("font_size", 14)
+	you_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	you_label.custom_minimum_size = Vector2(200, 0)
 	left.add_child(you_label)
 	follow_btn = Button.new()
 	follow_btn.text = "Follow"
@@ -70,9 +74,9 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 		_refresh())
 	top.add_child(pulse_slider)
 	next_btn = Button.new()
-	next_btn.custom_minimum_size = Vector2(130, 48)
+	next_btn.custom_minimum_size = Vector2(150, 56)
+	next_btn.add_theme_font_size_override("font_size", 18)
 	next_btn.pressed.connect(_on_next)
-	top.add_child(next_btn)
 
 	var bottom := HBoxContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -85,11 +89,15 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	for s in SHOUTS:
 		var b := Button.new()
 		b.text = CombatTypes.SHOUT_NAMES[s].capitalize() + "!"
-		b.custom_minimum_size = Vector2(128, 52)
+		b.custom_minimum_size = Vector2(112, 52)
 		b.toggle_mode = true
 		b.pressed.connect(_on_shout.bind(s))
 		bottom.add_child(b)
 		shout_buttons[s] = b
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(16, 0)
+	bottom.add_child(gap)
+	bottom.add_child(next_btn)
 
 	log_label = RichTextLabel.new()
 	log_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)

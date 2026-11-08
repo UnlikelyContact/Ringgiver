@@ -196,6 +196,8 @@ func _player_summary(lines: PackedStringArray) -> String:
 					out.append("you braced")
 				CombatTypes.ActionKind.ATTACK:
 					out.append("you struck at %s but the exchange went nowhere" % (a.target.display_name if a.target else "?"))
+	if out.size() > 2:
+		out = out.slice(0, 2)
 	return "; ".join(out)
 
 
