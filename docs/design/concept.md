@@ -239,7 +239,9 @@ once part of it is engaged the engaged men hold and fight and the rest
 close on the nearest enemy, from the ends of the line inward, never
 letting go of a man beside them, so a wing swings forward round a held or
 blocked man like a door on its hinge and the line bows round the fight.
-Shoved men and winners following up step square to their own facing. The
+Falling back, the whole shape goes back together along the wall's
+facing, bends and all. Shoved men and winners following up step square
+to their own facing. The
 push weighs a bent line as one line. "Shield wall!" straightens a line
 that is not engaged and holds an engaged one as it stands. On the screen
 each man stands a little off the centre of his hex, so the lock bars run

@@ -159,10 +159,13 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 		var zig: Vector2i = leader.pos + zig_step
 		var zag: Vector2i = leader.pos + (lf if zig_step != lf else BattleGrid.rotate(lf, 1))
 		slant = BattleGrid.distance(zag, near_l.pos) < BattleGrid.distance(zig, near_l.pos)
+	# Falling back, the whole shape goes back together along the wall's
+	# facing, bends and all; forward, each man steps square to his own.
+	var back_dir := BattleGrid.rotate(leader.wall_facing(), 3)
 	for w in members:
 		if engaged.has(w) and not back:
 			continue
-		var step := BattleGrid.advance_step(w.pos, BattleGrid.rotate(w.facing, 3) if back else w.facing)
+		var step := BattleGrid.advance_step(w.pos, back_dir if back else w.facing)
 		if slant:
 			step = w.facing if step != w.facing else BattleGrid.rotate(w.facing, 1)
 		var target: Vector2i = w.pos + step
@@ -176,7 +179,7 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 			return
 		var occ := grid.occupant(target)
 		if back and occ != null and not members.has(occ) and occ.side == side and occ.is_active() and not occ.broken:
-			var his: Vector2i = occ.pos + BattleGrid.advance_step(occ.pos, BattleGrid.rotate(w.facing, 3))
+			var his: Vector2i = occ.pos + BattleGrid.advance_step(occ.pos, back_dir)
 			if grid.is_free(his) and not claimed.has(his):
 				carried[occ] = his
 				claimed[his] = true
