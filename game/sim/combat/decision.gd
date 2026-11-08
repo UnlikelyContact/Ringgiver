@@ -98,7 +98,9 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 			if w.tier <= CombatTypes.Tier.BLOODED and w.morale <= rules.fall_back_steady_morale:
 				log.append("the line wavers: %s turns to run" % w.display_name)
 				return _flee(grid, w, enemies)
-			if has_leader and BattleGrid.chebyshev(w.pos, leader.pos) > rules.fall_back_regroup_distance:
+			if has_leader and not _in_wall(grid, w, leader.wall_facing()) and _adjacent(w, enemies).is_empty():
+				act = _form(grid, w, leader, all, enemies, false)  # rejoin the wall as it goes back
+			elif has_leader and BattleGrid.chebyshev(w.pos, leader.pos) > rules.fall_back_regroup_distance:
 				act = _step_toward(grid, w, leader.pos, Vector2i.ZERO)
 			if act == null:
 				var back := w.pos - w.facing

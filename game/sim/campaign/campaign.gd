@@ -143,8 +143,8 @@ func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attackin
 		ours.append(m.to_warrior(0))
 	var enemy := BandFactory.make_band(SimRng.new(seed_in).fork("enemy"), 1, enemy_size, enemy_tier,
 			CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID, stat_center if stat_center > 0 else _mean_stat(fighters))
-	BandFactory.deploy_column(battle.grid, ours, 5, Vector2i(1, 0), combat_rules)
-	BandFactory.deploy_column(battle.grid, enemy, 10, Vector2i(-1, 0), combat_rules)
+	BandFactory.deploy_line(battle.grid, ours, BattleGrid.from_offset(8, 8), Vector2i(0, -1), combat_rules)
+	BandFactory.deploy_line(battle.grid, enemy, BattleGrid.from_offset(8, 3), Vector2i(0, 1), combat_rules)
 	battle.add_band(ours)
 	battle.add_band(enemy)
 	battle.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE if attacking else LeaderAI.Doctrine.STEADY))

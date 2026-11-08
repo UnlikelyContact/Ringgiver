@@ -9,6 +9,7 @@ enum Doctrine { STEADY, AGGRESSIVE, RECKLESS }
 
 var doctrine: Doctrine = Doctrine.STEADY
 var _formed_rounds := 0
+var _last_wheel_round := -99
 
 
 func _init(p_doctrine: Doctrine = Doctrine.STEADY) -> void:
@@ -27,7 +28,10 @@ func _wheel_if_needed(battle: Battle, leader: Warrior, theirs: Array[Warrior]) -
 	var want := BattleGrid.snap_direction(sum / theirs.size() - BattleGrid.to_cart(Vector2(leader.pos)))
 	var have := leader.wall_facing()
 	var diff := posmod(BattleGrid.dir_index(want) - BattleGrid.dir_index(have), 6)
+	if battle.round - _last_wheel_round < battle.rules.ai_wheel_cooldown:
+		return
 	if diff >= battle.rules.ai_wheel_min_steps and diff <= 6 - battle.rules.ai_wheel_min_steps:
+		_last_wheel_round = battle.round
 		leader.line_facing = want
 		battle.log.append("%s wheels his line to face %s" % [leader.display_name, str(want)])
 

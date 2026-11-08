@@ -23,8 +23,8 @@ static func propagate(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 			has_banner = has_banner or m.is_banner
 	var banner_bonus := rules.hear_banner_radius_bonus if has_banner else 0
 	for m in band:
-		if not m.is_active():
-			continue
+		if not m.is_active() or m.broken:
+			continue  # a running man hears nothing
 		if m == leader:
 			m.heard_order = shout
 			continue

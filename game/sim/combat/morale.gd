@@ -81,7 +81,8 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	var checked := {}
 	var first_wave: Array[Warrior] = []
 	for w in men:
-		if w.is_active() and not w.broken and w.morale <= rules.morale_break_threshold:
+		if w.is_active() and not w.broken and w.morale <= rules.morale_break_threshold \
+				and not (rules.leaders_never_break and w.is_leader):
 			checked[w] = true
 			if _check_breaks(rng, rules, grid, w):
 				_break(w, log, "")
@@ -101,7 +102,7 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 				panicked.append(f)
 	panicked.sort_custom(func(x: Warrior, y: Warrior) -> bool: return x.id < y.id)
 	for f in panicked:
-		if checked.has(f) or f.broken or f.morale > rules.morale_break_threshold:
+		if checked.has(f) or f.broken or f.morale > rules.morale_break_threshold or (rules.leaders_never_break and f.is_leader):
 			continue
 		checked[f] = true
 		if _check_breaks(rng, rules, grid, f):

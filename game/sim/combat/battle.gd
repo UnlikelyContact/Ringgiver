@@ -17,6 +17,8 @@ var _ai := {}  # side -> LeaderAI (absent = external input via set_shout)
 var _pending_shout := {}  # side -> Shout set from outside for this round
 var _last_shout := {}  # side -> Shout actually given
 var _standing := {}  # side -> the last order given that was not NONE
+var _contact_logged := {}  # side -> bool, so "in contact" is logged once per spell
+var _rounds_without_blow := 0
 var _player_action := {}  # side -> Action for that side's leader this round (presentation hook)
 ## Actions chosen in the last round, Warrior -> Action (read by the view).
 var last_actions := {}
@@ -127,22 +129,25 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	var chance_sum := 0.0
 	for w in members:
 		if order == CombatTypes.Shout.PUSH and not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
-			log.append("the wall is in contact and holds")
+			if not _contact_logged.get(side, false):
+				log.append("side %d's wall is in contact and holds" % side)
+				_contact_logged[side] = true
 			return
 		var target: Vector2i = w.pos + BattleGrid.advance_step(w.pos, step_facing)
 		var occ := grid.occupant(target)
 		if not grid.in_bounds(target) or grid.terrain_at(target) == CombatTypes.Terrain.WATER \
 				or (occ != null and not members.has(occ)):
-			log.append("the wall cannot step as one: %s is blocked" % w.display_name)
+			log.append("%s's wall cannot step as one: %s is blocked" % [leader.display_name, w.display_name])
 			_hold_wall(members)
 			return
 		targets[w] = target
 		chance_sum += 1.0 if w == leader else Shouts.hear_chance(rules, BattleGrid.distance(w.pos, leader.pos), w.wits, horn, fog)
 	var chance := chance_sum / members.size()
 	if wr.randf() > chance:
-		log.append("the line hesitates (%d%% to move as one)" % int(round(chance * 100)))
+		log.append("%s's line hesitates (%d%% to move as one)" % [leader.display_name, int(round(chance * 100))])
 		_hold_wall(members)
 		return
+	_contact_logged[side] = false
 	for w in members:
 		# The exceptions to moving as one: a man who falls, and a man whose
 		# nerve breaks. Falling back, a green or blooded man with little
@@ -152,7 +157,7 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 			log.append("%s's nerve goes as the wall falls back" % w.display_name)
 			continue
 		w.wall_move = targets[w]
-	log.append("the wall steps %s as one, %d men" % ["forward" if order == CombatTypes.Shout.PUSH else "back", members.size()])
+	log.append("%s's wall steps %s as one, %d men" % [leader.display_name, "forward" if order == CombatTypes.Shout.PUSH else "back", members.size()])
 
 
 ## Marks a wall's men to stand fast this round (wall_move = own cell).
@@ -275,13 +280,25 @@ func run_round() -> void:
 	after_melee = _positions()
 	# 3d. The push: a heave happens only when a leader has called for it.
 	if _push_called():
-		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log)
+		var may_advance := {}
+		for side in 2:
+			for w in wall_members(side):
+				may_advance[w] = true
+		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance)
 		if push.winning_side >= 0:
 			log.append("the push goes to side %d" % push.winning_side)
 	# 3e. Morale.
 	var broke := Morale.round_update(rr.fork("morale"), rules, grid, warriors, leaders, any_attacks, log)
 	for w in broke:
 		result.broken[w.side] += 1
+
+	# Blows landed this round?
+	var any_blow := false
+	for i in range(maxi(0, log.size() - 60), log.size()):
+		if log[i].contains(" beats ") and not log[i].contains("glancing") and log[i].begins_with(log[i].split(" beats ")[0]):
+			any_blow = true
+			break
+	_rounds_without_blow = 0 if any_blow else _rounds_without_blow + 1
 
 	# 4. End check.
 	for side in 2:
@@ -295,6 +312,17 @@ func run_round() -> void:
 	for side in 2:
 		if last_shout(side) == CombatTypes.Shout.FALL_BACK and _withdrawn(side):
 			_finish(1 - side, "side %d draws off and leaves the field" % side)
+			return
+	if _rounds_without_blow >= rules.retreat_stall_rounds:
+		var retreating := []
+		for side in 2:
+			if standing_order(side) == CombatTypes.Shout.FALL_BACK:
+				retreating.append(side)
+		if retreating.size() == 1:
+			_finish(1 - retreating[0], "side %d keeps giving ground and quits the field" % retreating[0])
+			return
+		if retreating.size() == 2:
+			_finish(-1, "both sides draw off")
 			return
 
 
@@ -465,12 +493,19 @@ func _resolve_melee(mr: SimRng, actions: Dictionary) -> void:
 		var b_attacks := ba.kind == CombatTypes.ActionKind.ATTACK and ba.target == a
 		var a_braced := aa.kind == CombatTypes.ActionKind.BRACE
 		var b_braced := ba.kind == CombatTypes.ActionKind.BRACE
-		if a_attacks and BattleGrid.chebyshev(a.pos, b.pos) >= 1:
+		# A man turns to strike only if his target is not already ahead of him;
+		# turning inside a wall would unlock it for the push that follows.
+		if a_attacks and not _ahead_of(a, b.pos):
 			a.facing = BattleGrid.direction_to(a.pos, b.pos)
-		if b_attacks and BattleGrid.chebyshev(a.pos, b.pos) >= 1:
+		if b_attacks and not _ahead_of(b, a.pos):
 			b.facing = BattleGrid.direction_to(b.pos, a.pos)
 		var r := MeleeExchange.resolve(mr.fork(key), rules, grid, a, b, a_attacks, b_attacks, a_braced, b_braced, log)
 		_after_exchange(r)
+
+
+static func _ahead_of(w: Warrior, target: Vector2i) -> bool:
+	var arc := BattleGrid.arc_of(w, target)
+	return arc == CombatTypes.Arc.FRONT or arc == CombatTypes.Arc.FRONT_RIGHT
 
 
 func _after_exchange(r: ExchangeResult) -> void:

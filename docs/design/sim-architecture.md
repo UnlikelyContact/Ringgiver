@@ -395,3 +395,33 @@ winners follow only when the line moved. Two locked walls grind longer,
 so `max_rounds` is 40. Measured: veterans win 97% of 200 green fights
 (21 rounds); equal green 59/37 with 4% draws; equal veteran 47/35 with
 18.5% draws.
+
+### Scripted playtest (8 Nov 2026, `tools/playtest.gd`)
+
+Drives the prototype like a player (shield wall, push, hold, wheel, fall
+back) with a screenshot and the log every round. Found and fixed:
+
+- Men who attacked turned to face their target during the blows beat, so
+  the push beat that followed saw every attacker as a lone man and shoved
+  walls apart one man at a time. A man now turns only if his target is
+  not already ahead of him.
+- The player's own man could break and run off the field. Leaders never
+  break (`leaders_never_break`); a leader's nerve is a choice, the
+  player's or the AI's fall back.
+- The AI wheeled its wall every round as scattered enemies moved its
+  target; `ai_wheel_cooldown` (3 rounds).
+- Winners of a push stepped into vacated ground one by one and broke their
+  own wall; the winning line now follows square to its facing all together
+  or not at all, and only a leader's wall follows up (`may_advance`).
+- Men outside a wall that fell back kept walking away; they now rejoin.
+- The batch and campaign deployments put eight-man lines on the diagonal
+  axis of a 16x12 map, where the end men were off the edge and the wall
+  could never step; both now deploy across the map like the prototype.
+  That alone took equal-fight draws from 48% to 4.5%.
+- A side still falling back after `retreat_stall_rounds` without a blow has
+  quit the field (a pursuit at equal speed never catches anyone).
+- Broken men no longer hear or mishear shouts; "in contact" is logged once
+  per spell; wall log lines say whose wall.
+
+Measured after: equal green 46/49.5 with 4.5% draws (24 rounds); veterans
+win 95.5% of green fights; equal veteran 45.5/38 with 16.5% draws.

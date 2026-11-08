@@ -89,6 +89,8 @@ var morale_alone := -1
 var morale_leader_down := -3
 var morale_banner_lost := -2
 var morale_break_threshold := 3
+## Leaders never break: a leader's nerve is a choice (the player's, or the AI's fall back).
+var leaders_never_break := true
 var morale_rally_to_me := 2
 var push_morale_weight := 0.5
 var push_second_rank_bonus := 1
@@ -147,6 +149,10 @@ var max_rounds := 40
 ## A side whose leader has called "fall back" and whose men are all at least
 ## this far from every enemy has left the field and loses.
 var withdraw_distance := 4
+## A side still falling back after this many rounds without a blow landing
+## on either side has given up the field: a pursuit at equal speed never
+## catches anyone, and a line that keeps giving ground has lost.
+var retreat_stall_rounds := 4
 var missile_range := 6
 ## LeaderAI doctrine thresholds.
 var ai_form_rounds := 2
@@ -156,6 +162,7 @@ var ai_break_them_percent := 40
 var ai_scatter_mean_distance := 3
 ## The AI wheels its wall when the enemy is this many facings (60 degrees each) off it.
 var ai_wheel_min_steps := 2
+var ai_wheel_cooldown := 3
 ## A STEADY leader waits this many rounds without contact before pushing.
 var ai_patience_rounds := 6
 

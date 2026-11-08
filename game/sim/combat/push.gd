@@ -11,8 +11,10 @@ extends RefCounted
 ## some member of the other) makes one opposed roll on their strengths.
 
 
+## `may_advance`: Warrior -> true for men allowed to follow up a won push
+## (the battle passes the members of each side's wall). Empty means anyone.
 static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
-		all: Array[Warrior], log: PackedStringArray) -> PushResult:
+		all: Array[Warrior], log: PackedStringArray, may_advance: Dictionary = {}) -> PushResult:
 	var result := PushResult.new()
 	var men: Array[Warrior] = all.duplicate()
 	men.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
@@ -63,7 +65,15 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		w.add_effort(CombatTypes.Stat.MIGHT)
 	_shove(rules, grid, losers, result, log)
 	if rules.push_winners_advance:
-		_advance(grid, winners, losers, result, log)
+		if may_advance.is_empty():
+			_advance(grid, winners, losers, result, log)
+		else:
+			var allowed: Array[Warrior] = []
+			for w in winners:
+				if may_advance.has(w):
+					allowed.append(w)
+			if allowed.size() == winners.size():
+				_advance(grid, winners, losers, result, log)
 	result.winning_side = _top_side(wins)
 	return result
 
@@ -75,12 +85,24 @@ static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Wa
 		result: PushResult, log: PackedStringArray) -> void:
 	if losers.is_empty() or (result.shoved.is_empty() and not result.blocked.is_empty()):
 		return
+	# The winning line follows as a line: every man steps square to his
+	# facing, and only if all of them can; otherwise the line holds its gain.
+	var steps := {}
 	for w in winners:
 		if not w.is_active() or w.broken:
 			continue
-		var ahead := w.pos + w.facing
-		if grid.is_free(ahead):
-			grid.place(w, ahead)
+		var ahead := w.pos + BattleGrid.advance_step(w.pos, w.facing)
+		var occ := grid.occupant(ahead)
+		if not grid.in_bounds(ahead) or grid.terrain_at(ahead) == CombatTypes.Terrain.WATER \
+				or (occ != null and not winners.has(occ)):
+			return
+		steps[w] = ahead
+	for w in steps:
+		grid.remove(w)
+	for w in steps:
+		if not grid.place(w, steps[w]):
+			grid.place(w, w.pos)
+		else:
 			result.advanced.append(w)
 	if not result.advanced.is_empty():
 		log.append("side %d drives forward" % result.advanced[0].side)
