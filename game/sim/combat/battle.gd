@@ -147,11 +147,25 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	var carried := {}  # a friend behind a falling-back man, stepping back with him
 	# Pass one: every man's straight step, square to his own facing, by the
 	# zigzag that keeps his column. All at once, so a line that marches
-	# together stays together.
+	# together stays together. No hex step is square to a row, so when the
+	# enemy lies a little to one side the whole line takes the slant toward
+	# them instead of the zigzag, and slides across as it comes on rather
+	# than marching past.
+	var slant := false
+	if not back and not theirs.is_empty():
+		var lf := leader.wall_facing()
+		var near_l := _nearest_enemy(leader.pos, theirs)
+		var zig_step := BattleGrid.advance_step(leader.pos, lf)
+		var zig: Vector2i = leader.pos + zig_step
+		var zag: Vector2i = leader.pos + (lf if zig_step != lf else BattleGrid.rotate(lf, 1))
+		slant = BattleGrid.distance(zag, near_l.pos) < BattleGrid.distance(zig, near_l.pos)
 	for w in members:
 		if engaged.has(w) and not back:
 			continue
-		var target: Vector2i = w.pos + BattleGrid.advance_step(w.pos, BattleGrid.rotate(w.facing, 3) if back else w.facing)
+		var step := BattleGrid.advance_step(w.pos, BattleGrid.rotate(w.facing, 3) if back else w.facing)
+		if slant:
+			step = w.facing if step != w.facing else BattleGrid.rotate(w.facing, 1)
+		var target: Vector2i = w.pos + step
 		if back and not grid.in_bounds(target):
 			# Falling back with the edge of the field at their backs: the wall retreats off it.
 			for m in members:
