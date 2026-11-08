@@ -97,6 +97,8 @@ var push_winners_advance := true
 ## A push only moves a line when the winner's margin reaches this; smaller
 ## margins are a heave that gains nothing, which keeps lines from dissolving.
 var push_min_margin := 4
+## A losing line gives ground all together or holds; winners follow only when it moved.
+var push_as_a_line := true
 ## Chebyshev radius within which a man sees a friend or foe go down.
 var morale_visible_radius := 3
 ## A man at or below the break threshold rolls 2d6 + Nerve + personality

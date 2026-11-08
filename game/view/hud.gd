@@ -52,6 +52,11 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	you_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	you_label.custom_minimum_size = Vector2(200, 0)
 	left.add_child(you_label)
+	var adv := Button.new()
+	adv.text = "Advance"
+	adv.custom_minimum_size = Vector2(92, 40)
+	adv.pressed.connect(func() -> void: view.advance())
+	top.add_child(adv)
 	var wheel_l := Button.new()
 	wheel_l.text = "Wheel L"
 	wheel_l.custom_minimum_size = Vector2(84, 40)

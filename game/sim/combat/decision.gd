@@ -154,12 +154,13 @@ static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 		# One direction for the whole line, taken from the leader's position.
 		var anchor := leader if leader != null and leader.is_active() and leader.side == w.side else w
 		# A wall advances the way it faces; without a set wall facing, toward the enemy.
-		var advance := anchor.line_facing if anchor.line_facing != Vector2i.ZERO else _advance_direction(anchor, enemies)
+		var wall := anchor.line_facing if anchor.line_facing != Vector2i.ZERO else _advance_direction(anchor, enemies)
 		if _line_in_contact(grid, w, enemies):
-			return Action.brace(advance)  # the line is engaged: hold it together
+			return Action.brace(wall)  # the line is engaged: hold it together
+		var advance := BattleGrid.advance_step(w.pos, wall)
 		var ahead := w.pos + advance
 		if grid.is_free(ahead):
-			return Action.move_to(ahead, advance)
+			return Action.move_to(ahead, wall)
 		var occ := grid.occupant(ahead)
 		if occ != null and occ.side == w.side:
 			return Action.brace(advance)

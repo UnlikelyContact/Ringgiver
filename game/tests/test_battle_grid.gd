@@ -59,3 +59,23 @@ func test_line_neighbors_and_behind() -> void:
 	assert_eq(g.behind(w), Vector2i(4, 5))
 	assert_eq(g.adjacent_warriors(w.pos).size(), 2)
 	assert_eq(g.adjacent_warriors(w.pos, 1).size(), 1)
+
+
+func test_advance_step_goes_straight_up_the_field() -> void:
+	# A wall facing north-west along an east-west row: four steps keep the column.
+	var pos := BattleGrid.from_offset(8, 8)
+	var col := BattleGrid.to_offset(pos).x
+	for i in 4:
+		pos += BattleGrid.advance_step(pos, Vector2i(0, -1))
+	assert_eq(BattleGrid.to_offset(pos).x, col, "same column after four steps")
+	assert_eq(BattleGrid.to_offset(pos).y, 4, "four rows up")
+	# Two men on the same row step the same way.
+	var a := BattleGrid.from_offset(5, 8)
+	var b := BattleGrid.from_offset(9, 8)
+	assert_eq(BattleGrid.advance_step(a, Vector2i(0, -1)), BattleGrid.advance_step(b, Vector2i(0, -1)))
+	# A wall facing east (row north-east/south-west) stays on one line too.
+	var e := Vector2i(2, 5)
+	var start := e
+	for i in 4:
+		e += BattleGrid.advance_step(e, Vector2i(1, 0))
+	assert_eq(e - start, Vector2i(2, 2), "two east and two south-east steps")

@@ -183,6 +183,23 @@ static func line_dirs(facing: Vector2i) -> Array[Vector2i]:
 	return [rotate(facing, 2), rotate(facing, 5)]
 
 
+## The step a wall takes to advance square to its row. No hex direction is
+## perpendicular to a hex row, so "straight" alternates the two directions
+## that straddle the facing; the alternation is keyed on the coordinate that
+## stays constant along the row, so every man in the row steps the same way
+## and each keeps his own column over two steps.
+static func advance_step(pos: Vector2i, facing: Vector2i) -> Vector2i:
+	var row := rotate(facing, 2)
+	var key: int
+	if row.y == 0:
+		key = pos.y  # row runs east-west: r is constant along it
+	elif row.x == 0:
+		key = pos.x  # row runs north-west/south-east: q is constant
+	else:
+		key = pos.x + pos.y  # row runs north-east/south-west: q + r is constant
+	return facing if posmod(key, 2) == 0 else rotate(facing, 1)
+
+
 ## The cell directly behind `w` (for second-rank support).
 func behind(w: Warrior) -> Vector2i:
 	return w.pos - w.facing

@@ -59,6 +59,16 @@ func is_manual() -> bool:
 	return pulse_seconds <= 0.0
 
 
+## Steps your man one hex square to the wall; the line forms on where he goes.
+func advance() -> void:
+	if player == null or not player.is_active():
+		return
+	var cell := player.pos + BattleGrid.advance_step(player.pos, player.wall_facing())
+	if battle.grid.is_free(cell):
+		pending_action = Action.move_to(cell, player.wall_facing())
+		queue_redraw()
+
+
 ## Wheels the wall one facing (60 degrees) left or right.
 func wheel(steps: int) -> void:
 	if player == null:

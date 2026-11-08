@@ -73,7 +73,7 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 ## actually drives the line forward (concept.md, "Push!").
 static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Warrior],
 		result: PushResult, log: PackedStringArray) -> void:
-	if losers.is_empty():
+	if losers.is_empty() or (result.shoved.is_empty() and not result.blocked.is_empty()):
 		return
 	for w in winners:
 		if not w.is_active() or w.broken:
@@ -149,6 +149,21 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 		result: PushResult, log: PackedStringArray) -> void:
 	var pending: Array[Warrior] = losers.duplicate()
 	pending.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
+	# A line gives ground together or not at all: if any man of it has
+	# nowhere to go, the whole line is pressed and holds (and tires).
+	if rules.push_as_a_line and not pending.is_empty():
+		var can_all := true
+		for w: Warrior in pending:
+			var dest: Vector2i = w.pos - w.facing
+			if not grid.is_free(dest):
+				can_all = false
+				break
+		if not can_all:
+			for w: Warrior in pending:
+				w.spend_breath(rules.push_blocked_breath)
+				result.blocked.append(w)
+			log.append("the line is pressed back but holds its ground")
+			return
 	var moved := true
 	while moved:
 		moved = false
