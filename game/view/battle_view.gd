@@ -48,10 +48,13 @@ func setup(p_battle: Battle, p_player: Warrior, p_camera: Camera2D) -> void:
 	for w in battle.warriors:
 		var t := Token.new()
 		t.setup(w, rules, w == player)
-		t.position = Iso.to_screen(w.pos) + Iso.jitter(w.id)
 		add_child(t)
 		tokens[w] = t
 		_by_name[w.display_name] = w
+	# The walls as deployed draw closed up from the first frame.
+	_compute_tighten()
+	for w in tokens:
+		(tokens[w] as Token).position = _spot(w, w.pos)
 	clock = pulse_seconds
 	queue_redraw()
 
@@ -145,6 +148,69 @@ func _wait(seconds: float) -> void:
 		await get_tree().create_timer(seconds * anim_scale).timeout
 
 
+## How far a man in a wall draws in toward his leader, per link of the
+## chain, so locked shields overlap on the screen while the hex stays his
+## slot in the rules. The wall closes up as it forms and opens as it breaks.
+const WALL_TIGHTEN := 12.0
+const WALL_TIGHTEN_MAX := 48.0
+var _tighten := {}  # Warrior -> Vector2 pull toward the leader, recomputed each round
+
+
+## Where a man is drawn: his cell, his own small jitter, and his pull into
+## the wall if he stands in one.
+func _spot(w: Warrior, cell: Vector2i) -> Vector2:
+	var base := Iso.to_screen(cell)
+	var pull: Vector2 = _tighten.get(w, Vector2.ZERO)
+	var jitter := Iso.jitter(w.id) * (0.35 if pull != Vector2.ZERO else 1.0)
+	return base + jitter + pull
+
+
+## Recomputes every man's pull into his wall from the battle as it stands:
+## breadth-first from each leader, each link draws WALL_TIGHTEN pixels
+## further in, toward the leader's cell.
+func _compute_tighten() -> void:
+	_tighten.clear()
+	for side in 2:
+		var leader := battle.leader_of(side)
+		if leader == null:
+			continue
+		var members := battle.wall_members(side)
+		if members.size() < 2:
+			continue
+		var depth := {leader: 0}
+		var queue: Array[Warrior] = [leader]
+		while not queue.is_empty():
+			var m: Warrior = queue.pop_front()
+			for n in battle.grid.line_neighbors(m):
+				if members.has(n) and not depth.has(n):
+					depth[n] = depth[m] + 1
+					queue.append(n)
+		var centre := Iso.to_screen(leader.pos)
+		for m in members:
+			if not depth.has(m) or m == leader:
+				continue
+			var toward := centre - Iso.to_screen(m.pos)
+			if toward.length() < 1.0:
+				continue
+			_tighten[m] = toward.normalized() * minf(WALL_TIGHTEN * depth[m], WALL_TIGHTEN_MAX)
+		for m in members:
+			if tokens.has(m):
+				(tokens[m] as Token).set_locked(true)
+	for w in battle.warriors:
+		if tokens.has(w) and not _tighten.has(w) and not (battle.leader_of(w.side) == w and battle.wall_members(w.side).size() >= 2):
+			(tokens[w] as Token).set_locked(false)
+
+
+## After the beats: the walls close up or open out to where they now stand.
+func _settle(seconds: float) -> void:
+	_compute_tighten()
+	var now := {}
+	for w in battle.warriors:
+		now[w] = w.pos
+	if _tween_to(now, seconds):
+		await _wait(seconds)
+
+
 func _tween_to(positions: Dictionary, seconds: float) -> bool:
 	var any := false
 	var tween: Tween = null
@@ -152,7 +218,7 @@ func _tween_to(positions: Dictionary, seconds: float) -> bool:
 		if not tokens.has(w) or w.fled:
 			continue
 		var t: Token = tokens[w]
-		var target := Iso.to_screen(positions[w]) + Iso.jitter(w.id)
+		var target := _spot(w, positions[w])
 		if t.position.distance_to(target) < 0.5:
 			continue
 		any = true
@@ -233,6 +299,7 @@ func _animate(before: Dictionary, lines: PackedStringArray) -> void:
 			t.visible = false
 		t.set_tense(w.is_active() and not battle.grid.adjacent_warriors(w.pos, 1 - w.side).is_empty())
 		t.queue_redraw()
+	await _settle(0.3)
 	animating = false
 	queue_redraw()
 
@@ -552,8 +619,8 @@ func _draw_shield_locks() -> void:
 		for n in battle.grid.line_neighbors(w):
 			if n.id < w.id or n.broken:
 				continue
-			var a := Iso.to_screen(w.pos) + Iso.jitter(w.id)
-			var b := Iso.to_screen(n.pos) + Iso.jitter(n.id)
+			var a := _spot(w, w.pos)
+			var b := _spot(n, n.pos)
 			var locked := w.shield_usable() and n.shield_usable()
 			if not locked:
 				# Linked but not locked: a shield is gone here. A thin dark

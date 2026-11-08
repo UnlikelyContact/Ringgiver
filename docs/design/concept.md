@@ -329,7 +329,13 @@ side heart round after round, so the one who waits pays for waiting, and
 that a proud leader answers by coming on. The enemy jeers too. On the
 screen men now sway where they stand, each to his own rhythm, and tense
 up when an enemy is at arm's length; the shadow stays put and the man
-moves above it.
+moves above it. Men in a wall draw in toward their leader on the screen,
+twelve pixels a link, with bigger shields set steadier, so locked shields
+overlap while the hex stays each man's slot in the rules; the line
+visibly closes up as the wall forms and opens as it breaks. When real
+models come, the formation pose (shoulder to shoulder, shields
+overlapped) is this same offset, applied to the model rather than the
+disc.
 
 ### Drill, custom formations and custom shouts (decided 8 Nov 2026)
 

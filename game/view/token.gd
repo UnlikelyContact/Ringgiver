@@ -18,6 +18,7 @@ var down_mark := false
 var _phase := 0.0
 var _sway := Vector2.ZERO
 var _tense := false
+var _locked := false  # in a wall: a bigger shield set tight, and less sway
 
 const R := 15.0
 
@@ -39,7 +40,7 @@ func _process(delta: float) -> void:
 		return
 	# Sway: slow and small at rest, quicker and a little wider when tense.
 	var speed := 3.2 if _tense else 1.4
-	var amp := 1.6 if _tense else 1.0
+	var amp := (1.6 if _tense else 1.0) * (0.6 if _locked else 1.0)
 	_phase += delta * speed
 	var s := Vector2(sin(_phase) * amp, sin(_phase * 1.7 + 0.8) * amp * 0.6)
 	if (s - _sway).length() > 0.15 or flash > 0.0:
@@ -49,6 +50,12 @@ func _process(delta: float) -> void:
 
 func set_tense(t: bool) -> void:
 	_tense = t
+
+
+func set_locked(l: bool) -> void:
+	if l != _locked:
+		_locked = l
+		queue_redraw()
 
 
 func hit(color: Color) -> void:
@@ -66,7 +73,7 @@ func _draw() -> void:
 	var side := Palette.side_color(warrior.side)
 	# Ground shadow stays put; the man sways above it.
 	draw_circle(Vector2(0, 6), R * 0.9, Color(0, 0, 0, 0.25))
-	draw_set_transform(_sway, 0.0, Vector2.ONE)
+	draw_set_transform(_sway, 0.0, Vector2.ONE * (1.22 if _locked else 1.0))
 	var f := Iso.to_screen_f(Vector2(warrior.facing)).normalized()
 	var tip := f * (R + 9)
 	var side_v := Vector2(-f.y, f.x) * 5
