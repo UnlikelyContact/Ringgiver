@@ -107,11 +107,15 @@ static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Wa
 	# The winning line follows as a line: every man steps square to his
 	# facing, and only if all of them can; otherwise the line holds its gain.
 	var steps := {}
+	var side_step := {}  # side -> the one step its men take, so the line keeps its shape
 	for w in winners:
 		if not w.is_active() or w.broken:
 			continue
-		# Each man steps square to his own facing; a bent line follows as a bow.
-		var ahead := w.pos + BattleGrid.advance_step(w.pos, w.facing)
+		# The line follows up along its wall's facing, every man by the same
+		# step (the first man's zigzag), so a bent line keeps its shape.
+		if not side_step.has(w.side):
+			side_step[w.side] = BattleGrid.advance_step(w.pos, wall_facing.get(w.side, w.facing))
+		var ahead: Vector2i = w.pos + side_step[w.side]
 		var occ := grid.occupant(ahead)
 		if not grid.in_bounds(ahead) or grid.terrain_at(ahead) == CombatTypes.Terrain.WATER \
 				or (occ != null and not winners.has(occ)):
@@ -195,8 +199,15 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 	# Straight back, square to the line: the same zigzag a wall advances by,
 	# so a line shoved twice ends up where it started, not two cells aside.
 	var back := {}
+	var side_step := {}  # side -> the one step back its men take, so the line keeps its shape
 	for w: Warrior in pending:
-		back[w] = w.pos + BattleGrid.advance_step(w.pos, BattleGrid.rotate(w.facing, 3))
+		# Straight back along the wall's facing, every man by the same step,
+		# so a shoved line keeps its shape; a man with no wall goes back
+		# from his own front.
+		var f: Vector2i = wall_facing.get(w.side, w.facing)
+		if not side_step.has(w.side):
+			side_step[w.side] = BattleGrid.advance_step(w.pos, BattleGrid.rotate(f, 3))
+		back[w] = w.pos + side_step[w.side]
 	pending.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
 	# A line gives ground together: if fewer than push_line_fraction of its
 	# men have room behind them, the whole line is pressed and holds (and

@@ -215,28 +215,14 @@ static func facing_steps(a: Vector2i, b: Vector2i) -> int:
 	return mini(d, 6 - d)
 
 
-## Two men stand shoulder to shoulder: beside each other rather than one
-## behind the other (neither directly ahead of or behind the other), and
-## facing within `max_turn` facings of each other. A line that bends more
-## than that between two men has broken there.
-static func shoulder_to_shoulder(a: Warrior, b: Warrior, max_turn := DEFAULT_LINK_TURN) -> bool:
-	if a == b or a.side != b.side or distance(a.pos, b.pos) != 1:
-		return false
-	if facing_steps(a.facing, b.facing) > max_turn:
-		return false
-	var ab := posmod(dir_index(direction_to(a.pos, b.pos)) - dir_index(a.facing), 6)
-	var ba := posmod(dir_index(direction_to(b.pos, a.pos)) - dir_index(b.facing), 6)
-	return ab != 0 and ab != 3 and ba != 0 and ba != 3
-
-
-## Friends at w's shoulders: active men beside him in his line, whose
-## shields lock with his. The line may bend: a shoulder is any neighbour
-## not straight ahead or behind, facing within `max_turn` of him.
+## Friends at w's shoulders: active men linked to him in his line (`linked`),
+## whose shields lock with his. The same rule builds the wall, groups the
+## push and draws the bars, so what is counted is what is drawn and fought.
 func line_neighbors(w: Warrior, max_turn := DEFAULT_LINK_TURN) -> Array[Warrior]:
 	var out: Array[Warrior] = []
 	for c in neighbors(w.pos):
 		var n := occupant(c)
-		if n != null and n.is_active() and shoulder_to_shoulder(w, n, max_turn):
+		if n != null and n.is_active() and linked(w, n, max_turn):
 			out.append(n)
 	return out
 

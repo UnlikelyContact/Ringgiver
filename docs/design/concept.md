@@ -271,6 +271,23 @@ and the result panel is a wrapped box in plain words. On the varied
 fields a pushing player wins 55% with 3% draws, a holding one 39% with 8%,
 which is what "brace, don't chase" should cost.
 
+**Seventh playtest, same day (the bend did not show):** men with nobody
+in front stepped forward under Push, but the lock bars did not include
+them and the wall count dropped. Three causes, all fixed: the bars, the
+shield-lock bonus and the push groups used a stricter two-sided shoulder
+rule than the wall itself (one rule now, `BattleGrid.linked`, so what is
+counted is what is drawn and fought); a man stepping with the wall never
+took the facing his step gave him, since carried men were placed without
+it, so he stood straight ahead of his neighbour and unlinked (he now turns
+as planned, and a step is only taken with a facing that keeps every man
+beside him linked); and shoves, follow-ups and the wall's own step each
+used a per-man zigzag, which scattered a bent line (one shared step per
+wall now, so the shape moves as a piece). A stepper also keeps every
+wall-mate now at arm's length at arm's length, so nobody is left behind.
+Measured over forty fights: 98% of standing men still in the wall after a
+round, up from 96%, with the men who did leave mostly beside a man who
+fell.
+
 If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop
