@@ -448,18 +448,20 @@ func run_round() -> void:
 	if _push_called():
 		var may_advance := {}
 		var wall_facing := {}
+		var driving := {0: false, 1: false}
 		for side in 2:
-			# Only a line driving forward follows up a won shove; a line told
-			# to hold keeps its ground and does not chase.
+			# Only a line driving forward throws the enemy back and follows
+			# up; a line told to hold stops the push where it stands.
 			var order := standing_order(side)
 			if order != CombatTypes.Shout.PUSH and order != CombatTypes.Shout.BREAK_THEM and order != CombatTypes.Shout.SVINFYLKING:
 				continue
+			driving[side] = true
 			for w in wall_members(side):
 				may_advance[w] = true
 			var l := leader_of(side)
 			if l != null:
 				wall_facing[side] = l.wall_facing()
-		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance, wall_facing)
+		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance, wall_facing, driving)
 		for w in push.driven_off:
 			result.fled[w.side] += 1
 		if push.winning_side >= 0:

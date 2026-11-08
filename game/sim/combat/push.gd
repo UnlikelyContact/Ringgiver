@@ -16,9 +16,13 @@ extends RefCounted
 
 ## `may_advance`: Warrior -> true for men allowed to follow up a won push
 ## (the battle passes the members of each side's wall). Empty means anyone.
+## `driving`: side -> true for a side whose order is to drive forward. A
+## side that is holding and wins the contest holds the push: the pushers
+## are stopped and tire, but are not thrown back, so the lines stay locked
+## and the fight goes on. Empty means every side drives.
 static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		all: Array[Warrior], log: PackedStringArray, may_advance: Dictionary = {},
-		wall_facing: Dictionary = {}) -> PushResult:
+		wall_facing: Dictionary = {}, driving: Dictionary = {}) -> PushResult:
 	var result := PushResult.new()
 	var men: Array[Warrior] = all.duplicate()
 	men.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
@@ -56,6 +60,13 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 				continue
 			var won: Array[Warrior] = a if roll.margin > 0 else b
 			var lost: Array[Warrior] = b if roll.margin > 0 else a
+			if not driving.is_empty() and not driving.get(won[0].side, false):
+				log.append("push: %s, side %d holds the push" % [label, won[0].side])
+				for w in lost:
+					w.spend_breath(rules.push_blocked_breath)
+					if not result.blocked.has(w):
+						result.blocked.append(w)
+				continue
 			log.append("push: %s, side %d drives side %d back" % [label, won[0].side, lost[0].side])
 			wins[won[0].side] = wins.get(won[0].side, 0) + 1
 			for w in won:
@@ -73,7 +84,8 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 			w.morale = clampi(w.morale + rules.push_won_morale, 0, 10)
 	if rules.push_winners_advance:
 		if may_advance.is_empty():
-			_advance(grid, winners, losers, result, log, wall_facing)
+			if driving.is_empty():  # nobody named: anyone follows up
+				_advance(grid, winners, losers, result, log, wall_facing)
 		else:
 			var allowed: Array[Warrior] = []
 			for w in winners:

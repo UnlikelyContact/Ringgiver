@@ -255,6 +255,22 @@ stands up to three hexes off yours, and two leaders in five are
 aggressive. The HUD shows the build it was made from, so a stale cached
 build is easy to spot.
 
+**Sixth playtest, same day (played by touch at phone size and three
+scripted fights):** a line told to hold followed up every shove it won
+and walked forward two rows, so "Hold!" was a slower "Push!". Now only a
+side driving forward (Push, Break them, the wedge) throws a losing line
+back and follows up; a holding side that wins the contest holds the push
+where it stands, the pushers stop and tire, and the lines stay locked so
+the fight goes on. (The first cut, where a holding side still threw the
+pushers back but did not follow, stalled half of all holding fights: the
+enemy stepped in, nobody struck in the round of contact, the shove threw
+them out of reach, and it began again.) The HUD's wall count no longer
+drops to one when the leader turns to strike, the camera fits every
+standing man between the bars on a phone and eases in as the lines close,
+and the result panel is a wrapped box in plain words. On the varied
+fields a pushing player wins 55% with 3% draws, a holding one 39% with 8%,
+which is what "brace, don't chase" should cost.
+
 If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop

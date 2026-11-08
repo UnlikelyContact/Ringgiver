@@ -212,7 +212,7 @@ func _result_text(r: BattleResult) -> String:
 		if line.begins_with("==="):
 			why = line.trim_prefix("=== ").trim_suffix(" ===").replace("side 0", "your band").replace("side 1", "their band")
 	return "%s after %d rounds.\nYours: %d of %d down, %d broke, %d fled, %d dead.\nTheirs: %d of %d down, %d broke, %d fled, %d dead." % [
-		why.capitalize() if why != "" else "The fight is over", r.rounds,
+		(why[0].to_upper() + why.substr(1)) if why != "" else "The fight is over", r.rounds,
 		r.downed[0], r.started[0], r.broken[0], r.fled[0], r.dead[0],
 		r.downed[1], r.started[1], r.broken[1], r.fled[1], r.dead[1]]
 
