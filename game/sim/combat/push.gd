@@ -149,18 +149,18 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 		result: PushResult, log: PackedStringArray) -> void:
 	var pending: Array[Warrior] = losers.duplicate()
 	pending.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
-	# A line gives ground together or not at all: if any man of it has
-	# nowhere to go, the whole line is pressed and holds (and tires).
+	# A line gives ground together: if fewer than push_line_fraction of its
+	# men have room behind them, the whole line is pressed and holds (and
+	# tires); otherwise it goes back and the few who are blocked stay.
 	if rules.push_as_a_line and not pending.is_empty():
-		var can_all := true
+		var can := 0
 		for w: Warrior in pending:
-			var dest: Vector2i = w.pos - w.facing
-			if not grid.is_free(dest):
-				can_all = false
-				break
-		if not can_all:
+			if grid.is_free(w.pos - w.facing):
+				can += 1
+		if float(can) < float(pending.size()) * rules.push_line_fraction:
 			for w: Warrior in pending:
 				w.spend_breath(rules.push_blocked_breath)
+				w.morale = clampi(w.morale + rules.push_pressed_morale, 0, 10)
 				result.blocked.append(w)
 			log.append("the line is pressed back but holds its ground")
 			return

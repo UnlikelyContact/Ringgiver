@@ -99,6 +99,9 @@ var push_winners_advance := true
 var push_min_margin := 4
 ## A losing line gives ground all together or holds; winners follow only when it moved.
 var push_as_a_line := true
+var push_line_fraction := 0.5
+## Being pressed back with nowhere to go costs heart as well as breath.
+var push_pressed_morale := -1
 ## Chebyshev radius within which a man sees a friend or foe go down.
 var morale_visible_radius := 3
 ## A man at or below the break threshold rolls 2d6 + Nerve + personality
@@ -140,7 +143,7 @@ var reckless_charge_radius := 3
 var fall_back_steady_morale := 4
 
 # --- Battle loop (battle.gd) ----------------------------------------------
-var max_rounds := 30
+var max_rounds := 40
 ## A side whose leader has called "fall back" and whose men are all at least
 ## this far from every enemy has left the field and loses.
 var withdraw_distance := 4

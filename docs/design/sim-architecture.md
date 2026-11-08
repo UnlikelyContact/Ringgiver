@@ -381,3 +381,17 @@ ranks: back-left rotate(f,4), back-right rotate(f,3). `direction_to` and
 `BandFactory.deploy_line(grid, band, anchor, facing)` deploys along the
 line axis; `deploy_column` wraps it at the map's middle row. Rolls,
 wounds, morale, shouts, the campaign and the world are untouched.
+
+### Walls advance square, the push moves lines (8 Nov 2026)
+
+No hex direction is perpendicular to a hex row, so a wall stepping the way
+it faces slides sideways half a hex a round (the "waltz"). `BattleGrid.
+advance_step` alternates the two directions straddling the facing, keyed
+on the coordinate constant along the row, so every man steps the same way
+and keeps his column over two steps. "Push!" uses it. The push beat now
+moves a losing line together when at least `push_line_fraction` of it has
+room, else the whole line holds, tires and loses `push_pressed_morale`;
+winners follow only when the line moved. Two locked walls grind longer,
+so `max_rounds` is 40. Measured: veterans win 97% of 200 green fights
+(21 rounds); equal green 59/37 with 4% draws; equal veteran 47/35 with
+18.5% draws.
