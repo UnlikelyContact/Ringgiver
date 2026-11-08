@@ -126,7 +126,7 @@ func test_a_wall_pushes_as_one() -> void:
 	assert_true(stepped, "the wall's own test is logged")
 
 
-func test_a_wall_holds_when_one_man_is_blocked() -> void:
+func test_the_line_flows_past_a_blocked_man() -> void:
 	var parts := _two_walls(6)
 	var b: Battle = parts[0]
 	var ours: Array[Warrior] = parts[1]
@@ -143,8 +143,15 @@ func test_a_wall_holds_when_one_man_is_blocked() -> void:
 	for w in ours:
 		before[w] = w.pos
 	b.run_round()
+	# Whether the wall stepped or hesitated, it bent round the water rather
+	# than breaking: nobody is on it and every man is still in the wall.
 	for w in ours:
-		assert_eq(w.pos, before[w], "%s stayed with the wall" % w.display_name)
+		assert_true(b.grid.terrain_at(w.pos) != CombatTypes.Terrain.WATER, "%s is not in the water" % w.display_name)
+	assert_eq(b.wall_members(0).size(), ours.size(), "the wall is whole")
+	var said := false
+	for line in b.log:
+		said = said or line.contains("step and") or line.contains("hesitates") or line.contains("as one")
+	assert_true(said, "the wall stepped or hesitated as one")
 
 
 func test_a_wall_falls_back_as_one_except_a_man_whose_nerve_goes() -> void:

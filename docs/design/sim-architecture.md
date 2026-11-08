@@ -172,8 +172,9 @@ Rules to implement:
   `hear_certain_radius + hear_horn_radius_bonus` if a horn is on that
   side).
 - **Push:** the line is the unit: a group is a run of active, unbroken men
-  linked over `line_neighbors` who face the same way, and it pushes if any
-  man of it is in contact. Find contact: a man is "in contact" if an active enemy
+  standing shoulder to shoulder (`BattleGrid.line_neighbors`: beside each
+  other, facings within `wall_link_turn`), so a bent line pushes as one,
+  and it pushes if any man of it is in contact. Find contact: a man is "in contact" if an active enemy
   is in his FRONT arc and adjacent. Group contacted men by side into
   connected components over line-neighbor adjacency. For each pair of
   opposing components that touch, strength = Σ over members of

@@ -98,10 +98,8 @@ static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Wa
 	for w in winners:
 		if not w.is_active() or w.broken:
 			continue
-		# The line steps square to its wall's facing, not to whichever way a
-		# man turned to strike.
-		var f: Vector2i = wall_facing.get(w.side, w.facing)
-		var ahead := w.pos + BattleGrid.advance_step(w.pos, f)
+		# Each man steps square to his own facing; a bent line follows as a bow.
+		var ahead := w.pos + BattleGrid.advance_step(w.pos, w.facing)
 		var occ := grid.occupant(ahead)
 		if not grid.in_bounds(ahead) or grid.terrain_at(ahead) == CombatTypes.Terrain.WATER \
 				or (occ != null and not winners.has(occ)):
@@ -142,8 +140,9 @@ static func group_strength(rules: CombatRules, grid: BattleGrid, group: Array[Wa
 
 
 ## Lines that have at least one man in contact: connected components of
-## active, unbroken men over line-neighbor adjacency, linked only to men who
-## face the same way. Groups are ordered by their lowest id; members by id.
+## active, unbroken men standing shoulder to shoulder (BattleGrid
+## .line_neighbors, so a line may bend a facing between men). Groups are
+## ordered by their lowest id; members by id.
 static func _groups(grid: BattleGrid, men: Array[Warrior], contacted: Array[Warrior]) -> Array:
 	var group_of := {}
 	var groups: Array = []
@@ -157,10 +156,9 @@ static func _groups(grid: BattleGrid, men: Array[Warrior], contacted: Array[Warr
 			var w: Warrior = queue.pop_front()
 			g.append(w)
 			for other in men:
-				if group_of.has(other) or other.side != w.side or other.facing != w.facing \
-						or not other.is_active() or other.broken:
+				if group_of.has(other) or other.side != w.side or not other.is_active() or other.broken:
 					continue
-				if grid.line_neighbors(w).has(other) or grid.line_neighbors(other).has(w):
+				if grid.line_neighbors(w).has(other):
 					group_of[other] = true
 					queue.append(other)
 		g.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
@@ -186,8 +184,7 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 	# so a line shoved twice ends up where it started, not two cells aside.
 	var back := {}
 	for w: Warrior in pending:
-		var f: Vector2i = wall_facing.get(w.side, w.facing)
-		back[w] = w.pos + BattleGrid.advance_step(w.pos, BattleGrid.rotate(f, 3))
+		back[w] = w.pos + BattleGrid.advance_step(w.pos, BattleGrid.rotate(w.facing, 3))
 	pending.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
 	# A line gives ground together: if fewer than push_line_fraction of its
 	# men have room behind them, the whole line is pressed and holds (and

@@ -52,6 +52,8 @@ var order_lag := 0
 ## Battle before decisions; a man carried by his wall acts with it.
 const NO_WALL_MOVE := Vector2i(-9999, -9999)
 var wall_move := NO_WALL_MOVE
+var wall_face := Vector2i.ZERO  # the facing he takes with that step (ZERO: keeps his own)
+var turned_to_strike := false  # he turned off his wall's front to fight; he turns back once it is over
 ## Effort gained this battle, by CombatTypes.Stat -> int.
 var effort := {}
 var fate: CombatTypes.Fate = CombatTypes.Fate.RECOVERED

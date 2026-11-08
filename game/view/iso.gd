@@ -16,6 +16,13 @@ static func to_screen(cell: Vector2i) -> Vector2:
 	return to_screen_f(Vector2(cell))
 
 
+## A small, fixed offset per man inside his hex, so a line stands like men
+## rather than pegs.
+static func jitter(id: int) -> Vector2:
+	var h := (id * 2654435761) & 0xffff
+	return Vector2(float(h % 9) - 4.0, float((h / 9) % 7) - 3.0) * 0.9
+
+
 static func to_cell(screen: Vector2) -> Vector2i:
 	var x := screen.x / SIZE
 	var y := screen.y / SQUASH / SIZE

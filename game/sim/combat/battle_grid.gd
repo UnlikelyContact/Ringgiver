@@ -122,6 +122,10 @@ static func chebyshev(a: Vector2i, b: Vector2i) -> int:
 	return distance(a, b)
 
 
+const DEFAULT_LINK_TURN := 1  # a line may turn one facing between two men
+const DEFAULT_MAX_BEND := 2  # and no man may face more than two off its leader
+
+
 static func dir_index(d: Vector2i) -> int:
 	return DIRS.find(d)
 
@@ -205,14 +209,77 @@ func behind(w: Warrior) -> Vector2i:
 	return w.pos - w.facing
 
 
-## Shield-bearing friends on w's right and left along his line.
-func line_neighbors(w: Warrior) -> Array[Warrior]:
+## How many hex facings (60 degrees each) apart two directions are: 0..3.
+static func facing_steps(a: Vector2i, b: Vector2i) -> int:
+	var d := posmod(dir_index(a) - dir_index(b), 6)
+	return mini(d, 6 - d)
+
+
+## Two men stand shoulder to shoulder: beside each other rather than one
+## behind the other (neither directly ahead of or behind the other), and
+## facing within `max_turn` facings of each other. A line that bends more
+## than that between two men has broken there.
+static func shoulder_to_shoulder(a: Warrior, b: Warrior, max_turn := DEFAULT_LINK_TURN) -> bool:
+	if a == b or a.side != b.side or distance(a.pos, b.pos) != 1:
+		return false
+	if facing_steps(a.facing, b.facing) > max_turn:
+		return false
+	var ab := posmod(dir_index(direction_to(a.pos, b.pos)) - dir_index(a.facing), 6)
+	var ba := posmod(dir_index(direction_to(b.pos, a.pos)) - dir_index(b.facing), 6)
+	return ab != 0 and ab != 3 and ba != 0 and ba != 3
+
+
+## Friends at w's shoulders: active men beside him in his line, whose
+## shields lock with his. The line may bend: a shoulder is any neighbour
+## not straight ahead or behind, facing within `max_turn` of him.
+func line_neighbors(w: Warrior, max_turn := DEFAULT_LINK_TURN) -> Array[Warrior]:
 	var out: Array[Warrior] = []
-	for side_dir in line_dirs(w.facing):
-		var n := occupant(w.pos + side_dir)
-		if n != null and n.side == w.side and n.is_active():
+	for c in neighbors(w.pos):
+		var n := occupant(c)
+		if n != null and n.is_active() and shoulder_to_shoulder(w, n, max_turn):
 			out.append(n)
 	return out
+
+
+## The wall built on a leader: every active, unbroken friend reachable from
+## him through men standing next to each other (`linked`), each link
+## turning at most `max_turn`, and no man
+## facing more than `max_bend` facings off the leader's wall facing. Bend
+## further than that and the wall has broken there. Breadth-first from the
+## leader, so nearer men come first. Empty without a leader.
+func chain(leader: Warrior, max_turn := DEFAULT_LINK_TURN, max_bend := DEFAULT_MAX_BEND) -> Array[Warrior]:
+	var out: Array[Warrior] = []
+	if leader == null or not leader.is_active() or leader.broken:
+		return out
+	var wf := leader.wall_facing()
+	var seen := {leader: true}
+	var queue: Array[Warrior] = [leader]
+	while not queue.is_empty():
+		var w: Warrior = queue.pop_front()
+		out.append(w)
+		for c in neighbors(w.pos):
+			var n := occupant(c)
+			if n == null or seen.has(n) or n.side != leader.side or not n.is_active() or n.broken:
+				continue
+			if facing_steps(wf, n.facing) > max_bend or not linked(w, n, max_turn):
+				continue
+			seen[n] = true
+			queue.append(n)
+	return out
+
+
+## Two men are linked in a wall when at least one of them has the other at
+## his shoulder (not straight ahead or behind him) and they face within
+## `max_turn` of each other: a hinge where a wing has swung forward of the
+## man beside it still holds, a second rank straight behind does not.
+static func linked(a: Warrior, b: Warrior, max_turn := DEFAULT_LINK_TURN) -> bool:
+	if a == b or a.side != b.side or distance(a.pos, b.pos) != 1:
+		return false
+	if facing_steps(a.facing, b.facing) > max_turn:
+		return false
+	var ab := posmod(dir_index(direction_to(a.pos, b.pos)) - dir_index(a.facing), 6)
+	var ba := posmod(dir_index(direction_to(b.pos, a.pos)) - dir_index(b.facing), 6)
+	return (ab != 0 and ab != 3) or (ba != 0 and ba != 3)
 
 
 func describe() -> String:

@@ -169,6 +169,11 @@ var stall_rounds := 6
 ## A pushing wall whose enemy is this many facings (60 degrees each) or more
 ## off its front wheels toward them rather than marching away.
 var wall_wheel_min_steps := 2
+## A wall bends: two men stay linked while their facings differ by at most
+## this many hex facings, and a man stays in the wall while he faces no more
+## than `wall_max_bend` facings off the leader's. Bend further and it breaks.
+var wall_link_turn := BattleGrid.DEFAULT_LINK_TURN
+var wall_max_bend := BattleGrid.DEFAULT_MAX_BEND
 var stall_quit_fraction := 0.5
 var missile_range := 6
 ## LeaderAI doctrine thresholds.

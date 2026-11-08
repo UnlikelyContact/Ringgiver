@@ -148,7 +148,9 @@ func test_blocked_shove_costs_breath() -> void:
 	var grid := BattleGrid.new(16, 12)
 	var log := PackedStringArray()
 	# A huge, high-morale man (15 strength) against a weak, shaken one (1):
-	# margin is always positive. The loser has a friend at his back.
+	# margin is always positive. The loser has a friend at his back who is
+	# not in his line (turned two facings away), so he does not give ground
+	# with him and simply blocks.
 	var strong := _man("strong", 0, 1, rules, [10, 4, 4, 4, 4])
 	strong.morale = 10
 	var weak := _man("weak", 1, 2, rules, [1, 4, 4, 4, 4])
@@ -158,7 +160,7 @@ func test_blocked_shove_costs_breath() -> void:
 	_put(grid, weak, Vector2i(5, 5), SOUTH)
 	# Straight back is the zigzag step square to the line, not his own hex diagonal.
 	var behind := weak.pos + BattleGrid.advance_step(weak.pos, BattleGrid.rotate(SOUTH, 3))
-	_put(grid, wall, behind, SOUTH)
+	_put(grid, wall, behind, BattleGrid.rotate(SOUTH, 2))
 	var all: Array[Warrior] = [strong, weak, wall]
 	var before := weak.breath
 	var r := Push.resolve(SimRng.new(9), rules, grid, all, log)
@@ -202,13 +204,19 @@ func test_groups_are_line_connected_components() -> void:
 	assert_eq(r2.contests, 2)
 	var full := 6 * 4.0 * (1.0 + rules.push_morale_weight * 0.4)
 	assert_between(float(r2.strengths[1]), full - 0.001, full + 0.001, "the whole line lends its weight")
-	# Men standing together but facing every which way are not a line: each
+	# A line may bend a facing between men and still push as one; a man
+	# turned two facings from his neighbours has broken it, and each piece
 	# shoves alone.
 	var grid4 := BattleGrid.new(16, 12)
 	var all4 := _lines(grid4, rules, [4, 5, 6], [4, 5, 6])
 	all4[1].facing = BattleGrid.rotate(NORTH, 1)
 	var r4 := Push.resolve(SimRng.new(1), rules, grid4, all4, PackedStringArray())
-	assert_eq(r4.contests, 3, "three lone shovers against one line")
+	assert_eq(r4.contests, 1, "a bent line still pushes as one")
+	var grid5 := BattleGrid.new(16, 12)
+	var all5 := _lines(grid5, rules, [4, 5, 6], [4, 5, 6])
+	all5[1].facing = BattleGrid.rotate(NORTH, 2)
+	var r5 := Push.resolve(SimRng.new(1), rules, grid5, all5, PackedStringArray())
+	assert_eq(r5.contests, 2, "bent too far, it breaks: the two still facing the enemy shove alone, the turned man is out of it")
 	# Two separate skirmishes far apart: two contests.
 	var grid3 := BattleGrid.new(16, 12)
 	var all3 := _lines(grid3, rules, [1, 2, 10, 11], [1, 2, 10, 11])

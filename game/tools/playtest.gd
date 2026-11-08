@@ -70,7 +70,7 @@ func _init() -> void:
 		var our_rows := []
 		for w in b.active(0):
 			var o := BattleGrid.to_offset(w.pos)
-			our_rows.append("%s@%d,%d%s" % [w.display_name.substr(0, 4), o.x, o.y, "" if not w.broken else "!"])
+			our_rows.append("%s@%d,%d/%d%s" % [w.display_name.substr(0, 4), o.x, o.y, BattleGrid.dir_index(w.facing), "" if not w.broken else "!"])
 		print("R%02d order=%s wall %d/%d theirs %d/%d | %s" % [r, CombatTypes.SHOUT_NAMES[b.standing_order(0)], ours[0], ours[1], theirs[0], theirs[1], " ".join(our_rows)])
 		for i in range(before_log, b.log.size()):
 			var line := b.log[i]

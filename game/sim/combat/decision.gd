@@ -22,13 +22,12 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	# 1b. A man standing in a wall that is moving as one goes with it; the
 	# wall's single test has already been made.
 	if w.wall_move != Warrior.NO_WALL_MOVE:
-		var wf := leader.wall_facing() if leader != null else w.facing
 		if w.wall_move == w.pos:
 			var foe := _front_or_beside(w, enemies)
 			if foe != null:
 				return Action.attack(foe)
-			return Action.brace(wf)  # the wall stands fast
-		return Action.move_to(w.wall_move, wf)
+			return Action.brace(w.facing)  # the wall stands fast
+		return Action.move_to(w.wall_move, w.wall_face if w.wall_face != Vector2i.ZERO else w.facing)
 
 	# 2. A green man slow to take up a new order keeps doing what he was: bracing.
 	if w.order_lag > 0:
@@ -100,7 +99,7 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 			if w.tier <= CombatTypes.Tier.BLOODED and w.morale <= rules.fall_back_steady_morale:
 				log.append("the line wavers: %s turns to run" % w.display_name)
 				return _flee(grid, w, enemies)
-			if has_leader and not _in_wall(grid, w, leader.wall_facing()) and _adjacent(w, enemies).is_empty():
+			if has_leader and not _in_wall(grid, w) and _adjacent(w, enemies).is_empty():
 				act = _form(grid, w, leader, all, enemies, false)  # rejoin the wall as it goes back
 			elif has_leader and BattleGrid.chebyshev(w.pos, leader.pos) > rules.fall_back_regroup_distance:
 				act = _step_toward(grid, w, leader.pos, Vector2i.ZERO)
@@ -134,43 +133,31 @@ static func _hold(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 	var near := _nearest(w.pos, enemies)
 	if near == null:
 		return Action.brace()
-	# In a wall, hold the wall's facing; the line is dressed each round.
-	if leader != null and leader.is_active() and leader.side == w.side and leader != w \
-			and _in_wall(grid, w, leader.wall_facing()):
-		return Action.brace(leader.wall_facing())
+	# In a wall, keep his facing; the battle dresses the line each round.
+	if _in_wall(grid, w):
+		return Action.brace(w.facing)
 	return Action.brace(BattleGrid.direction_to(w.pos, near.pos))
 
 
-## Whether w stands in the leader's own wall: linked to him along the wall's
-## row through active, unbroken friends. A pair standing together off to one
-## side is a fragment, not the wall.
+## Whether w stands in the leader's own wall (BattleGrid.chain). A pair
+## standing together off to one side is a fragment, not the wall.
 static func _in_leaders_wall(grid: BattleGrid, w: Warrior, leader: Warrior) -> bool:
 	if leader == null or not leader.is_active() or leader.side != w.side:
 		return false
-	if w == leader:
-		return true
-	var dirs := BattleGrid.line_dirs(leader.wall_facing())
-	var seen := {leader: true}
-	var queue: Array[Warrior] = [leader]
-	while not queue.is_empty():
-		var m: Warrior = queue.pop_front()
-		for d in dirs:
-			var n := grid.occupant(m.pos + d)
-			if n != null and n.side == w.side and n.is_active() and not n.broken and not seen.has(n):
-				if n == w:
-					return true
-				seen[n] = true
-				queue.append(n)
-	return false
+	return w == leader or grid.chain(leader).has(w)
 
 
-## True when a friend stands beside w along the axis of a wall facing `wf`.
-static func _in_wall(grid: BattleGrid, w: Warrior, wf: Vector2i) -> bool:
-	for d in BattleGrid.line_dirs(wf):
-		var n := grid.occupant(w.pos + d)
-		if n != null and n.side == w.side and n.is_active():
+## Whether any man of a wall has an enemy at arm's length.
+static func _wall_engaged(grid: BattleGrid, members: Array[Warrior], enemies: Array[Warrior]) -> bool:
+	for m in members:
+		if not _adjacent(m, enemies).is_empty():
 			return true
 	return false
+
+
+## True when a friend stands at w's shoulder.
+static func _in_wall(grid: BattleGrid, w: Warrior) -> bool:
+	return not grid.line_neighbors(w).is_empty()
 
 
 static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior, all: Array[Warrior] = []) -> Action:
@@ -231,12 +218,27 @@ static func _form(grid: BattleGrid, w: Warrior, leader: Warrior, all: Array[Warr
 		enemies: Array[Warrior], wedge: bool) -> Action:
 	if leader == null or leader == w or not leader.is_active() or leader.side != w.side:
 		return _push(grid, w, enemies, leader, all) if wedge else _hold(grid, w, enemies, leader)
+	var members: Array[Warrior] = []
+	if not wedge:
+		members = grid.chain(leader)
+		if members.has(w) and _wall_engaged(grid, members, enemies):
+			# In a wall that is fighting: hold it as it stands, bends and all.
+			return _hold(grid, w, enemies, leader)
+		members = []  # not engaged: everyone dresses to the row
 	var band: Array[Warrior] = []
 	for m in all:
-		if m != leader and m.side == w.side and m.is_active() and not m.broken:
+		if m != leader and m.side == w.side and m.is_active() and not m.broken and not members.has(m):
 			band.append(m)
 	var slots := Formation.wedge_slots(grid, leader, band.size()) if wedge \
-			else Formation.line_slots(grid, leader, band.size())
+			else Formation.line_slots(grid, leader, band.size() + members.size())
+	if not members.is_empty():
+		# Cells held by men already in the engaged wall are not open slots.
+		var open: Array[Vector2i] = []
+		for c in slots:
+			var o := grid.occupant(c)
+			if o == null or band.has(o):
+				open.append(c)
+		slots = open
 	var plan := Formation.assign(slots, band)
 	if plan.has(w) and plan[w] != w.pos:
 		var step := _step_toward(grid, w, plan[w], leader.wall_facing())

@@ -220,6 +220,32 @@ Open: "Break them!" against the steady enemy doctrine wins about seven
 fights in ten, more than "Push!", because the enemy holds while a charging
 line keeps the initiative; the doctrine, not the wall, needs work.
 
+**Fifth playtest, same day (the lines did not bend):** the wall was a
+straight row with one facing, dressed flat every round and moved as a
+block, so it read as a fence; the hex board was not the cause. Decision:
+the wall is a chain. A man is in it if he stands next to a man already in
+it with neither straight ahead of or behind the other, their facings
+within one hex facing (60 degrees) of each other, and his own facing within
+two of the leader's. Bend further and the wall has broken there. Each man
+minds his own front: with an enemy before him he keeps his facing; with
+one at his flank and none before him he turns a facing toward him, so the
+ends hinge back to refuse a flank; with nobody at arm's length he dresses
+one facing a round back toward the wall's, so a wheel runs along the line
+over rounds and a bend straightens only once the fight there is over. A
+man who turned clean round to strike faces his wall again as soon as
+nobody is at arm's length. The wall still moves under one test, but as a
+chain: with nobody engaged every man takes his straight step together;
+once part of it is engaged the engaged men hold and fight and the rest
+close on the nearest enemy, from the ends of the line inward, never
+letting go of a man beside them, so a wing swings forward round a held or
+blocked man like a door on its hinge and the line bows round the fight.
+Shoved men and winners following up step square to their own facing. The
+push weighs a bent line as one line. "Shield wall!" straightens a line
+that is not engaged and holds an engaged one as it stands. On the screen
+each man stands a little off the centre of his hex, so the lock bars run
+as a chain rather than a rail. Enemy leaders now wheel a facing a round
+too.
+
 If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop

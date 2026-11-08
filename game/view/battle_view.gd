@@ -48,7 +48,7 @@ func setup(p_battle: Battle, p_player: Warrior, p_camera: Camera2D) -> void:
 	for w in battle.warriors:
 		var t := Token.new()
 		t.setup(w, rules, w == player)
-		t.position = Iso.to_screen(w.pos)
+		t.position = Iso.to_screen(w.pos) + Iso.jitter(w.id)
 		add_child(t)
 		tokens[w] = t
 		_by_name[w.display_name] = w
@@ -152,7 +152,7 @@ func _tween_to(positions: Dictionary, seconds: float) -> bool:
 		if not tokens.has(w) or w.fled:
 			continue
 		var t: Token = tokens[w]
-		var target := Iso.to_screen(positions[w])
+		var target := Iso.to_screen(positions[w]) + Iso.jitter(w.id)
 		if t.position.distance_to(target) < 0.5:
 			continue
 		any = true
@@ -469,7 +469,7 @@ func _draw_wall_slots() -> void:
 	if leader == null:
 		return
 	var n := battle.active(player.side).size() - 1
-	for slot in Formation.line_slots(battle.grid, leader, n):
+	for slot in Formation.open_line_slots(battle.grid, leader, n):
 		if battle.grid.occupant(slot) == null:
 			draw_polyline(Iso.hexagon(slot, 6) + PackedVector2Array([Iso.hexagon(slot, 6)[0]]), Color(Palette.BONE, 0.35), 1.5)
 
@@ -482,8 +482,8 @@ func _draw_shield_locks() -> void:
 		for n in _locked_neighbours(w):
 			if n.id < w.id:
 				continue
-			var a := Iso.to_screen(w.pos)
-			var b := Iso.to_screen(n.pos)
+			var a := Iso.to_screen(w.pos) + Iso.jitter(w.id)
+			var b := Iso.to_screen(n.pos) + Iso.jitter(n.id)
 			# The leader's wall is bright; a broken-off fragment is dim.
 			var whole := in_wall(w) and in_wall(n)
 			var col := Palette.BONE if w.side == player.side else Palette.UNDYED.darkened(0.3)

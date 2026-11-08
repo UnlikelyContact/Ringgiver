@@ -25,6 +25,26 @@ static func line_slots(grid: BattleGrid, leader: Warrior, count: int) -> Array[V
 	return out
 
 
+## Line slots not already held by a friend: where a man outside the wall
+## should go to join it.
+static func open_line_slots(grid: BattleGrid, leader: Warrior, count: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if leader == null or count <= 0:
+		return out
+	var dirs := BattleGrid.line_dirs(leader.wall_facing())
+	var reach := maxi(grid.width, grid.height)
+	for k in range(1, reach + 1):
+		for dir in dirs:
+			var c: Vector2i = leader.pos + dir * k
+			if grid.is_free(c):
+				out.append(c)
+				if out.size() >= count:
+					return out
+			elif not _usable(grid, leader, c):
+				continue
+	return out
+
+
 ## Up to `count` cells of a boar's-snout wedge behind the leader at its tip:
 ## rank 1 is behind-left and behind-right, rank 2 the three cells of the next
 ## rank out (two edges and the middle), and so on, each rank filled from its

@@ -91,35 +91,26 @@ func standing_order(side: int) -> CombatTypes.Shout:
 	return _standing.get(side, CombatTypes.Shout.NONE)
 
 
-## The wall: every active, unbroken man connected to the leader along the
-## row of his wall facing, the leader included. Empty without a leader.
+## The wall: every active, unbroken man standing with the leader, the
+## leader first (BattleGrid.chain): a line that may bend a facing between
+## men and two off the leader, and has broken where it bends further.
 func wall_members(side: int) -> Array[Warrior]:
-	var out: Array[Warrior] = []
-	var leader := leader_of(side)
-	if leader == null:
-		return out
-	var dirs := BattleGrid.line_dirs(leader.wall_facing())
-	var seen := {leader: true}
-	var queue: Array[Warrior] = [leader]
-	while not queue.is_empty():
-		var w: Warrior = queue.pop_front()
-		out.append(w)
-		for d in dirs:
-			var n := grid.occupant(w.pos + d)
-			if n != null and n.side == side and n.is_active() and not n.broken and not seen.has(n):
-				seen[n] = true
-				queue.append(n)
-	return out
+	return grid.chain(leader_of(side), rules.wall_link_turn, rules.wall_max_bend)
 
 
-## Under Push or Fall back the wall moves as one: one roll against the
-## wall's average chance to hear, and then every man steps the same way or
-## nobody does. It holds if any part of it is in contact or any man's cell
-## is blocked. Men outside the wall are not touched here.
+## Under Push or Fall back the wall moves as a wall: one roll against the
+## wall's average chance to hear, and then it steps or nobody does. Pushing,
+## a man with an enemy at arm's length holds and fights; with nobody in
+## contact the line marches straight, square to each man's facing; once part
+## of it is engaged the rest close on the nearest enemy, each man keeping a
+## hand on a man beside him, so the line bends round the fight. Falling back
+## every man steps straight back. A man whose cell is taken holds and the
+## line flows past him. Men outside the wall are not touched here.
 func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	for w in warriors:
 		if w.side == side:
 			w.wall_move = Warrior.NO_WALL_MOVE
+			w.wall_face = Vector2i.ZERO
 	if leader == null:
 		return
 	var order := standing_order(side)
@@ -132,26 +123,36 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	var members := wall_members(side)
 	if members.size() < 2:
 		return
-	var wf := leader.wall_facing()
-	if order == CombatTypes.Shout.PUSH and _wheel_toward_enemy(side, leader, members):
+	var back := order == CombatTypes.Shout.FALL_BACK
+	if not back and _wheel_toward_enemy(side, leader, members):
 		_hold_wall(members)
 		return
-	wf = leader.wall_facing()
-	var step_facing := wf if order == CombatTypes.Shout.PUSH else BattleGrid.rotate(wf, 3)
+	var theirs := active(1 - side)
+	var engaged := {}
+	for w in members:
+		if not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
+			engaged[w] = true
+	if not back and engaged.size() == members.size():
+		if not _contact_logged.get(side, false):
+			log.append("side %d's wall is in contact and holds" % side)
+			_contact_logged[side] = true
+		_hold_wall(members)
+		return
 	var horn := false
 	for w in active(side):
 		horn = horn or w.is_horn
-	var targets := {}
-	var chance_sum := 0.0
+	var targets := {}  # Warrior -> cell
+	var faces := {}  # Warrior -> facing taken with the step
+	var claimed := {}  # cell -> true
+	var carried := {}  # a friend behind a falling-back man, stepping back with him
+	# Pass one: every man's straight step, square to his own facing, by the
+	# zigzag that keeps his column. All at once, so a line that marches
+	# together stays together.
 	for w in members:
-		if order == CombatTypes.Shout.PUSH and not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
-			if not _contact_logged.get(side, false):
-				log.append("side %d's wall is in contact and holds" % side)
-				_contact_logged[side] = true
-			return
-		var target: Vector2i = w.pos + BattleGrid.advance_step(w.pos, step_facing)
-		var occ := grid.occupant(target)
-		if order == CombatTypes.Shout.FALL_BACK and not grid.in_bounds(target):
+		if engaged.has(w) and not back:
+			continue
+		var target: Vector2i = w.pos + BattleGrid.advance_step(w.pos, BattleGrid.rotate(w.facing, 3) if back else w.facing)
+		if back and not grid.in_bounds(target):
 			# Falling back with the edge of the field at their backs: the wall retreats off it.
 			for m in members:
 				m.fled = true
@@ -159,22 +160,74 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 				result.fled[side] += 1
 			log.append("%s's wall falls back off the field, %d men" % [leader.display_name, members.size()])
 			return
-		if occ != null and not members.has(occ) and occ.side == side and occ.is_active() and not occ.broken \
-				and order == CombatTypes.Shout.FALL_BACK:
-			# A friend behind the wall steps back with it, if he has room.
-			var his: Vector2i = occ.pos + BattleGrid.advance_step(occ.pos, step_facing)
-			if grid.is_free(his):
-				targets[occ] = his
+		var occ := grid.occupant(target)
+		if back and occ != null and not members.has(occ) and occ.side == side and occ.is_active() and not occ.broken:
+			var his: Vector2i = occ.pos + BattleGrid.advance_step(occ.pos, BattleGrid.rotate(w.facing, 3))
+			if grid.is_free(his) and not claimed.has(his):
+				carried[occ] = his
+				claimed[his] = true
 				occ = null
-		if not grid.in_bounds(target) or grid.terrain_at(target) == CombatTypes.Terrain.WATER \
+		if claimed.has(target) or not grid.in_bounds(target) or grid.terrain_at(target) == CombatTypes.Terrain.WATER \
 				or (occ != null and not members.has(occ)):
-			log.append("%s's wall cannot step as one: %s is blocked" % [leader.display_name, w.display_name])
-			_hold_wall(members)
-			return
+			continue  # he holds, for now
 		targets[w] = target
-		chance_sum += 1.0 if w == leader else Shouts.hear_chance(rules, BattleGrid.distance(w.pos, leader.pos), w.wits, horn, fog)
+		claimed[target] = true
+	if not back:
+		# Nobody lets go of a man beside him: a stepper who would lose a
+		# linked neighbour holds instead, until the line is consistent.
+		var changed := true
+		while changed:
+			changed = false
+			for w in targets.keys():
+				if not _keeps_a_hand_on(targets[w], w, members, targets):
+					claimed.erase(targets[w])
+					targets.erase(w)
+					changed = true
+		# Pass two: men still standing, from the ends of the line inward, try
+		# any step that brings them nearer the closest enemy without letting
+		# go of anyone, so a wing swings forward round a held or blocked man
+		# like a door on its hinge, and the line bends round the fight. A man
+		# who steps this way turns toward the enemy, a facing at most.
+		if not theirs.is_empty():
+			var outer := members.duplicate()
+			outer.reverse()
+			changed = true
+			while changed:
+				changed = false
+				for w in outer:
+					if targets.has(w) or engaged.has(w):
+						continue
+					var near := _nearest_enemy(w.pos, theirs)
+					var now_d := BattleGrid.distance(w.pos, near.pos)
+					var best := Vector2i(Warrior.NO_WALL_MOVE)
+					var best_d := now_d
+					for c in grid.neighbors(w.pos):
+						if claimed.has(c) or not grid.is_free(c):
+							continue
+						var d := BattleGrid.distance(c, near.pos)
+						if d >= best_d or not _keeps_a_hand_on(c, w, members, targets):
+							continue
+						best_d = d
+						best = c
+					if best == Vector2i(Warrior.NO_WALL_MOVE):
+						continue
+					targets[w] = best
+					claimed[best] = true
+					var face := BattleGrid.direction_to(best, near.pos)
+					if BattleGrid.facing_steps(face, w.facing) > rules.wall_link_turn:
+						face = BattleGrid.rotate(w.facing, 1 if posmod(BattleGrid.dir_index(face) - BattleGrid.dir_index(w.facing), 6) <= 3 else -1)
+					faces[w] = face
+					changed = true
+	if targets.is_empty():
+		if not _contact_logged.get(side, false):
+			log.append("%s's wall cannot step: every man is held or blocked" % leader.display_name)
+			_contact_logged[side] = true
+		_hold_wall(members)
+		return
+	var chance_sum := 0.0
 	var tier_sum := 0
 	for w in members:
+		chance_sum += 1.0 if w == leader else Shouts.hear_chance(rules, BattleGrid.distance(w.pos, leader.pos), w.wits, horn, fog)
 		tier_sum += int(w.tier)
 	var tier_avg := int(round(float(tier_sum) / members.size()))
 	var chance: float = chance_sum / members.size() * rules.wall_test_tier_factor[clampi(tier_avg, 0, 3)]
@@ -183,21 +236,52 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 		_hold_wall(members)
 		return
 	_contact_logged[side] = false
+	_hold_wall(members)
+	for w in carried:
+		w.wall_move = carried[w]
+	var stepped := 0
 	for w in targets:
-		if not members.has(w):
-			w.wall_move = targets[w]  # the man behind, carried back with the wall
-	for w in members:
 		# The exceptions to moving as one: a man who falls, and a man whose
 		# nerve breaks. Falling back, a green or blooded man with little
 		# heart left wavers and runs instead of stepping back with the wall.
-		if order == CombatTypes.Shout.FALL_BACK and w != leader and w.tier <= CombatTypes.Tier.BLOODED \
-				and w.morale <= rules.fall_back_steady_morale:
+		if back and w != leader and w.tier <= CombatTypes.Tier.BLOODED and w.morale <= rules.fall_back_steady_morale:
 			log.append("%s's nerve goes as the wall falls back" % w.display_name)
+			w.wall_move = Warrior.NO_WALL_MOVE
 			continue
 		w.wall_move = targets[w]
-		if order == CombatTypes.Shout.FALL_BACK:
+		w.wall_face = faces.get(w, Vector2i.ZERO)
+		stepped += 1
+		if back:
 			w.morale = clampi(w.morale + rules.fall_back_morale, 0, 10)
-	log.append("%s's wall steps %s as one, %d men" % [leader.display_name, "forward" if order == CombatTypes.Shout.PUSH else "back", members.size()])
+	var held := members.size() - stepped
+	if held == 0:
+		log.append("%s's wall steps %s as one, %d men" % [leader.display_name, "back" if back else "forward", stepped])
+	else:
+		log.append("%s's wall %s, %d men step and %d hold" % [leader.display_name, "gives ground" if back else "closes", stepped, held])
+
+
+## The nearest active enemy to a cell (never null when `theirs` is not empty).
+func _nearest_enemy(from: Vector2i, theirs: Array[Warrior]) -> Warrior:
+	var best: Warrior = null
+	var best_d := 999
+	for e in theirs:
+		var d := BattleGrid.distance(from, e.pos)
+		if d < best_d or (d == best_d and e.id < best.id):
+			best = e
+			best_d = d
+	return best
+
+
+## Would a man stepping to `c` keep every man now linked to him at arm's
+## length: each such member where he stays, or where he is stepping to.
+func _keeps_a_hand_on(c: Vector2i, w: Warrior, members: Array[Warrior], targets: Dictionary) -> bool:
+	for m in members:
+		if m == w or not BattleGrid.linked(w, m, rules.wall_link_turn):
+			continue
+		var at: Vector2i = targets[m] if targets.has(m) else m.pos
+		if BattleGrid.distance(c, at) != 1:
+			return false
+	return true
 
 
 ## A wall pushing with the enemy two or more facings off its front (beside or
@@ -436,19 +520,47 @@ func _withdrawn(side: int) -> bool:
 ## Every man with a friend beside him along the wall's axis faces the wall's
 ## facing, so a man who turned to strike or to watch an enemy is back in
 ## the line next round. A lone man keeps whatever way he was facing.
+## Each man in the wall minds his own front. With an enemy before him he
+## keeps his facing; with one at his flank and none before him he turns a
+## facing toward him, hinging the line; with nobody at arm's length he
+## dresses a facing a round back toward the wall's facing, so a wheel runs
+## along the line over rounds and a bend straightens only once the fight
+## there is over.
 func _dress_line(side: int, leader: Warrior) -> void:
 	if leader == null:
 		return
 	var wf := leader.wall_facing()
-	var dirs := BattleGrid.line_dirs(wf)
+	# A man who turned off the front to strike turns back to his wall's
+	# facing the moment nobody is at arm's length, and so rejoins it.
 	for w in active(side):
-		if w.broken or w == leader:
+		if w.turned_to_strike and w != leader and not w.broken and grid.adjacent_warriors(w.pos, 1 - side).is_empty():
+			w.facing = wf
+			w.turned_to_strike = false
+	for w in wall_members(side):
+		if w == leader:
 			continue
-		for d in dirs:
-			var n := grid.occupant(w.pos + d)
-			if n != null and n.side == side and n.is_active():
-				w.facing = wf
-				break
+		var front := false
+		var right := false
+		var left := false
+		for e in grid.adjacent_warriors(w.pos, 1 - side):
+			if not e.is_active():
+				continue
+			match BattleGrid.arc_of(w, e.pos):
+				CombatTypes.Arc.FRONT, CombatTypes.Arc.FRONT_RIGHT:
+					front = true
+				CombatTypes.Arc.RIGHT:
+					right = true
+				CombatTypes.Arc.LEFT:
+					left = true
+		if front or (right and left):
+			continue
+		if right:
+			w.facing = BattleGrid.rotate(w.facing, 1)
+		elif left:
+			w.facing = BattleGrid.rotate(w.facing, -1)
+		elif w.facing != wf and grid.adjacent_warriors(w.pos, 1 - side).is_empty():
+			var d := posmod(BattleGrid.dir_index(wf) - BattleGrid.dir_index(w.facing), 6)
+			w.facing = BattleGrid.rotate(w.facing, 1 if d <= 3 else -1)
 
 
 func _log_action_counts(actions: Dictionary) -> void:
@@ -584,8 +696,10 @@ func _resolve_melee(mr: SimRng, actions: Dictionary) -> void:
 		# turning inside a wall would unlock it for the push that follows.
 		if a_attacks and not _ahead_of(a, b.pos):
 			a.facing = BattleGrid.direction_to(a.pos, b.pos)
+			a.turned_to_strike = true
 		if b_attacks and not _ahead_of(b, a.pos):
 			b.facing = BattleGrid.direction_to(b.pos, a.pos)
+			b.turned_to_strike = true
 		var r := MeleeExchange.resolve(mr.fork(key), rules, grid, a, b, a_attacks, b_attacks, a_braced, b_braced, log)
 		_after_exchange(r)
 

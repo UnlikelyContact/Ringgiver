@@ -32,8 +32,9 @@ func _wheel_if_needed(battle: Battle, leader: Warrior, theirs: Array[Warrior]) -
 		return
 	if diff >= battle.rules.ai_wheel_min_steps and diff <= 6 - battle.rules.ai_wheel_min_steps:
 		_last_wheel_round = battle.round
-		leader.line_facing = want
-		battle.log.append("%s wheels his line to face %s" % [leader.display_name, str(want)])
+		# One facing a round: the line follows the wheel over the rounds after.
+		leader.line_facing = BattleGrid.rotate(have, 1 if diff <= 3 else -1)
+		battle.log.append("%s wheels his line toward %s" % [leader.display_name, str(want)])
 
 
 func choose(battle: Battle, side: int) -> CombatTypes.Shout:
