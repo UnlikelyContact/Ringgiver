@@ -323,7 +323,13 @@ straight behind him changes places with him at the start of the next
 round, stepping up into the line while he drops back and fights at reach,
 so the wall closes itself. The HUD reads "wall 8/8 (1 shieldless)" and
 draws the gap as a dark thread until it is relieved. Passing spare shields
-forward waits for the campaign's gear.
+forward waits for the campaign's gear. **Taunt!** (same day) is the
+answer to two lines that will not close: a jeer that costs the standing
+side heart round after round, so the one who waits pays for waiting, and
+that a proud leader answers by coming on. The enemy jeers too. On the
+screen men now sway where they stand, each to his own rhythm, and tense
+up when an enemy is at arm's length; the shadow stays put and the man
+moves above it.
 
 ### Drill, custom formations and custom shouts (decided 8 Nov 2026)
 
@@ -368,6 +374,7 @@ changes.
 | To me! | Close on the leader; rallies men in earshot |
 | Break them! | Charge, abandon formation |
 | Fall back! | Controlled retreat (steady men only) |
+| Taunt! | A jeer across the field, not an order. Enemies in earshot who stand and take it lose heart (never below the break threshold: shame shakes, it does not rout); men coming on are not shamed; Steady and Grim men ignore it; your own men in earshot take heart. The enemy taunts a holding line too, and a proud enemy leader answers a taunt by coming on |
 | Svínfylking (learned) | Boar's-snout wedge; unlocked by winter drill |
 | Custom (learned) | A drilled formation plus an order, under the band's own name; see "Drill, custom formations and custom shouts" |
 

@@ -122,7 +122,7 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 					act = Action.brace()
 		CombatTypes.Shout.SVINFYLKING:
 			act = _form(grid, w, leader, all, enemies, true)
-		_:
+		_:  # TAUNT is never propagated as an order; anything else unknown: hold
 			act = _hold(grid, w, enemies, leader)
 
 	# 8. Bowmen with nobody at arm's length shoot instead of moving or

@@ -231,6 +231,7 @@ func _animate(before: Dictionary, lines: PackedStringArray) -> void:
 			t.z_index = 5
 		if w.fled:
 			t.visible = false
+		t.set_tense(w.is_active() and not battle.grid.adjacent_warriors(w.pos, 1 - w.side).is_empty())
 		t.queue_redraw()
 	animating = false
 	queue_redraw()

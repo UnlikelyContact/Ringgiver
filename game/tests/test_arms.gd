@@ -199,3 +199,76 @@ func test_a_shieldless_man_is_relieved_by_the_man_behind() -> void:
 		said = said or line.contains("steps up into the line")
 	assert_true(said, "and the log says so")
 	assert_true(b.wall_members(0).has(behind), "the relief is in the wall")
+
+
+func test_a_taunt_shakes_standing_men_but_not_men_coming_on() -> void:
+	var rules := CombatRules.new()
+	var b := Battle.new(rules, 9)
+	var ours := _band(rules, 0, 6, 0, 0, 1)
+	var theirs := _band(rules, 1, 6, 0, 0, 101)
+	for w in ours + theirs:
+		w.javelins = 0
+	BandFactory.deploy_formation(b.grid, ours, BattleGrid.from_offset(8, 6), NORTH, rules, FormationTemplate.line())
+	BandFactory.deploy_formation(b.grid, theirs, BattleGrid.from_offset(8, 3), SOUTH, rules, FormationTemplate.line())
+	b.add_band(ours)
+	b.add_band(theirs)
+	for w in theirs:
+		w.personality.clear()
+		w.morale = 8
+	b.set_shout(1, CombatTypes.Shout.HOLD)
+	b.set_shout(0, CombatTypes.Shout.TAUNT)
+	b.run_round()
+	var shaken := 0
+	for line in b.log:
+		if line.contains("stand and take it"):
+			shaken = int(line.split(" ")[0])
+	assert_true(shaken >= 5, "standing men within earshot lose heart (%d)" % shaken)
+	assert_eq(b.standing_order(0), CombatTypes.Shout.NONE, "a taunt is not an order")
+	assert_eq(b.taunted_round(1), 1)
+	# Shame cannot rout: taunts stop above the break threshold.
+	for w in theirs:
+		w.morale = rules.morale_break_threshold + 1
+	b.set_shout(1, CombatTypes.Shout.HOLD)
+	b.set_shout(0, CombatTypes.Shout.TAUNT)
+	b.run_round()
+	for w in theirs:
+		if w.is_active():
+			assert_true(w.morale >= rules.morale_break_threshold + 1, "%s is shamed, not broken" % w.display_name)
+	# Men coming on answer with their feet: their push is the standing order
+	# by the time the jeer comes.
+	b.set_shout(1, CombatTypes.Shout.PUSH)
+	b.set_shout(0, CombatTypes.Shout.HOLD)
+	b.run_round()
+	for w in theirs:
+		w.morale = 8
+	b.set_shout(0, CombatTypes.Shout.TAUNT)
+	b.run_round()
+	var said := false
+	for line in b.log:
+		said = said or line.contains("answer with their feet")
+	assert_true(said)
+
+
+func test_a_taunted_aggressive_leader_comes_on() -> void:
+	var rules := CombatRules.new()
+	rules.ai_patience_rounds = 99  # he would hold all day
+	var b := Battle.new(rules, 11)
+	var ours := _band(rules, 0, 6, 0, 0, 1)
+	var theirs := _band(rules, 1, 6, 0, 0, 101)
+	for w in ours + theirs:
+		w.javelins = 0
+	BandFactory.deploy_formation(b.grid, ours, BattleGrid.from_offset(8, 8), NORTH, rules, FormationTemplate.line())
+	BandFactory.deploy_formation(b.grid, theirs, BattleGrid.from_offset(8, 3), SOUTH, rules, FormationTemplate.line())
+	b.add_band(ours)
+	b.add_band(theirs)
+	b.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY))
+	rules.taunt_answer_chance = 1.0
+	for r in 3:
+		b.set_shout(0, CombatTypes.Shout.HOLD)
+		b.run_round()
+	assert_true(b.standing_order(1) != CombatTypes.Shout.PUSH, "steady and patient: he is not coming on")
+	b.set_shout(0, CombatTypes.Shout.TAUNT)
+	b.run_round()
+	b.set_shout(0, CombatTypes.Shout.HOLD)
+	b.run_round()
+	assert_eq(b.standing_order(1), CombatTypes.Shout.PUSH, "taunted, he comes on")

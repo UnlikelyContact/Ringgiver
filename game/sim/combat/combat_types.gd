@@ -21,7 +21,7 @@ enum Role { SHIELD, SPEAR, MISSILE }
 enum Armor { NONE, LEATHER, MAIL }
 
 ## Leader shouts (concept.md, Combat > Shouts). NONE means "no new order".
-enum Shout { NONE, SHIELD_WALL, HOLD, PUSH, TO_ME, BREAK_THEM, FALL_BACK, SVINFYLKING }
+enum Shout { NONE, SHIELD_WALL, HOLD, PUSH, TO_ME, BREAK_THEM, FALL_BACK, SVINFYLKING, TAUNT }
 
 enum Personality { STEADY, RECKLESS, GRIM, BOASTFUL, GREEDY, SUPERSTITIOUS }
 
@@ -40,6 +40,6 @@ enum Fate { RECOVERED, MAIMED, DEAD }
 
 const TIER_NAMES := ["green", "blooded", "veteran", "champion"]
 const WOUND_NAMES := ["unhurt", "bruised", "wounded", "grievous", "down"]
-const SHOUT_NAMES := ["-", "shield wall", "hold", "push", "to me", "break them", "fall back", "svinfylking"]
+const SHOUT_NAMES := ["-", "shield wall", "hold", "push", "to me", "break them", "fall back", "svinfylking", "taunt"]
 const STAT_NAMES := ["might", "skill", "grit", "nerve", "wits"]
 const ROLE_NAMES := ["shield", "spear", "bow"]

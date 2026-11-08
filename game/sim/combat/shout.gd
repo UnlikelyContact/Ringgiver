@@ -39,7 +39,7 @@ static func propagate(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		if rng.randf() < mishear_chance(rules, m.tier):
 			var others: Array[CombatTypes.Shout] = []
 			for s in CombatTypes.Shout.values():
-				if s != CombatTypes.Shout.NONE and s != shout:
+				if s != CombatTypes.Shout.NONE and s != shout and s != CombatTypes.Shout.TAUNT:
 					others.append(s)
 			var wrong: CombatTypes.Shout = others[rng.randi_range(0, others.size() - 1)]
 			m.heard_order = wrong

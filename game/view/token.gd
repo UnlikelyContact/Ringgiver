@@ -13,6 +13,11 @@ var device_color := Palette.BONE
 var flash := 0.0  # hit flash timer
 var flash_color := Palette.BLOOD
 var down_mark := false
+## Idle motion: a man shifts his weight, sets his shield, breathes. Each man
+## has his own rhythm; a man with an enemy at arm's length is tenser.
+var _phase := 0.0
+var _sway := Vector2.ZERO
+var _tense := false
 
 const R := 15.0
 
@@ -24,12 +29,26 @@ func setup(w: Warrior, p_rules: CombatRules, player := false) -> void:
 	device = (w.id * 7) % 4
 	device_color = [Palette.BONE, Palette.UNDYED, Palette.GOLD, Palette.BONE][(w.id * 3) % 4]
 	z_index = 10
+	_phase = fmod(w.id * 2.399, TAU)
 
 
 func _process(delta: float) -> void:
 	if flash > 0.0:
 		flash = maxf(0.0, flash - delta)
+	if warrior == null or down_mark or not visible:
+		return
+	# Sway: slow and small at rest, quicker and a little wider when tense.
+	var speed := 3.2 if _tense else 1.4
+	var amp := 1.6 if _tense else 1.0
+	_phase += delta * speed
+	var s := Vector2(sin(_phase) * amp, sin(_phase * 1.7 + 0.8) * amp * 0.6)
+	if (s - _sway).length() > 0.15 or flash > 0.0:
+		_sway = s
 		queue_redraw()
+
+
+func set_tense(t: bool) -> void:
+	_tense = t
 
 
 func hit(color: Color) -> void:
@@ -45,8 +64,9 @@ func _draw() -> void:
 		_draw_down()
 		return
 	var side := Palette.side_color(warrior.side)
-	# Ground shadow and facing wedge.
+	# Ground shadow stays put; the man sways above it.
 	draw_circle(Vector2(0, 6), R * 0.9, Color(0, 0, 0, 0.25))
+	draw_set_transform(_sway, 0.0, Vector2.ONE)
 	var f := Iso.to_screen_f(Vector2(warrior.facing)).normalized()
 	var tip := f * (R + 9)
 	var side_v := Vector2(-f.y, f.x) * 5

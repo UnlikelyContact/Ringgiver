@@ -18,7 +18,7 @@ const TIERS := {
 ## Returns {battle, ours, theirs, doctrine, offset}. With `vary` false the
 ## enemy is eight shield-bearers, centred, steady: the symmetric field the
 ## batches calibrate on. Your band is eight shield-bearers, two spearmen
-## and two bowmen; a varied enemy brings seven to nine shields, one or two
+## and two bowmen; a varied enemy brings eight to ten shields, one or two
 ## spears and one or two bows. Both form in ranks.
 static func build(name: String, seed_in: int, rules: CombatRules, vary := true) -> Dictionary:
 	var t: Array = TIERS.get(name, TIERS["equal_green"])
@@ -32,7 +32,7 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true) 
 	var doctrine := LeaderAI.Doctrine.STEADY
 	if vary:
 		# About your own strength on average (twelve men), mixed differently.
-		their_shields = frng.randi_range(7, 9)
+		their_shields = frng.randi_range(8, 10)
 		their_spears = frng.randi_range(1, 2)
 		their_bows = frng.randi_range(1, 2)
 		offset = frng.randi_range(-3, 3)

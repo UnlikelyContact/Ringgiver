@@ -19,6 +19,7 @@ var _last_logged_shout := {}
 const SHOUTS := [
 	CombatTypes.Shout.SHIELD_WALL, CombatTypes.Shout.HOLD, CombatTypes.Shout.PUSH,
 	CombatTypes.Shout.TO_ME, CombatTypes.Shout.BREAK_THEM, CombatTypes.Shout.FALL_BACK,
+	CombatTypes.Shout.TAUNT,
 ]
 
 
@@ -124,7 +125,7 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	for s in SHOUTS:
 		var b := Button.new()
 		b.text = CombatTypes.SHOUT_NAMES[s].capitalize() + "!"
-		b.custom_minimum_size = Vector2(112, 52)
+		b.custom_minimum_size = Vector2(100, 52)
 		b.toggle_mode = true
 		b.pressed.connect(_on_shout.bind(s))
 		bottom.add_child(b)
@@ -184,6 +185,9 @@ func _on_round(lines: PackedStringArray) -> void:
 		var keep := false
 		if line.contains("DOWN") or line.contains("breaks") or line.contains("flees") or line.contains("===") or line.contains("drives forward"):
 			col = Palette.WARN
+			keep = true
+		elif line.contains("taunts the enemy") or line.contains("called a coward") or line.contains("answer with their feet") or line.contains("take it, and like it less") or line.contains("stands for it"):
+			col = Palette.GOLD
 			keep = true
 		elif line.contains("shouts:"):
 			var who := line.split(" shouts:")[0]

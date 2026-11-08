@@ -12,7 +12,7 @@ func _init() -> void:
 	var n := int(args[0]) if args.size() > 0 else 200
 	var seed_in := int(args[1]) if args.size() > 1 else 1
 	var scenario := args[2] if args.size() > 2 else "equal_green"
-	var strats := ["none", "wall_push", "wall_hold", "wall_hold_then_push", "push_only", "break_them", "wall_advance", "wall_then_nothing", "wall_every_round", "hold_only",
+	var strats := ["none", "wall_push", "wall_hold", "wall_hold_then_push", "push_only", "break_them", "wall_hold_taunt", "wall_advance", "wall_then_nothing", "wall_every_round", "hold_only",
 		"wall_push_leader_attacks", "wall_push_leader_steps", "ai_steady", "ai_aggressive"]
 	if args.size() > 3:
 		strats = [args[3]]
@@ -65,6 +65,13 @@ func run(strat: String, n: int, seed_in: int, scenario: String, per_fight := fal
 					b.set_shout(0, S.SHIELD_WALL if r == 1 else S.HOLD)
 					if r > 1:
 						b.request_wall_step(0)
+				"wall_hold_taunt":
+					if r == 1:
+						b.set_shout(0, S.SHIELD_WALL)
+					elif r % 3 == 0 and not in_contact(b):
+						b.set_shout(0, S.TAUNT)
+					else:
+						b.set_shout(0, S.HOLD)
 				"push_only":
 					b.set_shout(0, S.PUSH)
 				"break_them":

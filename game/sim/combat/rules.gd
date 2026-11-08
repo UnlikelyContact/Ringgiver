@@ -200,6 +200,19 @@ var ai_wheel_min_steps := 2
 var ai_wheel_cooldown := 3
 ## A STEADY leader waits this many rounds without contact before pushing.
 var ai_patience_rounds := 6
+## Taunts. A leader's jeer carries this far; every enemy in earshot who is
+## standing (his side not driving forward, and nobody of ours at arm's
+## length) loses this much heart, never below the break threshold plus
+## one: shame shakes a man, it does not rout him. Steady and Grim men do
+## not hear it. Our own men in earshot take heart from the jeering.
+var taunt_range := 5
+var taunt_morale := -1
+var taunt_cheer := 1
+## A taunted AI leader comes on: always if aggressive, else with this chance
+## per taunt once his line is formed. A steady AI taunts a holding enemy
+## every taunt_ai_every rounds while nobody is engaged.
+var taunt_answer_chance := 0.5
+var taunt_ai_every := 3
 
 # --- Post-battle (fate) ----------------------------------------------------
 ## Downed men roll 2d6 + grit against these: < fate_dead_below -> dead,

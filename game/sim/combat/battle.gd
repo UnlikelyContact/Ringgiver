@@ -20,6 +20,7 @@ var _standing := {}  # side -> the last order given that was not NONE
 var _contact_logged := {}  # side -> bool, so "in contact" is logged once per spell
 var _wall_step := {}  # side -> true when the leader asks his wall to step forward this round
 var _volleyed := {}  # side -> true once the wall has paused to throw its spears
+var _taunted_round := {}  # side -> the last round that side was taunted
 var _blows_ever := false
 var _rounds_without_blow := 0
 var _player_action := {}  # side -> Action for that side's leader this round (presentation hook)
@@ -457,6 +458,11 @@ func run_round() -> void:
 		elif _ai.has(side) and leader != null:
 			shout = (_ai[side] as LeaderAI).choose(self, side)
 		_last_shout[side] = shout
+		if shout == CombatTypes.Shout.TAUNT:
+			# A jeer across the field, not an order: the standing order holds.
+			if leader != null:
+				_taunt(side, leader)
+			continue
 		if shout != CombatTypes.Shout.NONE:
 			_standing[side] = shout
 		if leader != null and shout != CombatTypes.Shout.NONE:
@@ -620,6 +626,46 @@ func _withdrawn(side: int) -> bool:
 ## Every man with a friend beside him along the wall's axis faces the wall's
 ## facing, so a man who turned to strike or to watch an enemy is back in
 ## the line next round. A lone man keeps whatever way he was facing.
+## The round a side was last taunted, or -99.
+func taunted_round(side: int) -> int:
+	return _taunted_round.get(side, -99)
+
+
+## A leader jeers at the enemy. Every enemy in earshot who is standing
+## about (his side not driving forward, and none of ours at arm's length)
+## loses heart, never below the break threshold plus one; Steady and Grim
+## men do not hear it. Men who are coming on answer with their feet and
+## are not shamed. Our own men in earshot take heart from the jeering.
+func _taunt(side: int, leader: Warrior) -> void:
+	var foe := 1 - side
+	var their_order := standing_order(foe)
+	var coming_on := their_order == CombatTypes.Shout.PUSH or their_order == CombatTypes.Shout.BREAK_THEM \
+			or their_order == CombatTypes.Shout.SVINFYLKING
+	_taunted_round[foe] = round
+	log.append("%s taunts the enemy across the field" % leader.display_name)
+	var shamed := 0
+	for e in active(foe):
+		if e.broken or BattleGrid.distance(e.pos, leader.pos) > rules.taunt_range:
+			continue
+		if coming_on or not grid.adjacent_warriors(e.pos, side).is_empty():
+			continue
+		if e.has_personality(CombatTypes.Personality.STEADY) or e.has_personality(CombatTypes.Personality.GRIM):
+			continue
+		var floor_m := rules.morale_break_threshold + 1
+		if e.morale > floor_m:
+			e.morale = maxi(floor_m, e.morale + rules.taunt_morale)
+			shamed += 1
+	for m in active(side):
+		if not m.broken and BattleGrid.distance(m.pos, leader.pos) <= rules.taunt_range:
+			m.morale = clampi(m.morale + rules.taunt_cheer, 0, 10)
+	if coming_on:
+		log.append("they answer with their feet")
+	elif shamed > 0:
+		log.append("%d of them stand and take it, and like it less" % shamed)
+	else:
+		log.append("nobody within earshot stands for it")
+
+
 ## Relief: a man in the line whose shield is gone changes places with a
 ## shielded man standing straight behind him. The fresh shield steps up
 ## into the line and the shieldless man drops back, where his spear still

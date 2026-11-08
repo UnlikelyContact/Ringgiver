@@ -37,6 +37,17 @@ func _wheel_if_needed(battle: Battle, leader: Warrior, theirs: Array[Warrior]) -
 		battle.log.append("%s wheels his line toward %s" % [leader.display_name, str(want)])
 
 
+func _within(leader: Warrior, theirs: Array[Warrior], range: int) -> bool:
+	for e in theirs:
+		if BattleGrid.distance(leader.pos, e.pos) <= range:
+			return true
+	return false
+
+
+func _answer_rng(battle: Battle, side: int) -> SimRng:
+	return battle.rng.fork("taunt-answer:%d:%d" % [side, battle.round])
+
+
 func choose(battle: Battle, side: int) -> CombatTypes.Shout:
 	var mine := battle.active(side)
 	var theirs := battle.active(1 - side)
@@ -77,6 +88,15 @@ func choose(battle: Battle, side: int) -> CombatTypes.Shout:
 	if in_contact == 0:
 		if doctrine == Doctrine.AGGRESSIVE or battle.round > battle.rules.ai_form_rounds + battle.rules.ai_patience_rounds:
 			return CombatTypes.Shout.PUSH
+		# Taunted while standing: a proud man comes on.
+		if battle.taunted_round(side) >= battle.round - 1 and _answer_rng(battle, side).randf() < battle.rules.taunt_answer_chance:
+			battle.log.append("%s will not stand and be called a coward" % leader.display_name)
+			return CombatTypes.Shout.PUSH
+		# A holding enemy who will not come to us gets jeered at.
+		var their_order := battle.standing_order(1 - side)
+		var they_hold := their_order != CombatTypes.Shout.PUSH and their_order != CombatTypes.Shout.BREAK_THEM
+		if they_hold and battle.round % battle.rules.taunt_ai_every == 0 and _within(leader, theirs, battle.rules.taunt_range):
+			return CombatTypes.Shout.TAUNT
 		return CombatTypes.Shout.HOLD
 	_formed_rounds += 1
 	if doctrine == Doctrine.AGGRESSIVE or _formed_rounds > battle.rules.ai_hold_rounds_before_push:
