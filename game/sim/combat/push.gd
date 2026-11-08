@@ -5,10 +5,13 @@ extends RefCounted
 ## weaker line is shoved back a cell.
 ##
 ## A man is "in contact" when he is active, not broken, and an active enemy
-## stands adjacent in his FRONT arc. Contacted men of one side form groups:
-## connected components over line-neighbor adjacency (BattleGrid.line_neighbors).
-## Each pair of opposing groups that touch (some member of one adjacent to
-## some member of the other) makes one opposed roll on their strengths.
+## stands adjacent in his FRONT arc. A line is the unit: a group is a run of
+## men standing shoulder to shoulder and facing the same way (connected over
+## BattleGrid.line_neighbors), and the whole run lends its weight when any
+## man of it is in contact. Men facing every which way do not make a line:
+## each is his own group. Each pair of opposing groups that touch (some
+## member of one adjacent to some member of the other) makes one opposed
+## roll on their strengths.
 
 
 ## `may_advance`: Warrior -> true for men allowed to follow up a won push
@@ -27,7 +30,7 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	if contacted.is_empty():
 		return result
 
-	var groups := _groups(grid, contacted)
+	var groups := _groups(grid, men, contacted)
 	var strength_of: Array[float] = []
 	for g in groups:
 		var s := group_strength(rules, grid, g)
@@ -64,7 +67,7 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 
 	for w in winners:
 		w.add_effort(CombatTypes.Stat.MIGHT)
-	_shove(rules, grid, losers, result, log)
+	_shove(rules, grid, losers, result, log, wall_facing)
 	if not result.shoved.is_empty() or not result.driven_off.is_empty():
 		for w in winners:
 			w.morale = clampi(w.morale + rules.push_won_morale, 0, 10)
@@ -138,9 +141,10 @@ static func group_strength(rules: CombatRules, grid: BattleGrid, group: Array[Wa
 	return total
 
 
-## Connected components of contacted men over line-neighbor adjacency.
-## Groups are ordered by their lowest id; members by id.
-static func _groups(grid: BattleGrid, contacted: Array[Warrior]) -> Array:
+## Lines that have at least one man in contact: connected components of
+## active, unbroken men over line-neighbor adjacency, linked only to men who
+## face the same way. Groups are ordered by their lowest id; members by id.
+static func _groups(grid: BattleGrid, men: Array[Warrior], contacted: Array[Warrior]) -> Array:
 	var group_of := {}
 	var groups: Array = []
 	for start in contacted:
@@ -152,8 +156,9 @@ static func _groups(grid: BattleGrid, contacted: Array[Warrior]) -> Array:
 		while not queue.is_empty():
 			var w: Warrior = queue.pop_front()
 			g.append(w)
-			for other in contacted:
-				if group_of.has(other) or other.side != w.side:
+			for other in men:
+				if group_of.has(other) or other.side != w.side or other.facing != w.facing \
+						or not other.is_active() or other.broken:
 					continue
 				if grid.line_neighbors(w).has(other) or grid.line_neighbors(other).has(w):
 					group_of[other] = true
@@ -175,8 +180,14 @@ static func _touch(a: Array[Warrior], b: Array[Warrior]) -> bool:
 ## cell behind is freed by a friend giving ground move too; the rest are
 ## blocked and lose breath.
 static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
-		result: PushResult, log: PackedStringArray) -> void:
+		result: PushResult, log: PackedStringArray, wall_facing: Dictionary = {}) -> void:
 	var pending: Array[Warrior] = losers.duplicate()
+	# Straight back, square to the line: the same zigzag a wall advances by,
+	# so a line shoved twice ends up where it started, not two cells aside.
+	var back := {}
+	for w: Warrior in pending:
+		var f: Vector2i = wall_facing.get(w.side, w.facing)
+		back[w] = w.pos + BattleGrid.advance_step(w.pos, BattleGrid.rotate(f, 3))
 	pending.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
 	# A line gives ground together: if fewer than push_line_fraction of its
 	# men have room behind them, the whole line is pressed and holds (and
@@ -185,9 +196,9 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 		var can := 0
 		var at_edge := 0
 		for w: Warrior in pending:
-			if grid.is_free(w.pos - w.facing):
+			if grid.is_free(back[w]):
 				can += 1
-			elif not grid.in_bounds(w.pos - w.facing):
+			elif not grid.in_bounds(back[w]):
 				at_edge += 1
 		# Pressed back onto the map's edge with nowhere to go: driven from the field.
 		if at_edge > 0 and float(can) < float(pending.size()) * rules.push_line_fraction:
@@ -208,7 +219,7 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 	while moved:
 		moved = false
 		for w: Warrior in pending.duplicate():
-			var dest: Vector2i = w.pos - w.facing
+			var dest: Vector2i = back[w]
 			if grid.is_free(dest) and grid.place(w, dest):
 				pending.erase(w)
 				result.shoved.append(w)

@@ -84,7 +84,8 @@ var morale_ally_down_adjacent := -2
 var morale_ally_down_visible := -1
 var morale_enemy_down_visible := 1
 var morale_flanked := -1
-## A man with no friend beside him loses heart each round.
+## A man with no friend at his shoulder in his line (BattleGrid.line_neighbors)
+## loses heart each round: a mob milling about is still a crowd of lone men.
 var morale_alone := -1
 var morale_leader_down := -3
 var morale_banner_lost := -2
@@ -161,6 +162,14 @@ var withdraw_distance := 4
 ## on either side has given up the field: a pursuit at equal speed never
 ## catches anyone, and a line that keeps giving ground has lost.
 var retreat_stall_rounds := 4
+## Once blows have been struck, this many rounds without one ends the fight:
+## a side with fewer standing men than this fraction of the other's quits
+## and loses, otherwise both draw off.
+var stall_rounds := 6
+## A pushing wall whose enemy is this many facings (60 degrees each) or more
+## off its front wheels toward them rather than marching away.
+var wall_wheel_min_steps := 2
+var stall_quit_fraction := 0.5
 var missile_range := 6
 ## LeaderAI doctrine thresholds.
 var ai_form_rounds := 2

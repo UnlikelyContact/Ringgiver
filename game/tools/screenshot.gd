@@ -14,6 +14,7 @@ func _init() -> void:
 	var scene = load("res://view/main.tscn").instantiate()
 	scene.scenario = scenario
 	scene.seed_in = seed_in
+	scene.fixed_seed = true
 	get_root().add_child(scene)
 	await process_frame
 	var view: BattleView = scene.view

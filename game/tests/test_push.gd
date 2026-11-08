@@ -156,7 +156,9 @@ func test_blocked_shove_costs_breath() -> void:
 	var wall := _man("wall", 1, 3, rules)
 	_put(grid, strong, Vector2i(5, 6), NORTH)
 	_put(grid, weak, Vector2i(5, 5), SOUTH)
-	_put(grid, wall, Vector2i(5, 4), SOUTH)
+	# Straight back is the zigzag step square to the line, not his own hex diagonal.
+	var behind := weak.pos + BattleGrid.advance_step(weak.pos, BattleGrid.rotate(SOUTH, 3))
+	_put(grid, wall, behind, SOUTH)
 	var all: Array[Warrior] = [strong, weak, wall]
 	var before := weak.breath
 	var r := Push.resolve(SimRng.new(9), rules, grid, all, log)
@@ -191,12 +193,22 @@ func test_groups_are_line_connected_components() -> void:
 	var r := Push.resolve(SimRng.new(1), rules, grid, all, PackedStringArray())
 	assert_eq(r.contests, 1)
 	# A gap in side 0's line splits it into two groups, each pushing alone.
-	# Side 1's man at x=4 then has nobody in his front arc, so side 1 also
-	# splits into {2,3} and {5,6,7}: two touching pairs, two contests.
+	# Side 1's man at x=4 has nobody in his front arc, but the line is the
+	# unit: his whole unbroken line pushes as one, so two contests, each
+	# against the full weight of side 1.
 	var grid2 := BattleGrid.new(16, 12)
 	var all2 := _lines(grid2, rules, [2, 3, 6, 7], [2, 3, 4, 5, 6, 7])
 	var r2 := Push.resolve(SimRng.new(1), rules, grid2, all2, PackedStringArray())
 	assert_eq(r2.contests, 2)
+	var full := 6 * 4.0 * (1.0 + rules.push_morale_weight * 0.4)
+	assert_between(float(r2.strengths[1]), full - 0.001, full + 0.001, "the whole line lends its weight")
+	# Men standing together but facing every which way are not a line: each
+	# shoves alone.
+	var grid4 := BattleGrid.new(16, 12)
+	var all4 := _lines(grid4, rules, [4, 5, 6], [4, 5, 6])
+	all4[1].facing = BattleGrid.rotate(NORTH, 1)
+	var r4 := Push.resolve(SimRng.new(1), rules, grid4, all4, PackedStringArray())
+	assert_eq(r4.contests, 3, "three lone shovers against one line")
 	# Two separate skirmishes far apart: two contests.
 	var grid3 := BattleGrid.new(16, 12)
 	var all3 := _lines(grid3, rules, [1, 2, 10, 11], [1, 2, 10, 11])

@@ -22,6 +22,7 @@ var auto_pause := true
 var follow := true
 var pending_shout: CombatTypes.Shout = CombatTypes.Shout.NONE
 var pending_action: Action = null
+var pending_advance := false  # the wall steps forward as one next round
 var clock := 0.0
 var animating := false
 var anim_scale := 1.0  # 0 for headless screenshots
@@ -63,10 +64,26 @@ func is_manual() -> bool:
 func advance() -> void:
 	if player == null or not player.is_active():
 		return
+	if in_wall(player) and battle.wall_members(player.side).size() >= 2:
+		# In a wall, the wall goes: one test, everyone steps or nobody.
+		pending_advance = not pending_advance
+		pending_action = null
+		queue_redraw()
+		return
 	var cell := player.pos + BattleGrid.advance_step(player.pos, player.wall_facing())
 	if battle.grid.is_free(cell):
 		pending_action = Action.move_to(cell, player.wall_facing())
 		queue_redraw()
+
+
+## Where each man of your wall would step on Advance (empty when not in one).
+func advance_targets() -> Dictionary:
+	var out := {}
+	if player == null or not in_wall(player):
+		return out
+	for w in battle.wall_members(player.side):
+		out[w] = w.pos + BattleGrid.advance_step(w.pos, player.wall_facing())
+	return out
 
 
 ## Wheels the wall one facing (60 degrees) left or right.
@@ -105,7 +122,10 @@ func step() -> void:
 		battle.set_shout(player.side, pending_shout)
 	if pending_action != null:
 		battle.set_player_action(player.side, pending_action)
+	if pending_advance:
+		battle.request_wall_step(player.side)
 	pending_action = null
+	pending_advance = false
 	battle.run_round()
 	var lines := PackedStringArray()
 	for i in range(_log_seen, battle.log.size()):
@@ -356,10 +376,18 @@ func _tap(local: Vector2) -> void:
 		return
 	if cell == player.pos:
 		pending_action = null  # back to acting with the line
+		pending_advance = false
 		queue_redraw()
 		return
 	if BattleGrid.chebyshev(cell, player.pos) != 1:
 		return
+	if in_wall(player) and battle.wall_members(player.side).size() >= 2 \
+			and cell == player.pos + BattleGrid.advance_step(player.pos, player.wall_facing()):
+		pending_advance = true  # a tap ahead takes the wall forward, not the man
+		pending_action = null
+		queue_redraw()
+		return
+	pending_advance = false
 	var occ := battle.grid.occupant(cell)
 	if occ == null and battle.grid.is_free(cell):
 		pending_action = Action.move_to(cell, player.wall_facing())  # a step does not turn the wall
@@ -406,6 +434,11 @@ func _draw() -> void:
 		if pending_action != null:
 			var target := pending_action.target_cell
 			draw_colored_polygon(Iso.hexagon(target, 5), Color(Palette.GOLD, 0.45))
+		if pending_advance:
+			var targets := advance_targets()
+			for w in targets:
+				draw_colored_polygon(Iso.hexagon(targets[w], 5), Color(Palette.GOLD, 0.3 if w != player else 0.45))
+				_arrow(Iso.to_screen(w.pos), Iso.to_screen(targets[w]), Palette.GOLD, 4.0 if w == player else 3.0)
 	if not animating and (paused or is_manual()):
 		for p in preview():
 			var w: Warrior = p.warrior

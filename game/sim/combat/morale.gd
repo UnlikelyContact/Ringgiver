@@ -69,7 +69,9 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 				delta += rules.morale_leader_near
 		if is_flanked(grid, w):
 			delta += rules.morale_flanked
-		if grid.adjacent_warriors(w.pos, w.side).is_empty():
+		# Heart comes from the man at your shoulder: no shield-friend beside
+		# him in his line, and a man feels alone whoever is milling about.
+		if grid.line_neighbors(w).is_empty():
 			delta += rules.morale_alone
 		_shift(w, delta)
 

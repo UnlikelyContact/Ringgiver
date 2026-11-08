@@ -186,7 +186,41 @@ wall falls back a green or blooded man with little heart left wavers and
 runs rather than stepping back with it. An ordered fall back costs no
 heart; being driven back by a push does, and driving the enemy back gives
 heart. A wall pressed onto the edge of the field, or falling back into it,
-has been driven from the field: its men leave and count as fled. If the prototype finds pulses still feel like turns,
+has been driven from the field: its men leave and count as fled.
+
+**Fourth playtest, same day (the player kept losing):** the prototype's
+"Fight again" never changed the seed, so every fight after a reload was the
+same battle with the same dice; a fresh field is now drawn on each load and
+each "Fight again". Scripted play across 200 seeds showed where the losses
+really came from: stepping the leader ahead by hand lost two fights in
+three, because his step bypassed the wall's single test and left him alone
+in front. Decision: a tap on the cell ahead, or the Advance button, now
+takes the *wall* forward one step under its one test, whatever the standing
+order; a man steps alone only when he has no wall. Four sim faults found
+the same way: a shoved man went back along his own hex diagonal rather than
+square to the line, so two shoves slid a line two cells sideways and the
+lines slipped past each other to opposite edges of the field; a pair of
+men cut off from the wall marched on as their own "line"; the lull counter
+looked back sixty log lines instead of one round, so stalled fights never
+ended; and a pushing wall never turned toward an enemy behind it. Now a
+shove goes straight back by the same zigzag a wall advances by, a fragment
+rejoins the wall, a fight ends once blows have been struck and none land
+for six rounds (the side with fewer than half the other's men standing
+quits; otherwise both draw off), and a pushing wall with the enemy two or
+more facings off its front wheels toward them, one facing a round, unless
+it is in contact. Balance after the fixes, equal green bands, player wall
+shouting Push against a steady enemy: 64% wins, 4% draws. The push now
+weighs the whole line: every man shoulder to shoulder and facing the same
+way lends his might, so a mob crowding one part of a line no longer
+outweighs it; heart comes from the man at your shoulder (a man with no friend beside
+him in his line loses heart each round, however many mill about him); a held man
+with nobody in front but an enemy at his flank or back turns and fights
+him; and a green man with no orders still strikes at what is in his face.
+Open: "Break them!" against the steady enemy doctrine wins about seven
+fights in ten, more than "Push!", because the enemy holds while a charging
+line keeps the initiative; the doctrine, not the wall, needs work.
+
+If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop
 changes.

@@ -18,6 +18,8 @@ var _pending_shout := {}  # side -> Shout set from outside for this round
 var _last_shout := {}  # side -> Shout actually given
 var _standing := {}  # side -> the last order given that was not NONE
 var _contact_logged := {}  # side -> bool, so "in contact" is logged once per spell
+var _wall_step := {}  # side -> true when the leader asks his wall to step forward this round
+var _blows_ever := false
 var _rounds_without_blow := 0
 var _player_action := {}  # side -> Action for that side's leader this round (presentation hook)
 ## Actions chosen in the last round, Warrior -> Action (read by the view).
@@ -56,6 +58,12 @@ func set_shout(side: int, shout: CombatTypes.Shout) -> void:
 ## The player's own man acts on this instead of Decision next round.
 func set_player_action(side: int, action: Action) -> void:
 	_player_action[side] = action
+
+
+## The leader takes his wall one step forward this round, whatever the
+## standing order: one test, everyone steps or nobody (the Advance control).
+func request_wall_step(side: int) -> void:
+	_wall_step[side] = true
 
 
 func last_shout(side: int) -> CombatTypes.Shout:
@@ -115,12 +123,20 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	if leader == null:
 		return
 	var order := standing_order(side)
+	if _wall_step.get(side, false):
+		_wall_step.erase(side)
+		if order != CombatTypes.Shout.FALL_BACK:
+			order = CombatTypes.Shout.PUSH
 	if order != CombatTypes.Shout.PUSH and order != CombatTypes.Shout.FALL_BACK:
 		return
 	var members := wall_members(side)
 	if members.size() < 2:
 		return
 	var wf := leader.wall_facing()
+	if order == CombatTypes.Shout.PUSH and _wheel_toward_enemy(side, leader, members):
+		_hold_wall(members)
+		return
+	wf = leader.wall_facing()
 	var step_facing := wf if order == CombatTypes.Shout.PUSH else BattleGrid.rotate(wf, 3)
 	var horn := false
 	for w in active(side):
@@ -184,6 +200,30 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	log.append("%s's wall steps %s as one, %d men" % [leader.display_name, "forward" if order == CombatTypes.Shout.PUSH else "back", members.size()])
 
 
+## A wall pushing with the enemy two or more facings off its front (beside or
+## behind it) wheels one facing toward them instead of marching away. Not
+## while in contact: wheeling in a melee is chaos. True if it wheeled.
+func _wheel_toward_enemy(side: int, leader: Warrior, members: Array[Warrior]) -> bool:
+	var theirs := active(1 - side)
+	if theirs.is_empty():
+		return false
+	for w in members:
+		if not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
+			return false
+	var sum := Vector2.ZERO
+	for e in theirs:
+		sum += BattleGrid.to_cart(Vector2(e.pos))
+	var want := BattleGrid.snap_direction(sum / theirs.size() - BattleGrid.to_cart(Vector2(leader.pos)))
+	var diff := posmod(BattleGrid.dir_index(want) - BattleGrid.dir_index(leader.wall_facing()), 6)
+	if diff < rules.wall_wheel_min_steps or diff > 6 - rules.wall_wheel_min_steps:
+		return false
+	var step := 1 if diff <= 3 else -1
+	leader.line_facing = BattleGrid.rotate(leader.wall_facing(), step)
+	leader.facing = leader.line_facing
+	log.append("%s's line wheels %s to face the enemy" % [leader.display_name, "right" if step == 1 else "left"])
+	return true
+
+
 ## Marks a wall's men to stand fast this round (wall_move = own cell).
 func _hold_wall(members: Array[Warrior]) -> void:
 	for w in members:
@@ -226,6 +266,7 @@ func run_round() -> void:
 		return
 	round += 1
 	log.append("--- round %d ---" % round)
+	var round_log_start := log.size()
 	var rr := rng.fork("round:%d" % round)
 
 	# 1. Shouts. A leader who turned to strike last round faces his wall again.
@@ -324,11 +365,12 @@ func run_round() -> void:
 
 	# Blows landed this round?
 	var any_blow := false
-	for i in range(maxi(0, log.size() - 60), log.size()):
+	for i in range(round_log_start, log.size()):
 		if log[i].contains(" beats ") and not log[i].contains("glancing") and log[i].begins_with(log[i].split(" beats ")[0]):
 			any_blow = true
 			break
 	_rounds_without_blow = 0 if any_blow else _rounds_without_blow + 1
+	_blows_ever = _blows_ever or any_blow
 
 	# 4. End check.
 	for side in 2:
@@ -354,6 +396,21 @@ func run_round() -> void:
 		if retreating.size() == 2:
 			_finish(-1, "both sides draw off")
 			return
+	# Nobody has struck a blow for a while after the lines met: the fight is
+	# over. The side with clearly fewer men standing has had enough and quits;
+	# otherwise both draw off.
+	if _blows_ever and _rounds_without_blow >= rules.stall_rounds:
+		var standing := [0, 0]
+		for side in 2:
+			for w in active(side):
+				if not w.broken:
+					standing[side] += 1
+		for side in 2:
+			if float(standing[side]) < float(standing[1 - side]) * rules.stall_quit_fraction:
+				_finish(1 - side, "side %d has had enough and quits the field" % side)
+				return
+		_finish(-1, "neither side will close again; both draw off")
+		return
 
 
 func _push_called() -> bool:

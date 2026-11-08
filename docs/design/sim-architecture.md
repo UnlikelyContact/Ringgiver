@@ -171,7 +171,9 @@ Rules to implement:
   `morale_rally_to_me` to friends within earshot of the leader (use
   `hear_certain_radius + hear_horn_radius_bonus` if a horn is on that
   side).
-- **Push:** find contact groups: a man is "in contact" if an active enemy
+- **Push:** the line is the unit: a group is a run of active, unbroken men
+  linked over `line_neighbors` who face the same way, and it pushes if any
+  man of it is in contact. Find contact: a man is "in contact" if an active enemy
   is in his FRONT arc and adjacent. Group contacted men by side into
   connected components over line-neighbor adjacency. For each pair of
   opposing components that touch, strength = Σ over members of

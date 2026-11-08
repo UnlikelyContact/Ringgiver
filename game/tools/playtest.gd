@@ -11,9 +11,11 @@ func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	var outdir := args[0] if args.size() > 0 else "res://"
 	var seed_in := int(args[1]) if args.size() > 1 else 11
+	var plan_name := args[2] if args.size() > 2 else "mixed"
 	var scene = load("res://view/main.tscn").instantiate()
 	scene.scenario = "equal_green"
 	scene.seed_in = seed_in
+	scene.fixed_seed = true
 	get_root().add_child(scene)
 	await process_frame
 	var view: BattleView = scene.view
@@ -37,7 +39,15 @@ func _init() -> void:
 		20: {"shout": S.PUSH},
 		21: {}, 22: {},
 	}
-	for r in range(1, 23):
+	if plan_name == "wall_push":
+		plan = {1: {"shout": S.SHIELD_WALL}}
+		for r in range(2, 41):
+			plan[r] = {"shout": S.PUSH}
+	elif plan_name == "wall_advance":
+		# Hold, and take the wall forward a step at a time with the Advance control.
+		# (the Advance itself is pressed after each round below, so the frame shows it)
+		plan = {1: {"shout": S.SHIELD_WALL}, 2: {"shout": S.HOLD}}
+	for r in range(1, 41):
 		var step: Dictionary = plan.get(r, {})
 		if step.has("shout"):
 			view.pending_shout = step.shout
@@ -49,6 +59,10 @@ func _init() -> void:
 		view.step()
 		await process_frame
 		await process_frame
+		if plan_name == "wall_advance" and not b.is_over():
+			view.advance()  # so the frame shows the wall's step previewed
+			view.queue_redraw()
+			await process_frame
 		var img := get_root().get_texture().get_image()
 		img.save_png("%s/pt_%02d.png" % [outdir, r])
 		var ours := view.wall_count(0)

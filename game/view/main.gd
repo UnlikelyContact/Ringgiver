@@ -9,10 +9,14 @@ var player: Warrior
 var hud: CanvasLayer
 var scenario := "equal_green"
 var seed_in := 7
+## Tools set this so a run is repeatable; a player gets a fresh field each load.
+var fixed_seed := false
 
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.BG)
+	if not fixed_seed:
+		seed_in = randi_range(1, 99999)
 	start(scenario, seed_in)
 
 
@@ -36,6 +40,8 @@ func _process(delta: float) -> void:
 
 
 func start(p_scenario: String, p_seed: int) -> void:
+	scenario = p_scenario
+	seed_in = p_seed
 	for c in get_children():
 		c.queue_free()
 	var rules := CombatRules.new()

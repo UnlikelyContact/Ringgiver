@@ -24,9 +24,9 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	if w.wall_move != Warrior.NO_WALL_MOVE:
 		var wf := leader.wall_facing() if leader != null else w.facing
 		if w.wall_move == w.pos:
-			var front := _front(w, enemies)
-			if not front.is_empty():
-				return Action.attack(_pick_target(w, front, leader))
+			var foe := _front_or_beside(w, enemies)
+			if foe != null:
+				return Action.attack(foe)
 			return Action.brace(wf)  # the wall stands fast
 		return Action.move_to(w.wall_move, wf)
 
@@ -78,7 +78,9 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 	match order:
 		CombatTypes.Shout.NONE:
 			if w.tier == CombatTypes.Tier.GREEN:
-				act = Action.brace()
+				# No orders: a green man stands where he is, but strikes at what is in his face.
+				var at_him := _front(w, enemies)
+				act = Action.attack(_pick_target(w, at_him, leader)) if not at_him.is_empty() else Action.brace()
 			else:
 				act = _hold(grid, w, enemies, leader)
 		CombatTypes.Shout.SHIELD_WALL:
@@ -103,7 +105,7 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 			elif has_leader and BattleGrid.chebyshev(w.pos, leader.pos) > rules.fall_back_regroup_distance:
 				act = _step_toward(grid, w, leader.pos, Vector2i.ZERO)
 			if act == null:
-				var back := w.pos - w.facing
+				var back := w.pos + BattleGrid.advance_step(w.pos, BattleGrid.rotate(w.facing, 3))
 				if grid.is_free(back):
 					act = Action.move_to(back)
 				else:
@@ -126,9 +128,9 @@ static func _by_order(rules: CombatRules, grid: BattleGrid, w: Warrior,
 ## HOLD: strike a man in front (a wounded one first), else brace toward the
 ## nearest enemy.
 static func _hold(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader: Warrior) -> Action:
-	var front := _front(w, enemies)
-	if not front.is_empty():
-		return Action.attack(_pick_target(w, front, leader))
+	var foe := _front_or_beside(w, enemies, leader)
+	if foe != null:
+		return Action.attack(foe)
 	var near := _nearest(w.pos, enemies)
 	if near == null:
 		return Action.brace()
@@ -137,6 +139,29 @@ static func _hold(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 			and _in_wall(grid, w, leader.wall_facing()):
 		return Action.brace(leader.wall_facing())
 	return Action.brace(BattleGrid.direction_to(w.pos, near.pos))
+
+
+## Whether w stands in the leader's own wall: linked to him along the wall's
+## row through active, unbroken friends. A pair standing together off to one
+## side is a fragment, not the wall.
+static func _in_leaders_wall(grid: BattleGrid, w: Warrior, leader: Warrior) -> bool:
+	if leader == null or not leader.is_active() or leader.side != w.side:
+		return false
+	if w == leader:
+		return true
+	var dirs := BattleGrid.line_dirs(leader.wall_facing())
+	var seen := {leader: true}
+	var queue: Array[Warrior] = [leader]
+	while not queue.is_empty():
+		var m: Warrior = queue.pop_front()
+		for d in dirs:
+			var n := grid.occupant(m.pos + d)
+			if n != null and n.side == w.side and n.is_active() and not n.broken and not seen.has(n):
+				if n == w:
+					return true
+				seen[n] = true
+				queue.append(n)
+	return false
 
 
 ## True when a friend stands beside w along the axis of a wall facing `wf`.
@@ -163,9 +188,9 @@ static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 	if near == null:
 		return Action.brace()
 	var toward := BattleGrid.direction_to(w.pos, near.pos)
-	if not grid.line_neighbors(w).is_empty():
+	var anchor := leader if leader != null and leader.is_active() and leader.side == w.side else w
+	if _in_leaders_wall(grid, w, anchor) and not grid.line_neighbors(w).is_empty():
 		# One direction for the whole line, taken from the leader's position.
-		var anchor := leader if leader != null and leader.is_active() and leader.side == w.side else w
 		# A wall advances the way it faces; without a set wall facing, toward the enemy.
 		var wall := anchor.line_facing if anchor.line_facing != Vector2i.ZERO else _advance_direction(anchor, enemies)
 		if _line_in_contact(grid, w, enemies):
@@ -379,6 +404,20 @@ static func _adjacent(w: Warrior, men: Array[Warrior]) -> Array[Warrior]:
 		if BattleGrid.chebyshev(w.pos, m.pos) == 1:
 			out.append(m)
 	return out
+
+
+## The man to strike while standing his ground: one in front of him first;
+## failing that, one at his flank or back, since a man who is being cut at
+## from behind turns to fight whatever it costs the line. Null if nobody is
+## at arm's length.
+static func _front_or_beside(w: Warrior, enemies: Array[Warrior], leader: Warrior = null) -> Warrior:
+	var front := _front(w, enemies)
+	if not front.is_empty():
+		return _pick_target(w, front, leader)
+	var adj := _adjacent(w, enemies)
+	if not adj.is_empty():
+		return _pick_target(w, adj, leader)
+	return null
 
 
 ## Adjacent enemies ahead of him: FRONT or FRONT_RIGHT (anything not on his
