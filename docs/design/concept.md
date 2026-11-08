@@ -147,7 +147,18 @@ is presented as real time with a tactical pause:
 
 What this buys: the sim's legibility and determinism, replays, the preview,
 and the push as a dramatic moment, with the pressure and chaos of real
-time on the surface. If the prototype finds pulses still feel like turns,
+time on the surface.
+
+**First playtest, 8 Nov 2026 (web prototype on a phone):** with every beat
+animated at once, the pulse was disorienting; the player could not read
+what happened, whether the men were in a wall, or what his own man did.
+Decisions taken: the clock is off by default (a "Next round" button, the
+pulse as a setting); the beats animate in order (men step, blows land one
+at a time, the line heaves, then breaks); locked shields are drawn as bars
+between neighbours and the HUD counts "wall 6/8"; the player's own man gets
+a preview arrow and a one-line account of his round; and under Shield Wall
+or Push the line forms on where the leader is *going*, so stepping forward
+takes the wall with you. "Push!" now advances the line as a line. If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop
 changes.

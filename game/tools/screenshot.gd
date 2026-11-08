@@ -18,6 +18,7 @@ func _init() -> void:
 	await process_frame
 	var view: BattleView = scene.view
 	view.anim_scale = 0.0
+	view.pulse_seconds = 0.0
 	if rounds > 0:
 		view.pending_shout = CombatTypes.Shout.SHIELD_WALL
 		view.auto_pause = false

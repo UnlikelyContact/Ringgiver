@@ -30,9 +30,9 @@ func focus_point() -> Vector2:
 	return centre + Vector2(0, -10)
 
 
-func _process(_delta: float) -> void:
-	if camera != null and battle != null:
-		camera.position = focus_point()
+func _process(delta: float) -> void:
+	if camera != null and battle != null and view != null and view.follow:
+		camera.position = camera.position.lerp(focus_point(), minf(1.0, delta * 3.0))
 
 
 func start(p_scenario: String, p_seed: int) -> void:
@@ -64,17 +64,14 @@ func start(p_scenario: String, p_seed: int) -> void:
 	player = ours[0]
 	player.display_name = "You"
 
-	view = BattleView.new()
-	add_child(view)
-	view.setup(battle, player)
 	camera = Camera2D.new()
-	camera.zoom = Vector2(1.25, 1.25)
-	camera.position_smoothing_enabled = true
-	camera.position_smoothing_speed = 3.0
-	camera.position = focus_point()
+	camera.zoom = Vector2(2.0, 2.0)
 	add_child(camera)
 	camera.make_current()
-	camera.reset_smoothing()
+	view = BattleView.new()
+	add_child(view)
+	view.setup(battle, player, camera)
+	camera.position = focus_point()
 	hud = preload("res://view/hud.gd").new()
 	add_child(hud)
 	hud.setup(view, self)

@@ -1,16 +1,19 @@
 extends CanvasLayer
-## Shout bar, pause and pulse controls, the log ticker and the result panel.
+## Shout bar, next-round and pulse controls, follow toggle, status with the
+## wall count, your man's line, the log and the result panel.
 
 var view: BattleView
 var main: Node
 var log_label: RichTextLabel
 var status: Label
-var pause_btn: Button
+var you_label: Label
+var next_btn: Button
+var follow_btn: Button
 var shout_buttons := {}
 var result_panel: PanelContainer
 var pulse_slider: HSlider
 var pulse_label: Label
-var _last_logged_shout := {}  # side name -> shout text, so repeats stay quiet
+var _last_logged_shout := {}
 
 const SHOUTS := [
 	CombatTypes.Shout.SHIELD_WALL, CombatTypes.Shout.HOLD, CombatTypes.Shout.PUSH,
@@ -26,68 +29,80 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	# Top bar: status and pause.
 	var top := HBoxContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top.offset_left = 12
-	top.offset_right = -12
-	top.offset_top = 8
+	top.offset_left = 10
+	top.offset_right = -10
+	top.offset_top = 6
+	top.add_theme_constant_override("separation", 10)
 	root.add_child(top)
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(left)
 	status = Label.new()
 	status.add_theme_color_override("font_color", Palette.TEXT)
-	status.add_theme_font_size_override("font_size", 18)
-	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(status)
+	status.add_theme_font_size_override("font_size", 17)
+	left.add_child(status)
+	you_label = Label.new()
+	you_label.add_theme_color_override("font_color", Palette.GOLD)
+	you_label.add_theme_font_size_override("font_size", 14)
+	left.add_child(you_label)
+	follow_btn = Button.new()
+	follow_btn.text = "Follow"
+	follow_btn.toggle_mode = true
+	follow_btn.button_pressed = true
+	follow_btn.custom_minimum_size = Vector2(84, 40)
+	follow_btn.toggled.connect(func(on: bool) -> void: view.follow = on)
+	top.add_child(follow_btn)
 	pulse_label = Label.new()
 	pulse_label.add_theme_color_override("font_color", Palette.DIM)
 	top.add_child(pulse_label)
 	pulse_slider = HSlider.new()
-	pulse_slider.min_value = 1.0
+	pulse_slider.min_value = 0.0
 	pulse_slider.max_value = 8.0
 	pulse_slider.step = 0.5
 	pulse_slider.value = view.pulse_seconds
-	pulse_slider.custom_minimum_size = Vector2(140, 24)
+	pulse_slider.custom_minimum_size = Vector2(120, 24)
 	pulse_slider.value_changed.connect(func(v: float) -> void:
 		view.pulse_seconds = v
+		view.clock = v
 		_refresh())
 	top.add_child(pulse_slider)
-	pause_btn = Button.new()
-	pause_btn.custom_minimum_size = Vector2(110, 48)
-	pause_btn.pressed.connect(func() -> void: view.set_paused(not view.paused))
-	top.add_child(pause_btn)
+	next_btn = Button.new()
+	next_btn.custom_minimum_size = Vector2(130, 48)
+	next_btn.pressed.connect(_on_next)
+	top.add_child(next_btn)
 
-	# Bottom bar: shouts.
 	var bottom := HBoxContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_left = 12
-	bottom.offset_right = -12
-	bottom.offset_top = -64
-	bottom.offset_bottom = -8
+	bottom.offset_left = 10
+	bottom.offset_right = -10
+	bottom.offset_top = -62
+	bottom.offset_bottom = -6
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(bottom)
 	for s in SHOUTS:
 		var b := Button.new()
 		b.text = CombatTypes.SHOUT_NAMES[s].capitalize() + "!"
-		b.custom_minimum_size = Vector2(130, 54)
+		b.custom_minimum_size = Vector2(128, 52)
 		b.toggle_mode = true
 		b.pressed.connect(_on_shout.bind(s))
 		bottom.add_child(b)
 		shout_buttons[s] = b
 
-	# Log ticker, left side.
 	log_label = RichTextLabel.new()
 	log_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	log_label.offset_left = 12
-	log_label.offset_top = -200
-	log_label.offset_right = 360
+	log_label.offset_left = 10
+	log_label.offset_top = -170
+	log_label.offset_right = 330
 	log_label.offset_bottom = -66
 	log_label.scroll_following = true
 	log_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	log_label.add_theme_color_override("default_color", Palette.DIM)
-	log_label.add_theme_font_size_override("normal_font_size", 14)
+	log_label.add_theme_font_size_override("normal_font_size", 13)
 	root.add_child(log_label)
 
-	# Result panel, hidden until the battle ends.
 	result_panel = PanelContainer.new()
 	result_panel.set_anchors_preset(Control.PRESET_CENTER)
 	result_panel.visible = false
@@ -97,14 +112,22 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	view.battle_finished.connect(_on_finished)
 	view.auto_paused.connect(_on_auto_paused)
 	view.paused_changed.connect(func(_p: bool) -> void: _refresh())
+	view.camera_moved.connect(func() -> void: follow_btn.button_pressed = view.follow)
+	_refresh()
+
+
+func _on_next() -> void:
+	if view.is_manual():
+		view.step()
+	else:
+		view.set_paused(not view.paused)
 	_refresh()
 
 
 func _on_shout(s: CombatTypes.Shout) -> void:
-	if view.pending_shout == s:
-		view.pending_shout = CombatTypes.Shout.NONE
-	else:
-		view.pending_shout = s
+	view.pending_shout = CombatTypes.Shout.NONE if view.pending_shout == s else s
+	for k in shout_buttons:
+		(shout_buttons[k] as Button).button_pressed = (k == view.pending_shout)
 	_refresh()
 	view.queue_redraw()
 
@@ -130,9 +153,8 @@ func _on_round(lines: PackedStringArray) -> void:
 		log_label.push_color(col)
 		log_label.add_text(line.replace("the leader", "").strip_edges() + "\n")
 		log_label.pop()
-	while log_label.get_line_count() > 9:
+	while log_label.get_line_count() > 7:
 		log_label.remove_paragraph(0)
-	# A shout is given once; the men keep it until the next one.
 	for s in shout_buttons:
 		(shout_buttons[s] as Button).button_pressed = false
 	view.pending_shout = CombatTypes.Shout.NONE
@@ -169,17 +191,17 @@ func _on_finished(result: BattleResult) -> void:
 
 func _refresh() -> void:
 	var b := view.battle
-	var mine := 0
-	var theirs := 0
-	for w in b.active(0):
-		if not w.broken:
-			mine += 1
-	for w in b.active(1):
-		if not w.broken:
-			theirs += 1
-	var theirs_shout := b.last_shout(1)
-	status.text = "Round %d   yours %d   theirs %d%s%s" % [b.round, mine, theirs,
-			("   your shout: " + CombatTypes.SHOUT_NAMES[view.pending_shout]) if view.pending_shout != CombatTypes.Shout.NONE else "",
-			("   they call: " + CombatTypes.SHOUT_NAMES[theirs_shout]) if theirs_shout != CombatTypes.Shout.NONE else ""]
-	pulse_label.text = "pulse %.1fs " % view.pulse_seconds
-	pause_btn.text = "Resume" if view.paused else "Pause"
+	var mine := view.wall_count(0)
+	var theirs := view.wall_count(1)
+	var order := b.last_shout(0)
+	var their_order := b.last_shout(1)
+	status.text = "Round %d   wall %d/%d   theirs %d/%d%s%s" % [b.round, mine[0], mine[1], theirs[0], theirs[1],
+			("   order: " + CombatTypes.SHOUT_NAMES[order]) if order != CombatTypes.Shout.NONE else "",
+			("   they call: " + CombatTypes.SHOUT_NAMES[their_order]) if their_order != CombatTypes.Shout.NONE else ""]
+	you_label.text = ("you: " + view.player_line) if view.player_line != "" else "tap a cell to step or an enemy to strike; tap yourself to act with the line"
+	if view.is_manual():
+		pulse_label.text = "turns "
+		next_btn.text = "Next round"
+	else:
+		pulse_label.text = "pulse %.1fs " % view.pulse_seconds
+		next_btn.text = "Resume" if view.paused else "Pause"

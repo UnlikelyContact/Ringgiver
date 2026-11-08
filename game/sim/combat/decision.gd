@@ -128,18 +128,23 @@ static func _push(grid: BattleGrid, w: Warrior, enemies: Array[Warrior], leader:
 	var adj := _adjacent(w, enemies)
 	if not adj.is_empty():
 		return Action.attack(_pick_target(w, adj, leader))
-	# Drive forward means toward the enemy, not along whatever the leader
-	# happened to face last; the line keeps its facing while the foe is ahead.
+	# Drive forward means the whole line steps toward the enemy together:
+	# every man steps the same way, from his side's centre toward theirs,
+	# so the wall advances as a wall. A man with nobody beside him closes
+	# on the nearest enemy instead.
 	var near := _nearest(w.pos, enemies)
 	if near == null:
 		return Action.brace()
 	var toward := BattleGrid.direction_to(w.pos, near.pos)
-	var line_dir := w.facing
-	if leader != null and leader.is_active():
-		line_dir = leader.facing
-	var keep_line := BattleGrid.arc_of(w, near.pos) == CombatTypes.Arc.FRONT \
-			or BattleGrid.arc_of(w, near.pos) == CombatTypes.Arc.FRONT_RIGHT
-	var step := _step_toward(grid, w, near.pos, line_dir if keep_line else toward)
+	if not grid.line_neighbors(w).is_empty():
+		var advance := _advance_direction(w, enemies)
+		var ahead := w.pos + advance
+		if grid.is_free(ahead):
+			return Action.move_to(ahead, advance)
+		var occ := grid.occupant(ahead)
+		if occ != null and occ.side == w.side:
+			return Action.brace(advance)
+	var step := _step_toward(grid, w, near.pos, toward)
 	if step == null:
 		return Action.brace(toward)
 	return step
@@ -235,6 +240,32 @@ static func _gap_cell(grid: BattleGrid, w: Warrior, enemies: Array[Warrior]) -> 
 			if BattleGrid.chebyshev(c, e.pos) == 1:
 				return c
 	return Vector2i(-1, -1)
+
+
+## The direction a line advances: from this man toward the enemy's centre,
+## snapped to eight directions, so neighbours step the same way.
+static func _advance_direction(w: Warrior, enemies: Array[Warrior]) -> Vector2i:
+	var sum := Vector2.ZERO
+	var n := 0
+	for e in enemies:
+		if e.is_active():
+			sum += Vector2(e.pos)
+			n += 1
+	if n == 0:
+		return w.facing
+	var centre := sum / n
+	var d := centre - Vector2(w.pos)
+	if d.length() < 0.5:
+		return w.facing
+	# Snap: favour the dominant axis, keep the diagonal only when both are strong.
+	var dir := Vector2i(signi(int(round(d.x))), signi(int(round(d.y))))
+	if absf(d.x) > absf(d.y) * 2.0:
+		dir.y = 0
+	elif absf(d.y) > absf(d.x) * 2.0:
+		dir.x = 0
+	if dir == Vector2i.ZERO:
+		return w.facing
+	return dir
 
 
 ## One cell directly away from the nearest enemy, or a free cell beside that

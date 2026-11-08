@@ -19,6 +19,10 @@ var _last_shout := {}  # side -> Shout actually given
 var _player_action := {}  # side -> Action for that side's leader this round (presentation hook)
 ## Actions chosen in the last round, Warrior -> Action (read by the view).
 var last_actions := {}
+## Positions after the movement beat and after the melee beat of the last
+## round, Warrior -> Vector2i, so a view can animate the beats in order.
+var after_movement := {}
+var after_melee := {}
 var _over := false
 
 
@@ -127,9 +131,22 @@ func run_round() -> void:
 			if shout == CombatTypes.Shout.TO_ME:
 				Morale.rally(rules, grid, leader, warriors, log)
 
-	# 2. Simultaneous decisions.
+	# 2. Simultaneous decisions. If the player's man is stepping somewhere,
+	# his men form on where he is going: the line follows its leader.
 	var actions := {}
 	var any_attacks := false
+	var intent_leader: Warrior = null
+	var intent_from := Vector2i.ZERO
+	for side in _player_action:
+		var pa: Action = _player_action[side]
+		var l: Warrior = _leaders.get(side, null)
+		if pa != null and pa.kind == CombatTypes.ActionKind.MOVE and l != null and l.is_active() \
+				and grid.is_free(pa.target_cell) and BattleGrid.chebyshev(l.pos, pa.target_cell) == 1:
+			intent_leader = l
+			intent_from = l.pos
+			grid.place(l, pa.target_cell)
+			if pa.new_facing != Vector2i.ZERO:
+				l.facing = pa.new_facing
 	for w in warriors:
 		if not w.is_active():
 			continue
@@ -150,13 +167,17 @@ func run_round() -> void:
 			any_attacks = true
 	_log_action_counts(actions)
 	last_actions = actions
+	if intent_leader != null:
+		grid.place(intent_leader, intent_from)
 
 	# 3a. Movement.
 	_resolve_movement(rr.fork("move"), actions)
+	after_movement = _positions()
 	# 3b. Missiles.
 	_resolve_missiles(rr.fork("missiles"), actions)
 	# 3c. Melee.
 	_resolve_melee(rr.fork("melee"), actions)
+	after_melee = _positions()
 	# 3d. The push: a heave happens only when a leader has called for it.
 	if _push_called():
 		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log)
@@ -207,6 +228,13 @@ func _log_action_counts(actions: Dictionary) -> void:
 	for w in actions:
 		counts[(actions[w] as Action).kind] += 1
 	log.append("actions: brace %d move %d attack %d shoot %d flee %d idle %d" % counts)
+
+
+func _positions() -> Dictionary:
+	var out := {}
+	for w in warriors:
+		out[w] = w.pos
+	return out
 
 
 func _resolve_movement(mr: SimRng, actions: Dictionary) -> void:
