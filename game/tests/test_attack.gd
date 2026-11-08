@@ -83,9 +83,12 @@ func test_score_components() -> void:
 func test_score_flank_and_rear_bonus() -> void:
 	var r := _rules()
 	var g := BattleGrid.new()
-	var b := _man(r, g, "b", 1, Vector2i(5, 5), S)  # faces south
-	var rear := _man(r, g, "rear", 0, Vector2i(5, 4), S)  # behind b, faces b
-	var right := _man(r, g, "right", 0, Vector2i(4, 5), E)  # b's right (facing south, right is west)
+	var b := _man(r, g, "b", 1, Vector2i(5, 5), S)  # faces south-east
+	# Facing south-east, b's rear arc is north-west and north-east of him.
+	# The rear man stands north-east, so he is not on the right man's line
+	# (which would lock their shields and muddy the score).
+	var rear := _man(r, g, "rear", 0, Vector2i(6, 4), Vector2i(-1, 1))  # behind b, faces b
+	var right := _man(r, g, "right", 0, Vector2i(4, 5), E)  # b's right (facing south-east, right is west)
 	assert_eq(BattleGrid.arc_of(b, rear.pos), CombatTypes.Arc.REAR)
 	assert_eq(BattleGrid.arc_of(b, right.pos), CombatTypes.Arc.RIGHT)
 	var base := 4 + r.shield_defense_bonus

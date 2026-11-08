@@ -15,8 +15,10 @@ func _put(grid: BattleGrid, w: Warrior, c: Vector2i, facing := Vector2i(0, -1)) 
 	w.facing = facing
 
 
-## One gate run: a line of six all-4s men facing north, optionally with
-## their leader directly behind the middle (adjacent to three of them). Each
+## One gate run: a line of six all-4s men in a row along (+-1, 0), facing
+## (0, -1), optionally with their leader directly behind (pos - facing) one
+## of the middle two. On hexes he touches two of them, (7, 6) and (8, 6);
+## no cell touches three cells of a straight row. Each
 ## round one more friend goes down just in front of the line (the spot walks
 ## along it), then the morale beat runs. Returns how many of the six are
 ## broken after 10 rounds.
@@ -168,8 +170,8 @@ func test_leader_adjacent_and_flanked_modifiers() -> void:
 	var foe := _man("foe", 1, 4, rules, [4, 4, 4, 8, 4])
 	_put(grid, lead, Vector2i(2, 2))
 	_put(grid, by_lead, Vector2i(3, 2))
-	_put(grid, flanked, Vector2i(7, 7))  # facing north
-	_put(grid, foe, Vector2i(8, 7), Vector2i(-1, 0))  # on flanked's right
+	_put(grid, flanked, Vector2i(4, 7))  # facing north-west
+	_put(grid, foe, Vector2i(5, 7), Vector2i(-1, 0))  # on flanked's right
 	var all: Array[Warrior] = [lead, by_lead, flanked, foe]
 	Morale.round_update(SimRng.new(3), rules, grid, all, {0: lead, 1: null}, true, log)
 	assert_eq(by_lead.morale, 6 + rules.morale_leader_adjacent)
@@ -357,7 +359,7 @@ func test_to_me_rally() -> void:
 	var foe := _man("foe", 1, 5, rules)
 	_put(grid, lead, Vector2i(2, 2))
 	_put(grid, close, Vector2i(3, 2))
-	_put(grid, earshot, Vector2i(2 + rules.hear_certain_radius, 4))
+	_put(grid, earshot, Vector2i(2, 2 + rules.hear_certain_radius))
 	_put(grid, deaf, Vector2i(2 + rules.hear_certain_radius + 1, 2))
 	_put(grid, foe, Vector2i(2, 3))
 	close.broken = true
@@ -395,7 +397,7 @@ func test_a_lone_man_loses_heart() -> void:
 		w.reset_for_battle(rules)
 	g.place(lone, Vector2i(1, 1))
 	g.place(paired, Vector2i(5, 5))
-	g.place(friend, Vector2i(6, 5))
+	g.place(friend, Vector2i(4, 5))
 	var all: Array[Warrior] = [lone, paired, friend]
 	var log := PackedStringArray()
 	Morale.round_update(SimRng.new(1), rules, g, all, {}, true, log)
