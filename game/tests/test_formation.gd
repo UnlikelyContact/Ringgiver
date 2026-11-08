@@ -24,7 +24,7 @@ func test_line_slots_follow_facing() -> void:
 	var leader := _man("jarl", 0, Vector2i(8, 5), g)
 	leader.facing = Vector2i(1, 0)  # east: right hand is south-west, left north-east
 	var slots := Formation.line_slots(g, leader, 2)
-	var expected: Array[Vector2i] = [Vector2i(7, 6), Vector2i(9, 4)]
+	var expected: Array[Vector2i] = [Vector2i(7, 6), Vector2i(8, 4)]  # the plumb line keeps his column
 	assert_eq(slots, expected)
 
 
@@ -118,4 +118,9 @@ func test_line_forms_on_the_wall_facing_not_the_leaders_turn() -> void:
 	assert_eq(slots, [Vector2i(9, 6), Vector2i(7, 6)] as Array[Vector2i], "the line still runs east-west")
 	leader.line_facing = Vector2i.ZERO
 	var turned := Formation.line_slots(g, leader, 2)
-	assert_true(turned != slots, "without a wall facing the line follows his own facing")
+	assert_eq(turned, slots, "facing north-east the line is still level, so nothing changes")
+	leader.facing = Vector2i(1, 0)  # facing east: the line stands plumb
+	var plumb := Formation.line_slots(g, leader, 2)
+	assert_true(plumb != slots, "without a wall facing the line follows his own facing")
+	for c in plumb:
+		assert_eq(BattleGrid.to_offset(c).x, BattleGrid.to_offset(leader.pos).x, "a plumb line keeps the leader's column")

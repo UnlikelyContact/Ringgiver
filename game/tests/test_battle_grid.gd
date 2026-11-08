@@ -73,9 +73,16 @@ func test_advance_step_goes_straight_up_the_field() -> void:
 	var a := BattleGrid.from_offset(5, 8)
 	var b := BattleGrid.from_offset(9, 8)
 	assert_eq(BattleGrid.advance_step(a, Vector2i(0, -1)), BattleGrid.advance_step(b, Vector2i(0, -1)))
-	# A wall facing east (row north-east/south-west) stays on one line too.
+	# A wall facing east stands in a plumb line and steps straight east: four
+	# steps, four cells along the same row.
 	var e := Vector2i(2, 5)
-	var start := e
 	for i in 4:
 		e += BattleGrid.advance_step(e, Vector2i(1, 0))
-	assert_eq(e - start, Vector2i(2, 2), "two east and two south-east steps")
+	assert_eq(e, Vector2i(6, 5), "four cells east on the same row")
+	# Along a plumb line, the cells zigzag on the hexes but keep one column.
+	var p := BattleGrid.from_offset(8, 4)
+	var col_p := BattleGrid.to_offset(p).x
+	for i in 4:
+		p = BattleGrid.along_line(p, Vector2i(1, 0), true)
+	assert_eq(BattleGrid.to_offset(p).x, col_p, "same column down the plumb line")
+	assert_eq(BattleGrid.to_offset(p).y, 8, "four cells down it")

@@ -182,31 +182,55 @@ static func shield_covers(arc: CombatTypes.Arc) -> bool:
 	return arc == CombatTypes.Arc.FRONT or arc == CombatTypes.Arc.LEFT
 
 
-## The two directions along a line facing `facing`: right-hand first.
+## Lines run level or plumb on the screen, never slantwise, whatever the
+## hexes do. A man facing up or down (the four diagonal hex facings) stands
+## in a level row of cells; a man facing east or west stands in a plumb
+## line, which on pointy-top hexes is a zigzag of neighbouring cells drawn
+## straight. The two directions along his line are "right" and "left" of
+## his facing. (`line_dirs` is kept for callers that only need the two raw
+## hex axes nearest the line.)
 static func line_dirs(facing: Vector2i) -> Array[Vector2i]:
 	return [rotate(facing, 2), rotate(facing, 5)]
 
 
-## The step a wall takes to advance square to its row. No hex direction is
-## perpendicular to a hex row, so "straight" alternates the two directions
-## that straddle the facing; the alternation is keyed on the coordinate that
-## stays constant along the row, so every man in the row steps the same way
-## and each keeps his own column over two steps.
+## Does a man with this facing stand in a plumb (up-and-down) line?
+static func line_is_plumb(facing: Vector2i) -> bool:
+	var i := dir_index(facing)
+	return i == 2 or i == 5
+
+
+## The next cell along a man's line to his right (or left): along the row
+## for a level line, down or up the zigzag for a plumb one.
+static func along_line(pos: Vector2i, facing: Vector2i, right: bool) -> Vector2i:
+	var i := dir_index(facing)
+	if line_is_plumb(facing):
+		# Facing east, his right hand is south; facing west, north.
+		var down := (i == 2) == right
+		return pos + advance_step(pos, DIRS[3] if down else DIRS[0])
+	# Facing up (north-west or north-east), his right hand is east.
+	var up := i == 0 or i == 1
+	return pos + (DIRS[2] if up == right else DIRS[5])
+
+
+## The step a wall takes to advance square to its line. Facing east or
+## west it is the plain hex step. Facing up or down no hex step is square,
+## so "straight" alternates the two that straddle it, keyed on the row, so
+## every man in a level row steps the same way and keeps his column.
 static func advance_step(pos: Vector2i, facing: Vector2i) -> Vector2i:
-	var row := rotate(facing, 2)
-	var key: int
-	if row.y == 0:
-		key = pos.y  # row runs east-west: r is constant along it
-	elif row.x == 0:
-		key = pos.x  # row runs north-west/south-east: q is constant
-	else:
-		key = pos.x + pos.y  # row runs north-east/south-west: q + r is constant
-	return facing if posmod(key, 2) == 0 else rotate(facing, 1)
+	var i := dir_index(facing)
+	if i == 2 or i == 5:
+		return facing
+	# With odd rows shoved right, the cell straight above an even row is to
+	# the north-east and above an odd row to the north-west; straight below,
+	# south-east and south-west. Each step keeps the man's own column.
+	if i == 0 or i == 1:  # up
+		return DIRS[1] if posmod(pos.y, 2) == 0 else DIRS[0]
+	return DIRS[3] if posmod(pos.y, 2) == 0 else DIRS[4]  # down
 
 
-## The cell directly behind `w` (for second-rank support).
+## The cell straight behind `w` (for second-rank support).
 func behind(w: Warrior) -> Vector2i:
-	return w.pos - w.facing
+	return w.pos + advance_step(w.pos, rotate(w.facing, 3))
 
 
 ## How many hex facings (60 degrees each) apart two directions are: 0..3.

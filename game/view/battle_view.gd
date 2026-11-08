@@ -186,13 +186,22 @@ func _compute_tighten() -> void:
 					depth[n] = depth[m] + 1
 					queue.append(n)
 		var centre := Iso.to_screen(leader.pos)
+		var plumb := BattleGrid.line_is_plumb(leader.wall_facing())
 		for m in members:
 			if not depth.has(m) or m == leader:
 				continue
-			var toward := centre - Iso.to_screen(m.pos)
-			if toward.length() < 1.0:
-				continue
-			_tighten[m] = toward.normalized() * minf(WALL_TIGHTEN * depth[m], WALL_TIGHTEN_MAX)
+			var mine := Iso.to_screen(m.pos)
+			var pull := Vector2.ZERO
+			if plumb and m.role != CombatTypes.Role.MISSILE:
+				# A plumb line zigzags on the hexes; on the screen it stands
+				# straight under its leader, second rank one column back.
+				var ranks_back := roundi((mine.x - centre.x) / (Iso.SIZE * sqrt(3.0)) * (1.0 if leader.wall_facing() == BattleGrid.DIRS[5] else -1.0))
+				var want_x := centre.x - ranks_back * Iso.SIZE * sqrt(3.0) * (1.0 if leader.wall_facing() == BattleGrid.DIRS[5] else -1.0)
+				pull.x = want_x - mine.x
+			var toward := centre - mine
+			if toward.length() >= 1.0:
+				pull += toward.normalized() * minf(WALL_TIGHTEN * depth[m], WALL_TIGHTEN_MAX)
+			_tighten[m] = pull
 		for m in members:
 			if tokens.has(m):
 				(tokens[m] as Token).set_locked(true)

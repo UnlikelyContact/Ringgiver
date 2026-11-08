@@ -129,6 +129,17 @@ spear and shield, no armor) take on average 4–7 exchanges for one to go
 Down; mail roughly doubles that; an attack from the REAR roughly halves it.
 Write those as tests with ranges.
 
+## Line geometry (`battle_grid.gd`)
+
+Lines run level or plumb, never slantwise. `line_is_plumb(facing)` is true
+for east and west. `along_line(pos, facing, right)` gives the next cell
+along a man's line (along the row for a level line, down or up the zigzag
+for a plumb one); `advance_step(pos, facing)` is the plain hex step facing
+east or west and the row-keyed zigzag facing up or down; `behind(w)` is
+the cell straight behind by the same rule. `Formation.line_slots`,
+`BandFactory.deploy_line` and `Decision._gap_cell` build on `along_line`.
+The view straightens a plumb line on the screen.
+
 ## Formations and arms (`formation_template.gd`, `formation.gd`, roles)
 
 A `Warrior.role` is SHIELD, SPEAR or MISSILE. `FormationTemplate` is a

@@ -345,4 +345,4 @@ func test_push_advances_in_the_wall_facing() -> void:
 	var all: Array[Warrior] = [leader, w, e]
 	var a := _choose(w, leader, g, all)
 	assert_eq(a.kind, K.MOVE)
-	assert_eq(a.target_cell, Vector2i(9, 7), "one step the way the wall faces")
+	assert_eq(a.target_cell, Vector2i(10, 7), "one step the way the wall faces, keeping his column")

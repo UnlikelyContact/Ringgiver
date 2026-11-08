@@ -138,14 +138,16 @@ static func deploy_line(grid: BattleGrid, band: Array[Warrior], anchor: Vector2i
 	if leader == null and not others.is_empty():
 		leader = others.pop_front()
 	grid.place(leader, anchor)
-	var dirs := BattleGrid.line_dirs(facing)
+	var right := anchor
+	var left := anchor
 	var k := 1
 	var i := 0
 	while i < others.size() and k < 64:
-		for d in dirs:
+		right = BattleGrid.along_line(right, facing, true)
+		left = BattleGrid.along_line(left, facing, false)
+		for c in [right, left]:
 			if i >= others.size():
 				break
-			var c: Vector2i = anchor + d * k
 			if grid.is_free(c):
 				grid.place(others[i], c)
 				i += 1

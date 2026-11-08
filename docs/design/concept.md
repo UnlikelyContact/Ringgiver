@@ -335,7 +335,14 @@ overlap while the hex stays each man's slot in the rules; the line
 visibly closes up as the wall forms and opens as it breaks. When real
 models come, the formation pose (shoulder to shoulder, shields
 overlapped) is this same offset, applied to the model rather than the
-disc.
+disc. **Lines run level or plumb** (same day): a wall never forms slantwise
+across the hexes. Facing up or down (the four diagonal hex facings) the
+line is a level row and the step zigzags; facing east or west the line is
+plumb, a zigzag of neighbouring cells drawn straight on the screen, and
+the step is the plain hex step. "Straight behind" follows the same rule,
+so the second rank stands directly behind in both cases. Wheel still turns
+one facing at a time; a line swaps between level and plumb at the sixty-
+degree steps between.
 
 ### Drill, custom formations and custom shouts (decided 8 Nov 2026)
 

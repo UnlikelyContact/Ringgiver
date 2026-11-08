@@ -183,7 +183,7 @@ func test_blocked_shove_costs_breath() -> void:
 	assert_eq(r2.blocked.size(), 0)
 	assert_eq(r2.driven_off, [w2] as Array[Warrior])
 	assert_true(w2.fled, "driven off the field")
-	assert_eq(grid2.occupant(Vector2i(5, 0)), null, "and gone from the grid")
+	assert_true(grid2.occupant(Vector2i(5, 0)) != w2, "and gone from the grid (the winner may step into his place)")
 
 
 func test_groups_are_line_connected_components() -> void:

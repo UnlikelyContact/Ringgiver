@@ -363,11 +363,11 @@ static func _guard_leader(grid: BattleGrid, w: Warrior, leader: Warrior,
 ## the space a fallen neighbour has left; the open end of a line is not a
 ## gap. (-1, -1) if none.
 static func _gap_cell(grid: BattleGrid, w: Warrior, enemies: Array[Warrior]) -> Vector2i:
-	for side_dir in BattleGrid.line_dirs(w.facing):
-		var c := w.pos + side_dir
+	for right in [true, false]:
+		var c := BattleGrid.along_line(w.pos, w.facing, right)
 		if not grid.is_free(c):
 			continue
-		var beyond := grid.occupant(c + side_dir)
+		var beyond := grid.occupant(BattleGrid.along_line(c, w.facing, right))
 		if beyond == null or beyond.side != w.side or not beyond.is_active():
 			continue
 		for e in enemies:
