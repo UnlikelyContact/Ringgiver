@@ -145,3 +145,38 @@ func test_a_wall_holds_when_one_man_is_blocked() -> void:
 	b.run_round()
 	for w in ours:
 		assert_eq(w.pos, before[w], "%s stayed with the wall" % w.display_name)
+
+
+func test_a_wall_falls_back_as_one_except_a_man_whose_nerve_goes() -> void:
+	var parts := _two_walls(7)
+	var b: Battle = parts[0]
+	var ours: Array[Warrior] = parts[1]
+	var theirs: Array[Warrior] = parts[2]
+	# Enemies close enough to matter but not adjacent.
+	for w in theirs:
+		b.grid.place(w, w.pos + Vector2i(0, 4))
+	var shaky: Warrior = null
+	for w in ours:
+		if not w.is_leader:
+			shaky = w
+			break
+	shaky.tier = CombatTypes.Tier.GREEN
+	shaky.morale = b.rules.fall_back_steady_morale
+	b.set_shout(0, CombatTypes.Shout.FALL_BACK)
+	b.set_shout(1, CombatTypes.Shout.HOLD)
+	var rows := {}
+	for w in ours:
+		rows[w] = BattleGrid.to_offset(w.pos).y
+	b.run_round()
+	var stepped_back := 0
+	for w in ours:
+		if w != shaky and BattleGrid.to_offset(w.pos).y == rows[w] + 1:
+			stepped_back += 1
+	var nerve_line := false
+	for line in b.log:
+		if line.contains("nerve goes"):
+			nerve_line = true
+	if nerve_line:
+		assert_true(stepped_back == ours.size() - 1, "the rest of the wall stepped back together: %d" % stepped_back)
+	else:
+		assert_true(stepped_back == 0 or stepped_back == ours.size(), "the wall hesitated or moved whole")

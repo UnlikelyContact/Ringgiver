@@ -144,6 +144,13 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 		_hold_wall(members)
 		return
 	for w in members:
+		# The exceptions to moving as one: a man who falls, and a man whose
+		# nerve breaks. Falling back, a green or blooded man with little
+		# heart left wavers and runs instead of stepping back with the wall.
+		if order == CombatTypes.Shout.FALL_BACK and w != leader and w.tier <= CombatTypes.Tier.BLOODED \
+				and w.morale <= rules.fall_back_steady_morale:
+			log.append("%s's nerve goes as the wall falls back" % w.display_name)
+			continue
 		w.wall_move = targets[w]
 	log.append("the wall steps %s as one, %d men" % ["forward" if order == CombatTypes.Shout.PUSH else "back", members.size()])
 

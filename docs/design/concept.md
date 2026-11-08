@@ -180,7 +180,10 @@ same way or nobody does; it holds if any part is in contact or any man is
 blocked. Men outside the wall rejoin it rather than push ahead. A man who
 falls or breaks splits the wall; each piece moves as its own unit until
 Shield Wall re-forms it, and the HUD says "the wall is broken: 3 of 6
-with you". If the prototype finds pulses still feel like turns,
+with you". The only exceptions to moving as one are a man who falls and a
+man whose nerve breaks: a broken man leaves the wall and runs, and when a
+wall falls back a green or blooded man with little heart left wavers and
+runs rather than stepping back with it. If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop
 changes.
