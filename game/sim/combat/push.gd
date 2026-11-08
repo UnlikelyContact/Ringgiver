@@ -176,9 +176,20 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 	# tires); otherwise it goes back and the few who are blocked stay.
 	if rules.push_as_a_line and not pending.is_empty():
 		var can := 0
+		var at_edge := 0
 		for w: Warrior in pending:
 			if grid.is_free(w.pos - w.facing):
 				can += 1
+			elif not grid.in_bounds(w.pos - w.facing):
+				at_edge += 1
+		# Pressed back onto the map's edge with nowhere to go: driven from the field.
+		if at_edge > 0 and float(can) < float(pending.size()) * rules.push_line_fraction:
+			for w: Warrior in pending:
+				w.fled = true
+				grid.remove(w)
+				result.driven_off.append(w)
+			log.append("the line is driven from the field, %d men" % pending.size())
+			return
 		if float(can) < float(pending.size()) * rules.push_line_fraction:
 			for w: Warrior in pending:
 				w.spend_breath(rules.push_blocked_breath)
@@ -194,6 +205,7 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 			if grid.is_free(dest) and grid.place(w, dest):
 				pending.erase(w)
 				result.shoved.append(w)
+				w.morale = clampi(w.morale + rules.push_shoved_morale, 0, 10)
 				log.append("%s is shoved back to %s" % [w.display_name, dest])
 				moved = true
 	for w in pending:

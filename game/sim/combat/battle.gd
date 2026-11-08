@@ -135,6 +135,14 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 			return
 		var target: Vector2i = w.pos + BattleGrid.advance_step(w.pos, step_facing)
 		var occ := grid.occupant(target)
+		if order == CombatTypes.Shout.FALL_BACK and not grid.in_bounds(target):
+			# Falling back with the edge of the field at their backs: the wall retreats off it.
+			for m in members:
+				m.fled = true
+				grid.remove(m)
+				result.fled[side] += 1
+			log.append("%s's wall falls back off the field, %d men" % [leader.display_name, members.size()])
+			return
 		if not grid.in_bounds(target) or grid.terrain_at(target) == CombatTypes.Terrain.WATER \
 				or (occ != null and not members.has(occ)):
 			log.append("%s's wall cannot step as one: %s is blocked" % [leader.display_name, w.display_name])
@@ -157,6 +165,8 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 			log.append("%s's nerve goes as the wall falls back" % w.display_name)
 			continue
 		w.wall_move = targets[w]
+		if order == CombatTypes.Shout.FALL_BACK:
+			w.morale = clampi(w.morale + rules.fall_back_morale, 0, 10)
 	log.append("%s's wall steps %s as one, %d men" % [leader.display_name, "forward" if order == CombatTypes.Shout.PUSH else "back", members.size()])
 
 
@@ -285,6 +295,8 @@ func run_round() -> void:
 			for w in wall_members(side):
 				may_advance[w] = true
 		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance)
+		for w in push.driven_off:
+			result.fled[w.side] += 1
 		if push.winning_side >= 0:
 			log.append("the push goes to side %d" % push.winning_side)
 	# 3e. Morale.

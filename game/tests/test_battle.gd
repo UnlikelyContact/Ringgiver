@@ -180,3 +180,39 @@ func test_a_wall_falls_back_as_one_except_a_man_whose_nerve_goes() -> void:
 		assert_true(stepped_back == ours.size() - 1, "the rest of the wall stepped back together: %d" % stepped_back)
 	else:
 		assert_true(stepped_back == 0 or stepped_back == ours.size(), "the wall hesitated or moved whole")
+
+
+func test_falling_back_costs_heart_and_the_edge_means_retreat() -> void:
+	var parts := _two_walls(8)
+	var b: Battle = parts[0]
+	var ours: Array[Warrior] = parts[1]
+	for w in ours:
+		w.morale = 8
+	# Isolate the rule: no leader heartening, and no "quits the field" before the edge.
+	b.rules.morale_leader_adjacent = 0
+	b.rules.morale_leader_near = 0
+	b.rules.retreat_stall_rounds = 99
+	b.rules.withdraw_distance = 99  # isolate the edge rule from the out-of-reach rule
+	b.set_shout(0, CombatTypes.Shout.FALL_BACK)
+	b.set_shout(1, CombatTypes.Shout.HOLD)
+	b.run_round()
+	var stepped := false
+	for line in b.log:
+		if line.contains("steps back as one"):
+			stepped = true
+	if stepped:
+		for w in ours:
+			if w.is_active() and not w.is_leader:
+				assert_eq(w.morale, 8 + b.rules.fall_back_morale, "%s lost heart stepping back" % w.display_name)
+	# Keep falling back: the wall starts on row 9 of 12, so the edge comes soon.
+	var rounds := 0
+	while not b.is_over() and rounds < 8:
+		b.set_shout(0, CombatTypes.Shout.FALL_BACK)
+		b.run_round()
+		rounds += 1
+	var off := false
+	for line in b.log:
+		if line.contains("falls back off the field"):
+			off = true
+	assert_true(off, "a wall falling back into the edge retreats off the field")
+	assert_true(b.result.fled[0] >= 2, "the men who left are counted as fled: %d" % b.result.fled[0])

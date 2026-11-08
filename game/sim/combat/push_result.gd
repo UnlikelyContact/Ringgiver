@@ -11,6 +11,8 @@ var shoved: Array[Warrior] = []
 var blocked: Array[Warrior] = []
 ## Winners who stepped into ground the losers gave up.
 var advanced: Array[Warrior] = []
+## Losers with the map edge at their backs: driven from the field (fled).
+var driven_off: Array[Warrior] = []
 ## side -> summed push strength of that side's men in contact (float).
 var strengths := {}
 ## Number of opposed contests rolled (one per touching pair of groups).

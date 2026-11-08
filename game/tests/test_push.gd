@@ -166,7 +166,7 @@ func test_blocked_shove_costs_breath() -> void:
 	assert_eq(weak.pos, Vector2i(5, 5), "blocked man stays put")
 	assert_eq(weak.breath, before - rules.push_blocked_breath)
 	assert_eq(wall.breath, before, "the man behind was not in contact")
-	# The map edge blocks as well.
+	# The map edge is different: a man pressed back onto it is driven from the field.
 	var grid2 := BattleGrid.new(16, 12)
 	var s2 := _man("s2", 0, 1, rules, [10, 4, 4, 4, 4])
 	s2.morale = 10
@@ -176,8 +176,10 @@ func test_blocked_shove_costs_breath() -> void:
 	_put(grid2, w2, Vector2i(5, 0), SOUTH)
 	var all2: Array[Warrior] = [s2, w2]
 	var r2 := Push.resolve(SimRng.new(9), rules, grid2, all2, log)
-	assert_eq(r2.blocked.size(), 1)
-	assert_eq(w2.breath, before - rules.push_blocked_breath)
+	assert_eq(r2.blocked.size(), 0)
+	assert_eq(r2.driven_off, [w2] as Array[Warrior])
+	assert_true(w2.fled, "driven off the field")
+	assert_eq(grid2.occupant(Vector2i(5, 0)), null, "and gone from the grid")
 
 
 func test_groups_are_line_connected_components() -> void:

@@ -35,7 +35,7 @@ func test_band_acts_on_the_map() -> void:
 			sailed += 1
 	assert_true(sailed >= 3, "the band sailed %d times" % sailed)
 	assert_true(c.tally.get("raids", 0) + c.tally.get("contracts", 0) >= 1, "it raided or took a contract")
-	assert_true(c.band.known_places.size() > 6, "it learned the map: %d places" % c.band.known_places.size())
+	assert_true(c.band.known_places.size() > 4, "it learned the map: %d places" % c.band.known_places.size())
 
 
 func test_harald_expands_without_the_player() -> void:

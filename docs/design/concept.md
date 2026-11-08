@@ -183,7 +183,10 @@ Shield Wall re-forms it, and the HUD says "the wall is broken: 3 of 6
 with you". The only exceptions to moving as one are a man who falls and a
 man whose nerve breaks: a broken man leaves the wall and runs, and when a
 wall falls back a green or blooded man with little heart left wavers and
-runs rather than stepping back with it. If the prototype finds pulses still feel like turns,
+runs rather than stepping back with it. Every step back costs the wall
+heart, whether on its own order or driven by a push, and a wall pressed
+onto the edge of the field, or falling back into it, has been driven from
+the field: its men leave and count as fled. If the prototype finds pulses still feel like turns,
 the fallback is a fixed-timestep scheduler where each man acts on his own
 timer; the per-man rules survive that unchanged, only the battle loop
 changes.
