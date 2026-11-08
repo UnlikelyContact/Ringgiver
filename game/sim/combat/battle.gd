@@ -143,6 +143,13 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 				result.fled[side] += 1
 			log.append("%s's wall falls back off the field, %d men" % [leader.display_name, members.size()])
 			return
+		if occ != null and not members.has(occ) and occ.side == side and occ.is_active() and not occ.broken \
+				and order == CombatTypes.Shout.FALL_BACK:
+			# A friend behind the wall steps back with it, if he has room.
+			var his: Vector2i = occ.pos + BattleGrid.advance_step(occ.pos, step_facing)
+			if grid.is_free(his):
+				targets[occ] = his
+				occ = null
 		if not grid.in_bounds(target) or grid.terrain_at(target) == CombatTypes.Terrain.WATER \
 				or (occ != null and not members.has(occ)):
 			log.append("%s's wall cannot step as one: %s is blocked" % [leader.display_name, w.display_name])
@@ -150,12 +157,19 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 			return
 		targets[w] = target
 		chance_sum += 1.0 if w == leader else Shouts.hear_chance(rules, BattleGrid.distance(w.pos, leader.pos), w.wits, horn, fog)
-	var chance := chance_sum / members.size()
+	var tier_sum := 0
+	for w in members:
+		tier_sum += int(w.tier)
+	var tier_avg := int(round(float(tier_sum) / members.size()))
+	var chance: float = chance_sum / members.size() * rules.wall_test_tier_factor[clampi(tier_avg, 0, 3)]
 	if wr.randf() > chance:
 		log.append("%s's line hesitates (%d%% to move as one)" % [leader.display_name, int(round(chance * 100))])
 		_hold_wall(members)
 		return
 	_contact_logged[side] = false
+	for w in targets:
+		if not members.has(w):
+			w.wall_move = targets[w]  # the man behind, carried back with the wall
 	for w in members:
 		# The exceptions to moving as one: a man who falls, and a man whose
 		# nerve breaks. Falling back, a green or blooded man with little
@@ -291,10 +305,14 @@ func run_round() -> void:
 	# 3d. The push: a heave happens only when a leader has called for it.
 	if _push_called():
 		var may_advance := {}
+		var wall_facing := {}
 		for side in 2:
 			for w in wall_members(side):
 				may_advance[w] = true
-		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance)
+			var l := leader_of(side)
+			if l != null:
+				wall_facing[side] = l.wall_facing()
+		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance, wall_facing)
 		for w in push.driven_off:
 			result.fled[w.side] += 1
 		if push.winning_side >= 0:

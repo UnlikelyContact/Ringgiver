@@ -139,6 +139,9 @@ var green_panic_ignore_chance := 0.3
 ## or more enemies on him (champions always do, at two).
 var guard_min_tier := CombatTypes.Tier.VETERAN
 var guard_threats := 2
+## The wall's one test to move as one is the mean chance to hear, scaled by
+## the wall's average tier: green walls hesitate, veteran walls do not.
+var wall_test_tier_factor := [0.75, 0.9, 1.0, 1.0]
 ## A man falling back who finds himself this far from his leader rejoins him instead.
 var fall_back_regroup_distance := 3
 ## An active banner-bearer on the side widens the certain-hearing radius.

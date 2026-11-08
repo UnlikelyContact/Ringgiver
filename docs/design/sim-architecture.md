@@ -425,3 +425,18 @@ back) with a screenshot and the log every round. Found and fixed:
 
 Measured after: equal green 46/49.5 with 4.5% draws (24 rounds); veterans
 win 95.5% of green fights; equal veteran 45.5/38 with 16.5% draws.
+
+### Second scripted playtest (8 Nov 2026)
+
+- A won push's follow-up stepped each man by his own facing; a man who had
+  turned to strike stepped sideways and the wall broke. The follow-up now
+  uses the side's wall facing (`Push.resolve` takes `wall_facing`).
+- The wall's single test never failed: it is now the mean hearing chance
+  scaled by the wall's average tier (`wall_test_tier_factor`, green 0.75),
+  so green walls hesitate about one step in four.
+- A man standing behind a wall that falls back is carried back with it
+  when he has room; falling back into an enemy is still blocked.
+- The prototype camera sat too high once the lines reached the upper rows.
+
+Measured: equal green 45/52.5 with 2.5% draws; veterans win 99.5% of green
+fights in 17 rounds.

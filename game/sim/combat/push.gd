@@ -14,7 +14,8 @@ extends RefCounted
 ## `may_advance`: Warrior -> true for men allowed to follow up a won push
 ## (the battle passes the members of each side's wall). Empty means anyone.
 static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
-		all: Array[Warrior], log: PackedStringArray, may_advance: Dictionary = {}) -> PushResult:
+		all: Array[Warrior], log: PackedStringArray, may_advance: Dictionary = {},
+		wall_facing: Dictionary = {}) -> PushResult:
 	var result := PushResult.new()
 	var men: Array[Warrior] = all.duplicate()
 	men.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
@@ -69,14 +70,14 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 			w.morale = clampi(w.morale + rules.push_won_morale, 0, 10)
 	if rules.push_winners_advance:
 		if may_advance.is_empty():
-			_advance(grid, winners, losers, result, log)
+			_advance(grid, winners, losers, result, log, wall_facing)
 		else:
 			var allowed: Array[Warrior] = []
 			for w in winners:
 				if may_advance.has(w):
 					allowed.append(w)
 			if allowed.size() == winners.size():
-				_advance(grid, winners, losers, result, log)
+				_advance(grid, winners, losers, result, log, wall_facing)
 	result.winning_side = _top_side(wins)
 	return result
 
@@ -85,7 +86,7 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 ## ahead is now free moves into it, so the lines stay in contact and a push
 ## actually drives the line forward (concept.md, "Push!").
 static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Warrior],
-		result: PushResult, log: PackedStringArray) -> void:
+		result: PushResult, log: PackedStringArray, wall_facing: Dictionary = {}) -> void:
 	if losers.is_empty() or (result.shoved.is_empty() and not result.blocked.is_empty()):
 		return
 	# The winning line follows as a line: every man steps square to his
@@ -94,7 +95,10 @@ static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Wa
 	for w in winners:
 		if not w.is_active() or w.broken:
 			continue
-		var ahead := w.pos + BattleGrid.advance_step(w.pos, w.facing)
+		# The line steps square to its wall's facing, not to whichever way a
+		# man turned to strike.
+		var f: Vector2i = wall_facing.get(w.side, w.facing)
+		var ahead := w.pos + BattleGrid.advance_step(w.pos, f)
 		var occ := grid.occupant(ahead)
 		if not grid.in_bounds(ahead) or grid.terrain_at(ahead) == CombatTypes.Terrain.WATER \
 				or (occ != null and not winners.has(occ)):
