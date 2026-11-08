@@ -13,10 +13,10 @@ static func line_slots(grid: BattleGrid, leader: Warrior, count: int) -> Array[V
 	var out: Array[Vector2i] = []
 	if leader == null or count <= 0:
 		return out
-	var right := BattleGrid.rotate(leader.facing, 2)
+	var dirs := BattleGrid.line_dirs(leader.facing)
 	var reach := maxi(grid.width, grid.height)
 	for k in range(1, reach + 1):
-		for dir in [right, -right]:
+		for dir in dirs:
 			var c: Vector2i = leader.pos + dir * k
 			if _usable(grid, leader, c):
 				out.append(c)
@@ -33,7 +33,9 @@ static func wedge_slots(grid: BattleGrid, leader: Warrior, count: int) -> Array[
 	var out: Array[Vector2i] = []
 	if leader == null or count <= 0:
 		return out
-	var back_left := BattleGrid.rotate(leader.facing, -3)
+	# On hexes the two cells behind the tip are 120 and 180 degrees round
+	# from the facing; the rank runs along the line direction between them.
+	var back_left := BattleGrid.rotate(leader.facing, 4)
 	var back_right := BattleGrid.rotate(leader.facing, 3)
 	var across := back_right - back_left
 	var reach := maxi(grid.width, grid.height)

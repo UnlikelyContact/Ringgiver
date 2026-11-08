@@ -356,30 +356,31 @@ func _draw() -> void:
 	if battle == null:
 		return
 	var g := battle.grid
-	for y in g.height:
-		for x in g.width:
-			var c := Vector2i(x, y)
+	for row in g.height:
+		for col_i in g.width:
+			var c := BattleGrid.from_offset(col_i, row)
 			var col := Palette.GROUND
 			if g.terrain_at(c) == CombatTypes.Terrain.MUD:
 				col = Palette.MUD
-			elif (x + y) % 2 == 0:
+			elif (col_i + row) % 2 == 0:
 				col = Palette.GROUND.lightened(0.04)
-			draw_colored_polygon(Iso.diamond(c), col)
-			draw_polyline(Iso.diamond(c) + PackedVector2Array([Iso.diamond(c)[0]]), Palette.GROUND_LINE, 1.0)
+			var hexa := Iso.hexagon(c, 1.0)
+			draw_colored_polygon(hexa, col)
+			draw_polyline(hexa + PackedVector2Array([hexa[0]]), Palette.GROUND_LINE, 1.0)
 	_draw_wall_slots()
 	_draw_shield_locks()
 	if player != null and player.is_active():
-		draw_colored_polygon(Iso.diamond(player.pos, 3), Color(Palette.GOLD, 0.25))
+		draw_colored_polygon(Iso.hexagon(player.pos, 3), Color(Palette.GOLD, 0.25))
 		if not animating:
 			for n in g.neighbors(player.pos):
 				var occ := g.occupant(n)
 				if occ == null and g.is_free(n):
-					draw_polyline(Iso.diamond(n, 4) + PackedVector2Array([Iso.diamond(n, 4)[0]]), Color(Palette.BONE, 0.45), 1.5)
+					draw_polyline(Iso.hexagon(n, 4) + PackedVector2Array([Iso.hexagon(n, 4)[0]]), Color(Palette.BONE, 0.45), 1.5)
 				elif occ != null and occ.side != player.side and occ.is_active():
-					draw_polyline(Iso.diamond(n, 4) + PackedVector2Array([Iso.diamond(n, 4)[0]]), Color(Palette.BLOOD, 0.8), 2.0)
+					draw_polyline(Iso.hexagon(n, 4) + PackedVector2Array([Iso.hexagon(n, 4)[0]]), Color(Palette.BLOOD, 0.8), 2.0)
 		if pending_action != null:
 			var target := pending_action.target_cell
-			draw_colored_polygon(Iso.diamond(target, 5), Color(Palette.GOLD, 0.45))
+			draw_colored_polygon(Iso.hexagon(target, 5), Color(Palette.GOLD, 0.45))
 	if not animating and (paused or is_manual()):
 		for p in preview():
 			var w: Warrior = p.warrior
@@ -412,7 +413,7 @@ func _draw_wall_slots() -> void:
 	var n := battle.active(player.side).size() - 1
 	for slot in Formation.line_slots(battle.grid, leader, n):
 		if battle.grid.occupant(slot) == null:
-			draw_polyline(Iso.diamond(slot, 6) + PackedVector2Array([Iso.diamond(slot, 6)[0]]), Color(Palette.BONE, 0.35), 1.5)
+			draw_polyline(Iso.hexagon(slot, 6) + PackedVector2Array([Iso.hexagon(slot, 6)[0]]), Color(Palette.BONE, 0.35), 1.5)
 
 
 ## A bar between neighbours whose shields are locked: the wall you can see.

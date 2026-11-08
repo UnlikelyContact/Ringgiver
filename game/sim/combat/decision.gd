@@ -233,8 +233,7 @@ static func _guard_leader(grid: BattleGrid, w: Warrior, leader: Warrior,
 ## the space a fallen neighbour has left; the open end of a line is not a
 ## gap. (-1, -1) if none.
 static func _gap_cell(grid: BattleGrid, w: Warrior, enemies: Array[Warrior]) -> Vector2i:
-	for steps in [2, -2]:
-		var side_dir := BattleGrid.rotate(w.facing, steps)
+	for side_dir in BattleGrid.line_dirs(w.facing):
 		var c := w.pos + side_dir
 		if not grid.is_free(c):
 			continue
@@ -276,18 +275,10 @@ static func _advance_direction(w: Warrior, enemies: Array[Warrior]) -> Vector2i:
 	if n == 0:
 		return w.facing
 	var centre := sum / n
-	var d := centre - Vector2(w.pos)
+	var d := BattleGrid.to_cart(centre) - BattleGrid.to_cart(Vector2(w.pos))
 	if d.length() < 0.5:
 		return w.facing
-	# Snap: favour the dominant axis, keep the diagonal only when both are strong.
-	var dir := Vector2i(signi(int(round(d.x))), signi(int(round(d.y))))
-	if absf(d.x) > absf(d.y) * 2.0:
-		dir.y = 0
-	elif absf(d.y) > absf(d.x) * 2.0:
-		dir.x = 0
-	if dir == Vector2i.ZERO:
-		return w.facing
-	return dir
+	return BattleGrid.snap_direction(d)
 
 
 ## One cell directly away from the nearest enemy, or a free cell beside that

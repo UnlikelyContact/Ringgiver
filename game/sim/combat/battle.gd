@@ -294,7 +294,7 @@ func _resolve_movement(mr: SimRng, actions: Dictionary) -> void:
 
 
 func _on_edge(c: Vector2i) -> bool:
-	return c.x == 0 or c.y == 0 or c.x == grid.width - 1 or c.y == grid.height - 1
+	return grid.is_edge(c)
 
 
 func _resolve_missiles(mr: SimRng, actions: Dictionary) -> void:

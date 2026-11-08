@@ -48,23 +48,33 @@ static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier
 	return out
 
 
-## Deploys a band in a column at x = `column`, centered vertically, facing
-## `facing` (east for side 0, west for side 1 is the usual).
+## Deploys a band as a line through the cell at offset column `column` and
+## the map's middle row, facing `facing` (east for side 0, west for side 1
+## is the usual). The leader stands at the anchor; the rest fill the line's
+## slots outward, right first, exactly as Formation.line_slots orders them.
 static func deploy_column(grid: BattleGrid, band: Array[Warrior], column: int, facing: Vector2i, rules: CombatRules) -> void:
-	var start_y := maxi(0, (grid.height - band.size()) / 2)
-	var order: Array[Warrior] = []
-	# Leader in the middle of the line, everyone else around him.
+	var anchor := BattleGrid.from_offset(column, grid.height / 2)
 	var leader: Warrior = null
+	var others: Array[Warrior] = []
 	for w in band:
-		if w.is_leader:
-			leader = w
-		else:
-			order.append(w)
-	var mid := (band.size() - 1) / 2
-	if leader != null:
-		order.insert(mid, leader)
-	for i in order.size():
-		var w := order[i]
 		w.reset_for_battle(rules)
 		w.facing = facing
-		grid.place(w, Vector2i(column, start_y + i))
+		if w.is_leader and leader == null:
+			leader = w
+		else:
+			others.append(w)
+	if leader == null and not others.is_empty():
+		leader = others.pop_front()
+	grid.place(leader, anchor)
+	var dirs := BattleGrid.line_dirs(facing)
+	var k := 1
+	var i := 0
+	while i < others.size() and k < 64:
+		for d in dirs:
+			if i >= others.size():
+				break
+			var c: Vector2i = anchor + d * k
+			if grid.is_free(c):
+				grid.place(others[i], c)
+				i += 1
+		k += 1
