@@ -290,9 +290,10 @@ func _refresh() -> void:
 	if their_order != CombatTypes.Shout.NONE:
 		calls += "  they: " + CombatTypes.SHOUT_NAMES[their_order]
 	var stance: String = BattleGrid.AXIS_NAMES[view.player.wall_axis()] if view.player != null else ""
-	status.text = "Round %d  wall %d/%d%s (%s)  theirs %d/%d%s" % [b.round, mine[0], mine[1], arms_text, stance, theirs[0], theirs[1], calls]
+	var round_text := "Round %d" % b.round
 	if b.objective != null:
-		status.text += "  |  " + b.objective.progress(b)
+		round_text = "Round %d/%d  %s" % [b.round, b.objective.rounds, b.objective.progress(b)]
+	status.text = "%s  wall %d/%d%s (%s)  theirs %d/%d%s" % [round_text, mine[0], mine[1], arms_text, stance, theirs[0], theirs[1], calls]
 	form_btn.text = "Form: " + view.formation_name()
 	var warn := ""
 	if view.player.is_active() and b.round > 0 and view.wall_count(0)[0] < 2:

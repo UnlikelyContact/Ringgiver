@@ -133,14 +133,13 @@ func brief(side: int) -> String:
 
 ## The state of play for the HUD ("hall: 2 of 5 held, round 9 of 18").
 func progress(battle: Battle) -> String:
-	var round_text := "round %d of %d" % [battle.round, rounds]
 	match kind:
 		Kind.HOLD_GROUND:
-			return "ford: %d attackers on it to %d, %s" % [men_on(battle, attacker), men_on(battle, defender()), round_text]
+			return "ford %d:%d" % [men_on(battle, attacker), men_on(battle, defender())]  # attackers : defenders on it
 		Kind.REACH_THE_SHIPS:
-			return "ships: %d of %d there, %s" % [men_on(battle, attacker), ships_men, round_text]
+			return "ships %d/%d" % [men_on(battle, attacker), ships_men]
 		_:
-			return "hall: %d of %d held, %s" % [men_on(battle, attacker), cells.size(), round_text]
+			return "hall %d/%d" % [men_on(battle, attacker), cells.size()]
 
 
 ## -1 while undecided, else the winning side. Call once a round, after the

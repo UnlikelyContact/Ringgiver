@@ -1066,6 +1066,20 @@ right work for cloud sessions now.
 7. **Expansion by region.** Denmark and the Baltic, the west and Iceland, the
    eastern routes; the full historical spine.
 
+**Ninth playtest, 9 Nov 2026 (objectives and a cunning enemy, measured
+together):** with the ford, the ships and the hall on three fields in
+four, and an enemy who wheels toward the threat, refuses a flank and holds
+ranks against ranks (CUNNING in two fights in five), the tactics have
+changed shape. Against each doctrine the human's wheel-and-flank now wins
+31-36%, holding and taunting 26-43%, and a straight push 55-60%. Across
+the varied fields: pushing wins 56% (51% when you attack, 73% when you
+defend, 34% in an open fight), holding wins 32% and never wins an attack,
+and the steady AI on your side wins 49%. The symmetric batches are
+unchanged. Open: the attacker rarely takes the objective itself (the
+defender mostly wins on time), the ships are nearly unreachable, and a
+holding line against a holding line is a dead fight unless there is
+ground to fight over.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art
