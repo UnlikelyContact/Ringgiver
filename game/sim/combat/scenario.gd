@@ -29,7 +29,12 @@ const TIERS := {
 ## come on. The symmetric field (`vary` false) never has one.
 static func build(name: String, seed_in: int, rules: CombatRules, vary := true) -> Dictionary:
 	var t: Array = TIERS.get(name, TIERS["equal_green"])
-	var battle := Battle.new(rules, seed_in)
+	var battle := Battle.new(rules, seed_in, BattleGrid.new(rules.field_width, rules.field_height))
+	# Rows and columns relative to the field: the enemy's front three rows
+	# above the middle, yours five rows below it, both about the centre column.
+	var centre := rules.field_width / 2
+	var their_row := rules.field_height / 2 - 3
+	var our_row := their_row + 5
 	var brng := SimRng.new(seed_in).fork("bands")
 	var frng := SimRng.new(seed_in).fork("field")
 	var their_shields := 8
@@ -60,20 +65,20 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true) 
 	var theirs := BandFactory.make_mixed_band(brng.fork("b"), 1, their_shields, their_spears, their_bows, t[1], rules, CombatTypes.Armor.NONE, 16, 101)
 	# A little mud so the ground has texture.
 	var mr := SimRng.new(seed_in).fork("mud")
-	for i in 6:
-		battle.grid.set_terrain(BattleGrid.from_offset(mr.randi_range(2, 13), mr.randi_range(4, 7)), CombatTypes.Terrain.MUD)
+	for i in 6 + (rules.field_width - 16) / 2:
+		battle.grid.set_terrain(BattleGrid.from_offset(mr.randi_range(2, rules.field_width - 3), mr.randi_range(their_row + 1, our_row - 1)), CombatTypes.Terrain.MUD)
 	# Lines run across the screen: ours below facing north-west, theirs
 	# above facing south-east, five rows apart, theirs shifted along the row.
 	var template := FormationTemplate.ranks()
-	BandFactory.deploy_formation(battle.grid, ours, BattleGrid.from_offset(8, 8), Vector2i(0, -1), rules, template)
-	BandFactory.deploy_formation(battle.grid, theirs, BattleGrid.from_offset(8 + offset, 3), Vector2i(0, 1), rules, FormationTemplate.ranks())
+	BandFactory.deploy_formation(battle.grid, ours, BattleGrid.from_offset(centre, our_row), Vector2i(0, -1), rules, template)
+	BandFactory.deploy_formation(battle.grid, theirs, BattleGrid.from_offset(centre + offset, their_row), Vector2i(0, 1), rules, FormationTemplate.ranks())
 	if objective != null:
 		# The defender's end: theirs at the top (rear toward row 0), ours at
 		# the bottom (rear toward the last row).
 		if objective.attacker == 0:
-			objective.place(battle.grid, 3, -1, 8 + offset)
+			objective.place(battle.grid, their_row, -1, centre + offset)
 		else:
-			objective.place(battle.grid, 8, 1, 8)
+			objective.place(battle.grid, our_row, 1, centre)
 		battle.objective = objective
 	battle.add_band(ours)
 	battle.add_band(theirs)

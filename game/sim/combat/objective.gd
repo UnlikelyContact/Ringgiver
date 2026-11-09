@@ -31,6 +31,7 @@ var cells: Array[Vector2i] = []
 var rounds := 16
 var name := ""
 var ships_men := 4
+var ships_depth := 3  # rows behind the defender's front the ships lie
 var hall_streak := 2
 ## Set when `check` decides: the finish line for the log ("side 0 takes the hall").
 var reason := ""
@@ -46,6 +47,7 @@ func _init(p_kind: Kind, p_attacker: int, seed_in: int, rules: CombatRules = nul
 	_seed = seed_in
 	name = NAMES[kind]
 	var r := rules if rules != null else CombatRules.new()
+	ships_depth = r.objective_ships_depth
 	ships_men = r.objective_ships_men
 	hall_streak = r.objective_hall_streak
 	match kind:
@@ -83,9 +85,12 @@ func place(grid: BattleGrid, front_row: int, back: int, centre_col: int) -> void
 		Kind.REACH_THE_SHIPS:
 			var n := r.randi_range(8, 10)
 			var left := -(n / 2)
+			# A strip objective_ships_depth rows behind the defender's front, or
+			# at the field's edge if that is nearer.
 			var edge_row := (grid.height - 1) if back > 0 else 0
+			var depth := mini(ships_depth, absi(edge_row - front_row))
 			for i in n:
-				offs.append(Vector2i(left + i, (edge_row - front_row) * back))
+				offs.append(Vector2i(left + i, depth))
 		Kind.THE_HALL:
 			var n := r.randi_range(4, 6)
 			# Two rows, the second and third ranks' ground, widest at the back.

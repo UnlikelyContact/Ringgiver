@@ -155,6 +155,13 @@ var fall_back_steady_morale := 4
 
 # --- Battle loop (battle.gd) ----------------------------------------------
 var max_rounds := 40
+## The prototype's field (hexes across and down). The lines deploy five rows
+## apart about the middle; a wider field leaves room on the flanks and
+## behind for ships, bows and a wheel.
+var field_width := 22
+var field_height := 16
+## The ships lie this many rows behind the defender's front line.
+var objective_ships_depth := 3
 ## A side whose leader has called "fall back" and whose men are all at least
 ## this far from every enemy has left the field and loses.
 var withdraw_distance := 4

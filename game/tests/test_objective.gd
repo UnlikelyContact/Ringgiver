@@ -169,9 +169,9 @@ func test_varied_fields_carry_objectives_about_seven_in_ten() -> void:
 			rows += BattleGrid.to_offset(c).y
 		var mean_row := float(rows) / obj.cells.size()
 		if obj.attacker == 0:
-			assert_true(mean_row < 5.5, "seed %d: their end, at the top" % (1 + s))
+			assert_true(mean_row < rules.field_height / 2.0, "seed %d: their end, at the top" % (1 + s))
 		else:
-			assert_true(mean_row > 5.5, "seed %d: our end, at the bottom" % (1 + s))
+			assert_true(mean_row > rules.field_height / 2.0, "seed %d: our end, at the bottom" % (1 + s))
 	assert_true(n_with >= 28 and n_with <= 42, "about 70%% have one (%d of 50)" % n_with)
 	assert_true(we_attack >= n_with * 0.3 and we_attack <= n_with * 0.7, "we attack about half (%d of %d)" % [we_attack, n_with])
 	for k in 3:

@@ -1080,6 +1080,14 @@ defender mostly wins on time), the ships are nearly unreachable, and a
 holding line against a holding line is a dead fight unless there is
 ground to fight over.
 
+**The field grows** (9 Nov 2026): 22 hexes by 16, from 16 by 12, with
+the lines still five rows apart about the middle, so there is room on the
+flanks for a wheel and behind the lines for ships, bows and a retreat. The
+ships now lie three rows behind the defender's front rather than at the
+field's edge. Deployment, mud and objectives are placed relative to the
+field (`CombatRules.field_width`, `field_height`). Balance unchanged:
+pushing wins 52%, taking the objective 54%, the steady AI on your side 48%.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art
