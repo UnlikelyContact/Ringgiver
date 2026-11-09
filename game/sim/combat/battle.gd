@@ -12,6 +12,9 @@ var result := BattleResult.new()
 var log := PackedStringArray()
 var round := 0
 var fog := false
+## What the field is fought over (Objective), or null for an open fight.
+## Checked before the other end checks each round; see objective.gd.
+var objective: Objective = null
 var _leaders := {}  # side -> Warrior (the sworn leader, may be down)
 var _ai := {}  # side -> LeaderAI (absent = external input via set_shout)
 var _pending_shout := {}  # side -> Shout set from outside for this round
@@ -459,6 +462,7 @@ func run_round() -> void:
 			_pending_shout.erase(side)
 		elif _ai.has(side) and leader != null:
 			shout = (_ai[side] as LeaderAI).choose(self, side)
+			shout = _objective_nudge(side, leader, shout)
 		_last_shout[side] = shout
 		if shout == CombatTypes.Shout.TAUNT:
 			# A jeer across the field, not an order: the standing order holds.
@@ -566,7 +570,13 @@ func run_round() -> void:
 	_rounds_without_blow = 0 if any_blow else _rounds_without_blow + 1
 	_blows_ever = _blows_ever or any_blow
 
-	# 4. End check.
+	# 4. End check. The objective first: its decision stands over the rest.
+	if objective != null:
+		var taken := objective.check(self)
+		if taken >= 0:
+			result.by_objective = true
+			_finish(taken, objective.reason)
+			return
 	for side in 2:
 		var standing := 0
 		for w in active(side):
@@ -603,8 +613,35 @@ func run_round() -> void:
 			if float(standing[side]) < float(standing[1 - side]) * rules.stall_quit_fraction:
 				_finish(1 - side, "side %d has had enough and quits the field" % side)
 				return
+		if objective != null:
+			# Nobody will close again: the attacker has given up his task.
+			result.by_objective = true
+			_finish(objective.defender(), objective.time_up_reason())
+			return
 		_finish(-1, "neither side will close again; both draw off")
 		return
+
+
+## The objective's light hand on an AI leader's order (leader_ai.gd knows
+## nothing of objectives). Two overrides only: an attacker who is still
+## holding past half his time comes on; a defender who would push while
+## nobody of his is engaged holds instead, since he has no reason to come
+## to you.
+func _objective_nudge(side: int, leader: Warrior, shout: CombatTypes.Shout) -> CombatTypes.Shout:
+	if objective == null:
+		return shout
+	if objective.attacker == side and shout == CombatTypes.Shout.HOLD and round > objective.rounds / 2:
+		if standing_order(side) != CombatTypes.Shout.PUSH:
+			log.append(objective.ai_line(leader.display_name, true))
+		return CombatTypes.Shout.PUSH
+	if objective.attacker != side and shout == CombatTypes.Shout.PUSH and round <= objective.rounds:
+		for w in active(side):
+			if not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
+				return shout
+		if standing_order(side) != CombatTypes.Shout.HOLD:
+			log.append(objective.ai_line(leader.display_name, false))
+		return CombatTypes.Shout.HOLD
+	return shout
 
 
 func _push_called() -> bool:

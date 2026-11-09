@@ -566,6 +566,7 @@ func _draw() -> void:
 			var hexa := Iso.hexagon(c, 1.0)
 			draw_colored_polygon(hexa, col)
 			draw_polyline(hexa + PackedVector2Array([hexa[0]]), Palette.GROUND_LINE, 1.0)
+	draw_objective()
 	_draw_wall_slots()
 	_draw_shield_locks()
 	if player != null and player.is_active():
@@ -609,6 +610,34 @@ func _draw() -> void:
 					draw_arc(from, 21, 0, TAU, 20, col, 2.5 if w == player else 2.0)
 				_:
 					pass
+
+
+## The objective's ground, behind the tokens: each cell filled faintly and
+## outlined in its colour, and its short name once, beside the patch on the
+## side away from the fight.
+func draw_objective() -> void:
+	var obj := battle.objective
+	if obj == null or obj.cells.is_empty():
+		return
+	var col := Palette.objective_color(obj.kind)
+	var left := Vector2(INF, 0)
+	for c in obj.cells:
+		var hexa := Iso.hexagon(c, 2.0)
+		draw_colored_polygon(hexa, Color(col, 0.32))
+		draw_polyline(hexa + PackedVector2Array([hexa[0]]), Palette.OUTLINE, 5.0)
+		draw_polyline(hexa + PackedVector2Array([hexa[0]]), col, 3.0)
+		var p := Iso.to_screen(c)
+		if p.x < left.x:
+			left = p
+	var font := ThemeDB.fallback_font
+	var size := 20
+	var text := obj.short_name().to_upper()
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	# Off the patch's left end, where the lines' wings rarely stand, so the
+	# name is neither under the men nor under the HUD bars.
+	var pos := Vector2(left.x - Iso.SIZE - w, left.y + size * 0.35)
+	draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, 6, Palette.OUTLINE)
+	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 
 
 ## Faint outlines of the line's slots while the standing order is Shield Wall.

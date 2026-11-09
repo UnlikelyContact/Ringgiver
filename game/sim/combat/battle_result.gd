@@ -5,6 +5,9 @@ extends RefCounted
 
 var winner := -1  # side, or -1 for a draw / timeout
 var rounds := 0
+## True when the field's objective decided the fight (taken, or held until
+## the time ran out) rather than a line breaking or both drawing off.
+var by_objective := false
 var seed_value := 0
 ## Per side (index 0/1): counts at the end of the battle.
 var started: Array[int] = [0, 0]

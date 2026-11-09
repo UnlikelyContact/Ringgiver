@@ -15,11 +15,18 @@ const TIERS := {
 }
 
 
-## Returns {battle, ours, theirs, doctrine, offset}. With `vary` false the
+## Returns {battle, ours, theirs, doctrine, offset, objective}. With `vary` false the
 ## enemy is eight shield-bearers, centred, steady: the symmetric field the
 ## batches calibrate on. Your band is eight shield-bearers, two spearmen
 ## and two bowmen; a varied enemy brings eight to ten shields, one or two
 ## spears and one or two bows. Both form in ranks.
+##
+## A varied field usually has an objective (CombatRules.objective_chance),
+## drawn from its own fork of the seed so nothing else on the field changes
+## with it: the ford, the ships or the hall, with you the attacker or the
+## defender by even odds. Your line always stands at the bottom facing up;
+## the objective lies at the defender's end, so where it is tells who must
+## come on. The symmetric field (`vary` false) never has one.
 static func build(name: String, seed_in: int, rules: CombatRules, vary := true) -> Dictionary:
 	var t: Array = TIERS.get(name, TIERS["equal_green"])
 	var battle := Battle.new(rules, seed_in)
@@ -37,6 +44,16 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true) 
 		their_bows = frng.randi_range(1, 2)
 		offset = frng.randi_range(-3, 3)
 		doctrine = LeaderAI.Doctrine.AGGRESSIVE if frng.randf() < 0.4 else LeaderAI.Doctrine.STEADY
+	var objective: Objective = null
+	if vary:
+		var orng := SimRng.new(seed_in).fork("objective")
+		if orng.randf() < rules.objective_chance:
+			var kind: Objective.Kind = orng.randi_range(0, Objective.Kind.size() - 1) as Objective.Kind
+			var attacker := 0 if orng.randf() < rules.objective_player_attacks else 1
+			objective = Objective.new(kind, attacker, seed_in, rules)
+			# Whoever comes on came for a reason and in strength: an attacking
+			# enemy brings more shields, a defending one fewer.
+			their_shields += rules.objective_attacker_shields * (1 if attacker == 1 else -1)
 	var ours := BandFactory.make_mixed_band(brng.fork("a"), 0, 8, 2 if vary else 0, 2 if vary else 0, t[0], rules, CombatTypes.Armor.NONE, 0, 1)
 	var theirs := BandFactory.make_mixed_band(brng.fork("b"), 1, their_shields, their_spears, their_bows, t[1], rules, CombatTypes.Armor.NONE, 16, 101)
 	# A little mud so the ground has texture.
@@ -48,10 +65,18 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true) 
 	var template := FormationTemplate.ranks()
 	BandFactory.deploy_formation(battle.grid, ours, BattleGrid.from_offset(8, 8), Vector2i(0, -1), rules, template)
 	BandFactory.deploy_formation(battle.grid, theirs, BattleGrid.from_offset(8 + offset, 3), Vector2i(0, 1), rules, FormationTemplate.ranks())
+	if objective != null:
+		# The defender's end: theirs at the top (rear toward row 0), ours at
+		# the bottom (rear toward the last row).
+		if objective.attacker == 0:
+			objective.place(battle.grid, 3, -1, 8 + offset)
+		else:
+			objective.place(battle.grid, 8, 1, 8)
+		battle.objective = objective
 	battle.add_band(ours)
 	battle.add_band(theirs)
 	battle.set_ai(1, LeaderAI.new(doctrine))
 	for side in 2:
 		battle.result.started[side] = battle.active(side).size()
 	ours[0].display_name = "You"
-	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": offset}
+	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": offset, "objective": objective}

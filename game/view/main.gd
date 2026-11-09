@@ -25,13 +25,19 @@ const HUD_BOTTOM := 66.0  # the shout row
 const EDGE_MARGIN := 40.0  # world pixels kept clear round the outermost men
 
 
-## The box round every man standing: [min, max] in world pixels.
+## The box round every man standing and the field's objective, if it has
+## one: [min, max] in world pixels.
 func _men_bounds() -> Array[Vector2]:
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
 	for w in battle.warriors:
 		if w.is_active() and not w.broken:  # men running for the edge are leaving the fight
 			var p := Iso.to_screen(w.pos)
+			lo = lo.min(p)
+			hi = hi.max(p)
+	if battle.objective != null and lo.x != INF:
+		for c in battle.objective.cells:
+			var p := Iso.to_screen(c)
 			lo = lo.min(p)
 			hi = hi.max(p)
 	if lo.x == INF:

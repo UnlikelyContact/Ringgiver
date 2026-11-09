@@ -21,6 +21,19 @@ const HEARD := Color("7bbf5a")
 const BREATH := Color("9fb3c8")
 const TEXT := Color("e8e2d6")
 const DIM := Color("9a948a")
+## Objective ground: the ford in bone, the ships' strand in blue-grey, the
+## hall in gold.
+const SHIPS := Color("a3b4c9")
+
+
+static func objective_color(kind: int) -> Color:
+	match kind:
+		Objective.Kind.REACH_THE_SHIPS:
+			return SHIPS
+		Objective.Kind.THE_HALL:
+			return GOLD
+		_:
+			return BONE
 
 ## Side colours: the player's band in madder, the enemy in woad.
 static func side_color(side: int) -> Color:

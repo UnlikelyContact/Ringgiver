@@ -215,6 +215,28 @@ var taunt_cheer := 1
 var taunt_answer_chance := 0.5
 var taunt_ai_every := 3
 
+# --- Objectives (objective.gd) ----------------------------------------------
+## A varied field (Scenario.build with vary) carries an objective this often;
+## the rest are open fights. The player is the attacker in this share of them.
+var objective_chance := 0.7
+var objective_player_attacks := 0.5
+## The side that must come on brings more men: an attacking enemy has this
+## many more shield-bearers than his varied draw, a defending one this many
+## fewer (your band is always the same twelve).
+var objective_attacker_shields := 2
+## Hold the ground (the ford): the attacker must have more standing men on
+## the patch than the defender at the end of this round; otherwise the
+## defender has held it.
+var objective_ford_rounds := 16
+## Reach the ships: the attacker must get this many standing men onto the
+## strip along the defender's back edge before the end of this round.
+var objective_ships_rounds := 20
+var objective_ships_men := 4
+## The hall: the attacker must stand on at least half its cells for this many
+## rounds running before the end of this round.
+var objective_hall_rounds := 18
+var objective_hall_streak := 2
+
 # --- Post-battle (fate) ----------------------------------------------------
 ## Downed men roll 2d6 + grit against these: < fate_dead_below -> dead,
 ## < fate_maimed_below -> maimed, else recover.

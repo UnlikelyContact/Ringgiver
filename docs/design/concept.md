@@ -352,6 +352,34 @@ place across it; "straight behind" is the same step the other way. The
 enemy's leader wheels through the same stances toward your band. The HUD
 names the stance beside the wall count.
 
+**Objectives (9 Nov 2026), the answer to "the side that waits is
+favoured":** seven varied fields in ten are now fought over something
+(`sim/combat/objective.gd`), and you are the attacker or the defender by
+even odds. *The ford* is three to five hexes just before the defender's
+line: at the end of round 16 the side with more standing men on it has it,
+ties to the defender. *The ships* are a strip along the defender's back
+edge: four of the attacker's men there before round 20 wins at once. *The
+hall* is four to six hexes where the defender's rear ranks stand: the
+attacker must hold half of it two rounds running before round 18. Time
+running out, or both lines refusing to close again, gives the fight to the
+defender. The side that must come on brings two more shields (or the
+defending enemy two fewer), since men who come for something come in
+strength. Your line still stands at the bottom; the objective is drawn at
+the defender's end (bone for the ford, blue-grey for the ships, gold for
+the hall), the HUD gives the task before round 1 and its progress every
+round, and the enemy's leader is nudged by it: attacking, he stops holding
+past half his time; defending, he will not push out to you while nobody of
+his is engaged. Measured over 200 varied fields (41 open, 53 ford, 50
+ships, 56 hall), equal green: holding and taunting, the old best tactic,
+now wins none of the fights where you attack (75% defending, 73% in the
+open); pushing wins 55% attacking and 66% defending; pushing when you
+attack and holding and jeering when you defend wins 67% overall. About
+half of all fights are now decided by the objective, most of them by the
+defender holding out; the attacker actually takes it rarely (the hall 12
+times in 200, the ford 5, the ships once), and the enemy as attacker
+loses three fights in four. Open: the ships are nearly unreachable past a
+standing band, and the enemy needs a real plan for attacking, not a nudge.
+
 ### Drill, custom formations and custom shouts (decided 8 Nov 2026)
 
 The shouts and shapes above are the ones every leader knows. The rest a

@@ -186,7 +186,8 @@ func _on_round(lines: PackedStringArray) -> void:
 		if line.contains("DOWN") or line.contains("breaks") or line.contains("flees") or line.contains("===") or line.contains("drives forward"):
 			col = Palette.WARN
 			keep = true
-		elif line.contains("taunts the enemy") or line.contains("called a coward") or line.contains("answer with their feet") or line.contains("take it, and like it less") or line.contains("stands for it"):
+		elif line.contains("taunts the enemy") or line.contains("called a coward") or line.contains("answer with their feet") or line.contains("take it, and like it less") or line.contains("stands for it") \
+				or line.contains("let them come to him") or line.contains("will not leave the ford") or line.contains("makes for the ships") or line.contains("see the hall burn"):
 			col = Palette.GOLD
 			keep = true
 		elif line.contains("shouts:"):
@@ -224,7 +225,11 @@ func _result_text(r: BattleResult) -> String:
 	for line in r.log:
 		if line.begins_with("==="):
 			why = line.trim_prefix("=== ").trim_suffix(" ===").replace("side 0", "your band").replace("side 1", "their band")
-	return "%s after %d rounds.\nYours: %d of %d down, %d broke, %d fled, %d dead.\nTheirs: %d of %d down, %d broke, %d fled, %d dead." % [
+	var at := ""
+	var obj := view.battle.objective
+	if obj != null:
+		at = "You %s %s.\n" % ["came for" if obj.attacker == 0 else "stood to hold", obj.name]
+	return at + "%s after %d rounds.\nYours: %d of %d down, %d broke, %d fled, %d dead.\nTheirs: %d of %d down, %d broke, %d fled, %d dead." % [
 		(why[0].to_upper() + why.substr(1)) if why != "" else "The fight is over", r.rounds,
 		r.downed[0], r.started[0], r.broken[0], r.fled[0], r.dead[0],
 		r.downed[1], r.started[1], r.broken[1], r.fled[1], r.dead[1]]
@@ -286,13 +291,18 @@ func _refresh() -> void:
 		calls += "  they: " + CombatTypes.SHOUT_NAMES[their_order]
 	var stance: String = BattleGrid.AXIS_NAMES[view.player.wall_axis()] if view.player != null else ""
 	status.text = "Round %d  wall %d/%d%s (%s)  theirs %d/%d%s" % [b.round, mine[0], mine[1], arms_text, stance, theirs[0], theirs[1], calls]
+	if b.objective != null:
+		status.text += "  |  " + b.objective.progress(b)
 	form_btn.text = "Form: " + view.formation_name()
 	var warn := ""
 	if view.player.is_active() and b.round > 0 and view.wall_count(0)[0] < 2:
 		warn = "   (nobody stands with you)"
 	elif view.player.is_active() and b.round > 0 and view.wall_count(0)[0] < view.wall_count(0)[1]:
 		warn = "   (the wall is broken: %d of %d with you)" % [view.wall_count(0)[0], view.wall_count(0)[1]]
-	you_label.text = (("you: " + view.player_line) if view.player_line != "" else "tap a cell to step or an enemy to strike; tap yourself to act with the line") + warn
+	var hint := "tap a cell to step or an enemy to strike; tap yourself to act with the line"
+	if b.objective != null and b.round == 0:
+		hint = "you: " + b.objective.brief(0)  # the task, before you act
+	you_label.text = (("you: " + view.player_line) if view.player_line != "" else hint) + warn
 	if view.is_manual():
 		pulse_label.text = "turns "
 		next_btn.text = "Next round"

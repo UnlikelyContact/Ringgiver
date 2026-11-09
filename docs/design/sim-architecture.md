@@ -69,6 +69,41 @@ same commit and say so in your report.
 5. End check: a side with no active, unbroken men loses; `max_rounds`
    is a draw.
 
+## Objectives (`objective.gd`)
+
+An `Objective` (RefCounted) gives a field something to take or hold, so one
+side must come on. Kinds: `HOLD_GROUND` (the ford), `REACH_THE_SHIPS`,
+`THE_HALL`. Each has `attacker` (side), `cells` (it owns the list; `place`
+marks them `Terrain.FLAT`), `rounds`, `name`, `brief(side)` and
+`progress(battle)` for the HUD. `check(battle)` returns -1 or the winning
+side and sets `reason`; it counts once per round (the hall's two-round
+streak), so a second call in a round is free.
+
+- Ford: at the end of round `objective_ford_rounds` (16) the side with more
+  standing men on the cells has it; ties go to the defender.
+- Ships: `objective_ships_men` (4) standing attackers on the strip wins at
+  once; the defender wins at `objective_ships_rounds` (20).
+- Hall: the attacker on at least half the cells for `objective_hall_streak`
+  (2) rounds running; the defender wins at `objective_hall_rounds` (18).
+
+`Battle.objective` (null for an open fight) is checked first in the end
+check; a decision sets `BattleResult.by_objective`. The other end checks
+stand, except that a stall ("neither side will close again") with an
+objective goes to the defender. Two overrides in `Battle._objective_nudge`
+act on an AI leader's chosen shout without touching `LeaderAI`: an
+attacker told to hold past half the objective's rounds pushes; a defender
+told to push while none of his men is engaged holds.
+
+`Scenario.build(..., vary=true)` draws the objective from its own seed fork
+(`objective_chance` 0.7, `objective_player_attacks` 0.5) and places it at
+the defender's end: the ford on the row before his line, the ships on the
+edge row behind him, the hall on his second and third ranks' rows. The
+attacking side brings `objective_attacker_shields` (2) more shields than
+the defender's draw would give. `vary=false` never has an objective.
+`tools/batch_player.gd` reports per strategy how fights ended (objective,
+lines broke, drawn), the mix of fields and the win rate attacking,
+defending and in the open.
+
 ## Module A — exchanges and fate (`attack.gd`, `fate.gd`)
 
 Owner builds: `sim/combat/attack.gd` (`class_name MeleeExchange`),

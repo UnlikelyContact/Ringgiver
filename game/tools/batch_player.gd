@@ -1,6 +1,9 @@
 extends SceneTree
 ## Plays the prototype scenario (player side 0 vs STEADY AI) with scripted
 ## shout strategies and reports win rates. Answers "can the player win?".
+## Varied fields carry objectives (Scenario, Objective): each strategy also
+## reports how its fights ended (objective, lines breaking, drawn) and its
+## win rate attacking, defending and in open fights.
 ##
 ##   godot --headless --path game -s tools/batch_player.gd -- [n] [seed] [scenario]
 
@@ -13,7 +16,8 @@ func _init() -> void:
 	var seed_in := int(args[1]) if args.size() > 1 else 1
 	var scenario := args[2] if args.size() > 2 else "equal_green"
 	var strats := ["none", "wall_push", "wall_hold", "wall_hold_then_push", "push_only", "break_them", "wall_hold_taunt", "wall_advance", "wall_then_nothing", "wall_every_round", "hold_only",
-		"wall_push_leader_attacks", "wall_push_leader_steps", "ai_steady", "ai_aggressive"]
+		"wall_push_leader_attacks", "wall_push_leader_steps", "ai_steady", "ai_aggressive",
+		"attack_objective", "attack_objective_taunt"]
 	if args.size() > 3:
 		strats = [args[3]]
 	for strat in strats:
@@ -40,8 +44,14 @@ func run(strat: String, n: int, seed_in: int, scenario: String, per_fight := fal
 	var their_lost := 0
 	var hesitations := 0
 	var reasons := {}
+	var ends := {"objective": 0, "lines": 0, "drawn": 0}
+	var kinds := {"open": 0, "ford": 0, "ships": 0, "hall": 0}
+	# role -> [fights, wins]: we attack, we defend, open field.
+	var by_role := {"attack": [0, 0], "defend": [0, 0], "open": [0, 0]}
 	for i in n:
 		var b := build(seed_in + i, scenario, rules)
+		var obj := b.objective
+		var we_attack := obj != null and obj.attacker == 0
 		if strat == "ai_steady":
 			b.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.STEADY))
 		elif strat == "ai_aggressive":
@@ -68,6 +78,19 @@ func run(strat: String, n: int, seed_in: int, scenario: String, per_fight := fal
 				"wall_hold_taunt":
 					if r == 1:
 						b.set_shout(0, S.SHIELD_WALL)
+					elif r % 3 == 0 and not in_contact(b):
+						b.set_shout(0, S.TAUNT)
+					else:
+						b.set_shout(0, S.HOLD)
+				"attack_objective", "attack_objective_taunt":
+					# Shield wall, then: attacking, push every round; defending,
+					# hold and jeer every third round. In an open fight the
+					# first pushes and the second holds and jeers.
+					var coming := we_attack or (obj == null and strat == "attack_objective")
+					if r == 1:
+						b.set_shout(0, S.SHIELD_WALL)
+					elif coming:
+						b.set_shout(0, S.PUSH)
 					elif r % 3 == 0 and not in_contact(b):
 						b.set_shout(0, S.TAUNT)
 					else:
@@ -117,6 +140,17 @@ func run(strat: String, n: int, seed_in: int, scenario: String, per_fight := fal
 			wins[2] += 1
 		else:
 			wins[res.winner] += 1
+		if res.by_objective:
+			ends.objective += 1
+		elif res.winner < 0:
+			ends.drawn += 1
+		else:
+			ends.lines += 1
+		kinds[obj.short_name() if obj != null else "open"] += 1
+		var role := "open" if obj == null else ("attack" if we_attack else "defend")
+		by_role[role][0] += 1
+		if res.winner == 0:
+			by_role[role][1] += 1
 		rounds += b.round
 		our_lost += b.result.started[0] - b.active(0).size()
 		their_lost += b.result.started[1] - b.active(1).size()
@@ -129,6 +163,12 @@ func run(strat: String, n: int, seed_in: int, scenario: String, per_fight := fal
 	print("%-20s %s: win %5.1f%%  lose %5.1f%%  draw %4.1f%%  rounds %4.1f  our lost %.1f  their lost %.1f  our hesitations/fight %.1f" % [
 		strat, scenario, 100.0 * wins[0] / n, 100.0 * wins[1] / n, 100.0 * wins[2] / n, float(rounds) / n,
 		float(our_lost) / n, float(their_lost) / n, float(hesitations) / n])
+	var role_text := ""
+	for role in by_role:
+		var f: int = by_role[role][0]
+		role_text += "  %s %d: win %.0f%%" % [role, f, 100.0 * by_role[role][1] / maxi(1, f)]
+	print("      ended: objective %d, lines broke %d, drawn %d | fields: open %d, ford %d, ships %d, hall %d |%s" % [
+		ends.objective, ends.lines, ends.drawn, kinds.open, kinds.ford, kinds.ships, kinds.hall, role_text])
 	if per_fight or OS.get_cmdline_user_args().size() > 5:
 		for why in reasons:
 			print("      %3d  %s" % [reasons[why], why])
