@@ -198,6 +198,44 @@ with spears to throw halts one round within `javelin_range` and throws
 Bowmen shoot under any order but Break them, and step away from an enemy
 at arm's length (`Decision._step_away`).
 
+## Enemy doctrine (`leader_ai.gd`)
+
+`LeaderAI.choose(battle, side)` gives one shout a round under a doctrine:
+STEADY, AGGRESSIVE, RECKLESS or CUNNING. All but RECKLESS mind the wall
+first, every round, before choosing the shout:
+
+- *Wheel toward the threat.* `threat_men` is the nearest
+  `ai_threat_fraction` (a third) of the enemy wall (or of their standing
+  men when they have no wall of two), measured from our wall;
+  `threat_point` is its centre weighted toward the nearest. When that is
+  `ai_threat_wheel_min_steps` stances or more off the front the leader
+  wheels one stance a round, two when `outflanked` (their nearest man is
+  behind the plane of our line). No cooldown; never while any of the wall
+  is engaged.
+- *Refuse the flank* (`refuse_flanks`). An enemy wall member within
+  `ai_refuse_range` of an end of our wall, level with it beyond the end or
+  behind the line there, makes up to `ai_refuse_men` men at that end hinge
+  back one facing: the end man at once, each man inside only once the man
+  outside him has hinged, and only where he stays linked to both
+  neighbours, so the chain never breaks. The battle's `_dress_line` turns
+  them back once the threat is gone. Logged once a spell.
+- *Ranks against ranks.* When both leaders' formations are ranked
+  (`ranked`), STEADY and CUNNING hold and taunt instead of pushing after
+  `ai_patience_rounds`, and do not answer a taunt; they push when their
+  weighted strength (`strength`: shield 1.0, spear 0.9, bow 0.6, standing
+  men) is `ai_push_advantage` times the enemy's, when the enemy's mean
+  morale (`mean_morale`) is below `ai_push_when_wavering`, or once the
+  lines are engaged. AGGRESSIVE pushes regardless.
+- *CUNNING* also reads a wall marching across his front: when the enemy's
+  nearest man is more than 45 degrees off his front and their leader is
+  moving (or under Push!), he wheels toward a point `ai_cunning_lead` hexes
+  along their wall facing from the threat, as soon as that is a stance off.
+
+`Scenario.build` with `vary` draws STEADY or AGGRESSIVE as before, then
+makes two fights in five CUNNING. `tools/batch_flank.gd` plays the
+playtester's tactics (wheel and come at a flank; hold and taunt; push
+straight) against each doctrine; `tools/replay_flank.gd` prints one.
+
 ## Module B — morale and the push (`morale.gd`, `push.gd`)
 
 Owner builds: `sim/combat/morale.gd` (`class_name Morale`),

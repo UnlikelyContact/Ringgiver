@@ -44,6 +44,8 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true) 
 		their_bows = frng.randi_range(1, 2)
 		offset = frng.randi_range(-3, 3)
 		doctrine = LeaderAI.Doctrine.AGGRESSIVE if frng.randf() < 0.4 else LeaderAI.Doctrine.STEADY
+		if frng.randf() < 0.4:
+			doctrine = LeaderAI.Doctrine.CUNNING  # two fights in five: he reads your wall
 	var objective: Objective = null
 	if vary:
 		var orng := SimRng.new(seed_in).fork("objective")
