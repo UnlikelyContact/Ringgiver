@@ -37,6 +37,8 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true) 
 		their_bows = frng.randi_range(1, 2)
 		offset = frng.randi_range(-3, 3)
 		doctrine = LeaderAI.Doctrine.AGGRESSIVE if frng.randf() < 0.4 else LeaderAI.Doctrine.STEADY
+		if frng.randf() < 0.4:
+			doctrine = LeaderAI.Doctrine.CUNNING  # two fights in five: he reads your wall
 	var ours := BandFactory.make_mixed_band(brng.fork("a"), 0, 8, 2 if vary else 0, 2 if vary else 0, t[0], rules, CombatTypes.Armor.NONE, 0, 1)
 	var theirs := BandFactory.make_mixed_band(brng.fork("b"), 1, their_shields, their_spears, their_bows, t[1], rules, CombatTypes.Armor.NONE, 16, 101)
 	# A little mud so the ground has texture.

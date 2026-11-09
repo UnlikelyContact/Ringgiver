@@ -214,6 +214,32 @@ var taunt_cheer := 1
 ## every taunt_ai_every rounds while nobody is engaged.
 var taunt_answer_chance := 0.5
 var taunt_ai_every := 3
+## The AI wheels toward the threat, not the whole band: the nearest
+## fraction of the enemy's standing men (or of their wall, weighted toward
+## its nearer men), measured from his own wall. He wheels once that is this
+## many stances (BattleGrid.STATES, 45 degrees each) off his front, one a
+## round, two a round when their nearest man is already behind the plane of
+## his line. Never while any of his wall is engaged.
+var ai_threat_fraction := 0.34
+var ai_threat_wheel_min_steps := 2
+## Refusing the flank: an enemy wall member within this many hexes of an
+## end of the AI's wall, beside it or behind the line there, makes up to
+## `ai_refuse_men` men at that end hinge back one facing toward him.
+var ai_refuse_range := 2
+var ai_refuse_men := 3
+## Weights for counting a side's strength (standing men only).
+var ai_strength_shield := 1.0
+var ai_strength_spear := 0.9
+var ai_strength_bow := 0.6
+## Ranks against ranks: a steady or cunning AI holds and taunts rather than
+## walk into a ranked enemy, and comes on only when his strength is this
+## ratio of theirs or better, when the mean morale of their standing men
+## has fallen below `ai_push_when_wavering`, or once the lines are engaged.
+var ai_push_advantage := 1.2
+var ai_push_when_wavering := 5.0
+## A cunning AI reckons a wall marching across his front will be this many
+## hexes further along its own facing, and wheels toward there.
+var ai_cunning_lead := 3.0
 
 # --- Post-battle (fate) ----------------------------------------------------
 ## Downed men roll 2d6 + grit against these: < fate_dead_below -> dead,
