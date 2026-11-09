@@ -47,5 +47,6 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          timeout: 900000  # Pages file sync has stalled past the 10-minute default before
+        # Pages file sync has stalled before; the action's maximum wait is the
+        # 10-minute default, and a stalled deployment blocks the next until
+        # GitHub clears it, so a failed deploy is retried by the next push.
