@@ -191,12 +191,14 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 			continue
 		var target: Vector2i = w.pos + step
 		if back and not grid.in_bounds(target):
-			# Falling back with the edge of the field at their backs: the wall retreats off it.
-			for m in members:
-				m.fled = true
-				grid.remove(m)
-				result.fled[side] += 1
-			log.append("%s's wall falls back off the field, %d men" % [leader.display_name, members.size()])
+			# Ordered back with the edge of the field at their backs, the line
+			# halts there: an ordered fall back is a manoeuvre, not a rout.
+			# (Being driven onto the edge by a push is another matter: see
+			# Push._shove, where a pressed line with nowhere to go is driven off.)
+			if not _contact_logged.get(side, false):
+				log.append("%s's line can give no more ground: the field's edge is at its back" % leader.display_name)
+				_contact_logged[side] = true
+			_hold_wall(members)
 			return
 		var occ := grid.occupant(target)
 		if back and occ != null and not members.has(occ) and occ.side == side and occ.is_active() and not occ.broken:
@@ -593,14 +595,18 @@ func run_round() -> void:
 		if standing == 0:
 			_finish(1 - side, "side %d has no one left standing" % side)
 			return
+	# An AI leader only calls "fall back" when he is beaten, so his falling
+	# back is his leaving. A player's "fall back" is a manoeuvre: pull back,
+	# re-form, come again. For him the fight ends only by the other rules
+	# (nobody standing, the field's edge, the objective's clock, the stall).
 	for side in 2:
-		if last_shout(side) == CombatTypes.Shout.FALL_BACK and _withdrawn(side):
+		if _ai.has(side) and last_shout(side) == CombatTypes.Shout.FALL_BACK and _withdrawn(side):
 			_finish(1 - side, "side %d draws off and leaves the field" % side)
 			return
 	if _rounds_without_blow >= rules.retreat_stall_rounds:
 		var retreating := []
 		for side in 2:
-			if standing_order(side) == CombatTypes.Shout.FALL_BACK:
+			if _ai.has(side) and standing_order(side) == CombatTypes.Shout.FALL_BACK:
 				retreating.append(side)
 		if retreating.size() == 1:
 			_finish(1 - retreating[0], "side %d keeps giving ground and quits the field" % retreating[0])

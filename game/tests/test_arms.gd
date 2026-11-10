@@ -317,3 +317,47 @@ func test_a_wall_can_stand_eight_ways_and_slant_lines_are_straight() -> void:
 	var toward := BattleGrid.state_toward(Vector2(100, 0))
 	assert_eq(toward[0], BattleGrid.Axis.PLUMB)
 	assert_eq(toward[1], Vector2i(1, 0))
+
+
+func test_a_commanded_fall_back_is_a_manoeuvre_not_a_defeat() -> void:
+	var rules := CombatRules.new()
+	var b := Battle.new(rules, 13)
+	var ours := _band(rules, 0, 6, 0, 0, 1)
+	var theirs := _band(rules, 1, 6, 0, 0, 101)
+	for w in ours + theirs:
+		w.javelins = 0
+		w.personality.clear()
+	BandFactory.deploy_formation(b.grid, ours, BattleGrid.from_offset(8, 9), NORTH, rules, FormationTemplate.line())
+	BandFactory.deploy_formation(b.grid, theirs, BattleGrid.from_offset(8, 3), SOUTH, rules, FormationTemplate.line())
+	b.add_band(ours)
+	b.add_band(theirs)
+	b.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY))
+	# Far from the enemy, the player calls fall back and keeps it up: not a defeat.
+	b.set_shout(0, CombatTypes.Shout.FALL_BACK)
+	b.run_round()
+	assert_true(not b.is_over(), "falling back out of reach does not lose the fight")
+	for r in rules.retreat_stall_rounds + 1:
+		b.run_round()
+	assert_true(not b.is_over(), "nor does keeping it up for a while")
+	# He re-forms and comes on: the fight goes on as normal.
+	b.set_shout(0, CombatTypes.Shout.SHIELD_WALL)
+	b.run_round()
+	b.set_shout(0, CombatTypes.Shout.PUSH)
+	for r in 3:
+		b.run_round()
+	assert_true(b.active(0).size() > 0, "his band is still on the field")
+	# An AI leader who falls back, far from everyone, has left: that still ends it.
+	var b2 := Battle.new(rules, 14)
+	var a2 := _band(rules, 0, 6, 0, 0, 1)
+	var t2 := _band(rules, 1, 6, 0, 0, 101)
+	for w in a2 + t2:
+		w.javelins = 0
+	BandFactory.deploy_formation(b2.grid, a2, BattleGrid.from_offset(8, 9), NORTH, rules, FormationTemplate.line())
+	BandFactory.deploy_formation(b2.grid, t2, BattleGrid.from_offset(8, 3), SOUTH, rules, FormationTemplate.line())
+	b2.add_band(a2)
+	b2.add_band(t2)
+	b2.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY))
+	b2.set_shout(0, CombatTypes.Shout.HOLD)
+	b2.set_shout(1, CombatTypes.Shout.FALL_BACK)  # overrides his AI for this round
+	b2.run_round()
+	assert_true(b2.is_over() and b2.result.winner == 0, "an AI side that draws off has lost")

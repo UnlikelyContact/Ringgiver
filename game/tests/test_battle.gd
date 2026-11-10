@@ -189,7 +189,7 @@ func test_a_wall_falls_back_as_one_except_a_man_whose_nerve_goes() -> void:
 		assert_true(stepped_back == 0 or stepped_back == ours.size(), "the wall hesitated or moved whole")
 
 
-func test_falling_back_costs_heart_and_the_edge_means_retreat() -> void:
+func test_falling_back_keeps_heart_and_halts_at_the_edge() -> void:
 	var parts := _two_walls(8)
 	var b: Battle = parts[0]
 	var ours: Array[Warrior] = parts[1]
@@ -211,15 +211,21 @@ func test_falling_back_costs_heart_and_the_edge_means_retreat() -> void:
 		for w in ours:
 			if w.is_active() and not w.is_leader:
 				assert_eq(w.morale, 8 + b.rules.fall_back_morale, "%s keeps heart on an ordered fall back" % w.display_name)
-	# Keep falling back: the wall starts on row 9 of 12, so the edge comes soon.
+	# Keep falling back: the wall starts on row 9 of 12, so the edge comes
+	# soon. Ordered back, the line halts there rather than leaving the field:
+	# a commanded fall back is a manoeuvre, not a rout.
 	var rounds := 0
 	while not b.is_over() and rounds < 8:
 		b.set_shout(0, CombatTypes.Shout.FALL_BACK)
 		b.run_round()
 		rounds += 1
-	var off := false
+	var halted := false
 	for line in b.log:
-		if line.contains("falls back off the field"):
-			off = true
-	assert_true(off, "a wall falling back into the edge retreats off the field")
-	assert_true(b.result.fled[0] >= 2, "the men who left are counted as fled: %d" % b.result.fled[0])
+		if line.contains("can give no more ground"):
+			halted = true
+	assert_true(halted, "a wall ordered back into the edge halts there")
+	assert_eq(b.result.fled[0], 0, "nobody left the field")
+	assert_true(not b.is_over(), "and the fight is not over for it")
+	for w in ours:
+		if w.is_active():
+			assert_true(b.grid.in_bounds(w.pos), "%s still stands on the field" % w.display_name)

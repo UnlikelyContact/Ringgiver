@@ -1149,6 +1149,16 @@ steps out to contest the crossing (the objective nudge keeps him home);
 the HUD does not yet show the band size; and a wall split by a tree takes
 a round to find itself again.
 
+**A commanded fall back is a manoeuvre (10 Nov 2026).** A player's
+"fall back" used to end the fight as a defeat once the line was out of
+reach for a few rounds, and a line ordered back into the field's edge
+walked off it and counted as fled. Both rules were written for the AI
+leader, who only calls "fall back" when he is beaten. Now they apply to
+AI-led sides only. The player's line pulls back, re-forms, and comes
+again; its fight ends only by the other rules (nobody standing, the
+objective's clock, the stall). Ordered back into the edge it halts there
+and the log says so once ("can give no more ground").
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art
