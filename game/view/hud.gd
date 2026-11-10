@@ -303,6 +303,9 @@ func _refresh() -> void:
 	var hint := "tap a cell to step or an enemy to strike; tap yourself to act with the line"
 	if b.objective != null and b.round == 0:
 		hint = "you: " + b.objective.brief(0)  # the task, before you act
+	var ground: String = main.get("field_title") if main != null and main.get("field_title") != null else ""
+	if ground != "" and b.round == 0:
+		hint = "%s. %s" % [ground, hint]  # the ground, before you act
 	you_label.text = (("you: " + view.player_line) if view.player_line != "" else hint) + warn
 	if view.is_manual():
 		pulse_label.text = "turns "

@@ -7,18 +7,24 @@ extends RefCounted
 ## lines can still break first: Battle checks the objective before its own
 ## end checks each round, and they stay as they were.
 ##
-##   HOLD_GROUND     the ford: a patch just before the defender's line. At the
-##                   end of round `rounds` the side with more standing men on
-##                   it has it; ties (and an empty ford) go to the defender.
-##   REACH_THE_SHIPS the ships: a strip along the defender's back edge. The
+##   HOLD_GROUND     the ford: a stream across the field just before the
+##                   defender's line, WATER but for its crossings (fords, and
+##                   sometimes a bridge); the crossing cells are the
+##                   objective. At the end of round `rounds` the side with
+##                   more standing men on them has it; ties (and nobody on
+##                   them) go to the defender.
+##   REACH_THE_SHIPS the ships: a strip behind the defender's line. The
 ##                   attacker wins the moment `ships_men` of his standing men
 ##                   are on it; the defender wins if `rounds` pass first.
-##   THE_HALL        the hall: a cluster where the defender's rear ranks stand.
-##                   The attacker wins once he has stood on at least half its
-##                   cells for `hall_streak` rounds running; else the defender.
+##   THE_HALL        the hall: a building behind the defender's ranks, its
+##                   walls BUILDING and its doors (DOOR) toward the fight;
+##                   the objective is the doors and the floor inside. The
+##                   attacker wins once he has stood on at least half of them
+##                   for `hall_streak` rounds running; else the defender.
 ##
-## Built from a seed and a kind; `place` marks its cells on a grid (flat
-## ground: no mud on the ford or in the hall). Deterministic like the rest.
+## Built from a seed and a kind; `place` draws its ground on a grid and
+## lists every cell it drew in `features` (Field keeps its own features off
+## them). Deterministic like the rest.
 
 enum Kind { HOLD_GROUND, REACH_THE_SHIPS, THE_HALL }
 
@@ -28,6 +34,9 @@ const SHORT := ["ford", "ships", "hall"]
 var kind: Kind
 var attacker := 0
 var cells: Array[Vector2i] = []
+## Every cell `place` drew, the objective's own and its ground round it
+## (the stream's water, the hall's walls).
+var features: Array[Vector2i] = []
 var rounds := 16
 var name := ""
 var ships_men := 4
@@ -59,6 +68,14 @@ func _init(p_kind: Kind, p_attacker: int, seed_in: int, rules: CombatRules = nul
 			rounds = r.objective_hall_rounds
 
 
+## Sizes the ships' task to a band of `band` men: a share of it
+## (`objective_ships_fraction`, rounded up), never fewer than
+## `objective_ships_min_men`. The ford and the hall scale already: the one
+## is a count against the defender, the other half its cells.
+func size_for_band(band: int, rules: CombatRules) -> void:
+	ships_men = maxi(rules.objective_ships_min_men, ceili(band * rules.objective_ships_fraction - 0.0001))
+
+
 func defender() -> int:
 	return 1 - attacker
 
@@ -67,21 +84,31 @@ func short_name() -> String:
 	return SHORT[kind]
 
 
-## Marks the objective's cells on `grid`. `front_row` is the defender's front
-## line (offset row), `back` is +1 or -1, the way his rear lies (toward his
-## edge of the map), `centre_col` the column his leader stands on. The patch
-## is drawn from the seed: the ford is three to five hexes across the row in
-## front of his line, the ships a strip of eight to ten on the edge row behind
-## him, the hall four to six where his rear ranks stand.
+## Draws the objective on `grid`. `front_row` is the defender's front line
+## (offset row), `back` is +1 or -1, the way his rear lies (toward his edge
+## of the map), `centre_col` the column his leader stands on. Drawn from the
+## seed:
+##
+## - the ford: a stream across the whole field on the second row in front
+##   of his line (a row of dry bank between), crossed by one ford four hexes
+##   wide or two fords two wide, and two times in five a one-hex bridge out
+##   on a flank: four or five crossing hexes, which are the objective. They
+##   lie between the lines, so whoever wants the ford must come to it.
+## - the ships: a strip of eight to ten hexes `ships_depth` rows behind his
+##   front (or on his edge row, if that is nearer).
+## - the hall: one or two hexes of floor four rows behind his front (or on
+##   his edge row), ringed by its walls; one or two of the ring's hexes on
+##   the side toward the fight are doors. Four to six walls, and the doors
+##   and floor are the objective. On the smallest fields its front wall
+##   stands on his third rank's row; it is drawn before anyone deploys, so
+##   the men who would have stood there stand elsewhere.
 func place(grid: BattleGrid, front_row: int, back: int, centre_col: int) -> void:
 	var r := SimRng.new(_seed).fork("objective-cells")
-	var offs: Array[Vector2i] = []  # (column offset, row offset from front, + toward the back)
+	cells.clear()
+	features.clear()
 	match kind:
 		Kind.HOLD_GROUND:
-			var n := r.randi_range(3, 5)
-			var left := -(n / 2)
-			for i in n:
-				offs.append(Vector2i(left + i, -1))
+			_place_ford(grid, r, clampi(front_row - 2 * back, 0, grid.height - 1), centre_col)
 		Kind.REACH_THE_SHIPS:
 			var n := r.randi_range(8, 10)
 			var left := -(n / 2)
@@ -90,24 +117,105 @@ func place(grid: BattleGrid, front_row: int, back: int, centre_col: int) -> void
 			var edge_row := (grid.height - 1) if back > 0 else 0
 			var depth := mini(ships_depth, absi(edge_row - front_row))
 			for i in n:
-				offs.append(Vector2i(left + i, depth))
+				var col := clampi(centre_col + left + i, 0, grid.width - 1)
+				_mark(grid, BattleGrid.from_offset(col, front_row + depth * back), CombatTypes.Terrain.FLAT, true)
 		Kind.THE_HALL:
-			var n := r.randi_range(4, 6)
-			# Two rows, the second and third ranks' ground, widest at the back.
-			var back_n := (n + 1) / 2
-			var front_n := n - back_n
-			for i in back_n:
-				offs.append(Vector2i(-(back_n / 2) + i, 2))
-			for i in front_n:
-				offs.append(Vector2i(-(front_n / 2) + i, 1))
-	cells.clear()
-	for o in offs:
-		var col := clampi(centre_col + o.x, 0, grid.width - 1)
-		var row := clampi(front_row + o.y * back, 0, grid.height - 1)
-		var c := BattleGrid.from_offset(col, row)
-		if not cells.has(c):
-			cells.append(c)
-			grid.set_terrain(c, CombatTypes.Terrain.FLAT)
+			_place_hall(grid, r, front_row, back, centre_col)
+
+
+func _mark(grid: BattleGrid, c: Vector2i, t: CombatTypes.Terrain, is_objective: bool) -> void:
+	if not grid.in_bounds(c) or features.has(c):
+		return
+	grid.set_terrain(c, t)
+	features.append(c)
+	if is_objective:
+		cells.append(c)
+
+
+func _place_ford(grid: BattleGrid, r: SimRng, row: int, centre_col: int) -> void:
+	var crossing := stream_crossings(r, grid.width, centre_col)
+	var cols := crossing.keys()
+	cols.sort()
+	for col in cols:
+		_mark(grid, BattleGrid.from_offset(col, row), crossing[col], true)
+	for col in grid.width:
+		if not crossing.has(col):
+			_mark(grid, BattleGrid.from_offset(col, row), CombatTypes.Terrain.WATER, false)
+
+
+## Where a stream across a field `width` wide can be crossed, as column ->
+## Terrain (FORD or BRIDGE): one ford four hexes wide about `centre_col`, or
+## two fords two wide either side of it, and two times in five a one-hex
+## bridge out on a flank. Every other column of the stream is WATER.
+static func stream_crossings(r: SimRng, width: int, centre_col: int) -> Dictionary:
+	var crossing := {}
+	if r.randf() < 0.5:
+		var start := clampi(centre_col - 2 + r.randi_range(-1, 1), 0, width - 4)
+		for i in 4:
+			crossing[start + i] = CombatTypes.Terrain.FORD
+	else:
+		var a := clampi(centre_col - r.randi_range(3, 5), 0, width - 2)
+		var b := clampi(centre_col + r.randi_range(2, 4), a + 3, width - 2)
+		for col in [a, a + 1, b, b + 1]:
+			crossing[col] = CombatTypes.Terrain.FORD
+	if r.randf() < 0.4:
+		var sgn := -1 if r.randf() < 0.5 else 1
+		var col := clampi(centre_col + sgn * r.randi_range(6, 8), 0, width - 1)
+		if not crossing.has(col) and not crossing.has(col - 1) and not crossing.has(col + 1):
+			crossing[col] = CombatTypes.Terrain.BRIDGE
+	return crossing
+
+
+func _place_hall(grid: BattleGrid, r: SimRng, front_row: int, back: int, centre_col: int) -> void:
+	var edge_row := (grid.height - 1) if back > 0 else 0
+	var floor_row := front_row + mini(4, absi(edge_row - front_row)) * back
+	var shape := hall_shape(grid, r, floor_row, back, centre_col)
+	for c in shape.doors:
+		_mark(grid, c, CombatTypes.Terrain.DOOR, true)
+	for c in shape.floor:
+		_mark(grid, c, CombatTypes.Terrain.FLAT, true)
+	for c in shape.walls:
+		_mark(grid, c, CombatTypes.Terrain.BUILDING, false)
+
+
+## A hall's ground: one or two hexes of `floor` on `floor_row` about
+## `centre_col`, ringed by its `walls`, with one or two `doors` in the ring
+## on the row toward the fight (`back` is +1 when the hall's rear is down
+## the field). One floor hex has two hexes of its ring toward the fight and
+## one or two doors; two have three and two doors: four to six walls on an
+## open field, fewer where the ring runs off the edge.
+static func hall_shape(grid: BattleGrid, r: SimRng, floor_row: int, back: int, centre_col: int) -> Dictionary:
+	var m := r.randi_range(1, 2)
+	var floor_cells: Array[Vector2i] = []
+	for i in m:
+		floor_cells.append(BattleGrid.from_offset(clampi(centre_col - (m - 1) / 2 + i, 0, grid.width - 1), floor_row))
+	var ring: Array[Vector2i] = []
+	var front_ring: Array[Vector2i] = []
+	for f in floor_cells:
+		for d in BattleGrid.DIRS:
+			var c: Vector2i = f + d
+			if floor_cells.has(c) or ring.has(c) or not grid.in_bounds(c):
+				continue
+			ring.append(c)
+			if c.y == floor_row - back:
+				front_ring.append(c)
+	front_ring.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x)
+	var doors: Array[Vector2i] = []
+	var n_doors := 2 if m == 2 else r.randi_range(1, 2)
+	if front_ring.size() <= n_doors:
+		doors = front_ring.duplicate()
+	elif n_doors == 1:
+		doors.append(front_ring[r.randi_range(0, front_ring.size() - 1)])
+	else:
+		var skip := r.randi_range(0, front_ring.size() - 1)
+		for i in front_ring.size():
+			if i != skip and doors.size() < n_doors:
+				doors.append(front_ring[i])
+	var walls: Array[Vector2i] = []
+	for c in ring:
+		if not doors.has(c):
+			walls.append(c)
+	return {"floor": floor_cells, "doors": doors, "walls": walls}
 
 
 func has_cell(c: Vector2i) -> bool:

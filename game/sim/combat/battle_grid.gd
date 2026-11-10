@@ -64,8 +64,29 @@ func occupant(c: Vector2i) -> Warrior:
 	return _occupants.get(c, null)
 
 
+## Ground nobody can stand on: water too deep to wade, trees, rocks,
+## fences and the walls of a building. Every movement choice goes through
+## `is_free`, so these are simply never chosen; nobody stands in them, so
+## nobody is struck or flanked from them either.
+static func blocks(t: CombatTypes.Terrain) -> bool:
+	return t == CombatTypes.Terrain.WATER or t == CombatTypes.Terrain.TREE or t == CombatTypes.Terrain.ROCK \
+			or t == CombatTypes.Terrain.FENCE or t == CombatTypes.Terrain.BUILDING
+
+
+## On the map and ground a man can stand on, whoever stands there now.
+func is_passable(c: Vector2i) -> bool:
+	return in_bounds(c) and not blocks(terrain_at(c))
+
+
 func is_free(c: Vector2i) -> bool:
-	return in_bounds(c) and not _occupants.has(c) and terrain_at(c) != CombatTypes.Terrain.WATER
+	return is_passable(c) and not _occupants.has(c)
+
+
+## A man standing in the ford cannot set his feet: his shield locks with
+## nobody's (`line_neighbors`). He is still in the wall (`chain`), so the
+## line crosses together, but it crosses unlocked.
+func in_ford(c: Vector2i) -> bool:
+	return terrain_at(c) == CombatTypes.Terrain.FORD
 
 
 func place(w: Warrior, c: Vector2i) -> bool:
@@ -352,11 +373,16 @@ static func facing_steps(a: Vector2i, b: Vector2i) -> int:
 ## Friends at w's shoulders: active men linked to him in his line (`linked`),
 ## whose shields lock with his. The same rule builds the wall, groups the
 ## push and draws the bars, so what is counted is what is drawn and fought.
+## Nobody locks with a man standing in a ford, nor he with them (`in_ford`):
+## the lock bonus, the brace against a shove, the push's line and the
+## morale of a man alone all read this, so the stream breaks them all.
 func line_neighbors(w: Warrior, max_turn := DEFAULT_LINK_TURN) -> Array[Warrior]:
 	var out: Array[Warrior] = []
+	if in_ford(w.pos):
+		return out
 	for c in neighbors(w.pos):
 		var n := occupant(c)
-		if n != null and n.is_active() and linked(w, n, max_turn):
+		if n != null and n.is_active() and not in_ford(c) and linked(w, n, max_turn):
 			out.append(n)
 	return out
 
@@ -418,7 +444,8 @@ func describe() -> String:
 			var c := from_offset(col, row)
 			var w := occupant(c)
 			if w == null:
-				s += ". " if terrain_at(c) == CombatTypes.Terrain.FLAT else "~ "
+				var t := terrain_at(c)
+				s += ". " if t == CombatTypes.Terrain.FLAT else ("# " if blocks(t) else "~ ")
 			elif w.is_down():
 				s += "x "
 			else:

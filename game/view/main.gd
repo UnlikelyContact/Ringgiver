@@ -11,6 +11,13 @@ var scenario := "equal_green"
 var seed_in := 7
 ## Tools set this so a run is repeatable; a player gets a fresh field each load.
 var fixed_seed := false
+## Your band's strength in men; the enemy and the field are sized to it.
+var band := 12
+## Forces the field's template ("meadow", "river", ...); empty: the seed's.
+var template := ""
+## The field's template name as built ("meadow", ...), for the HUD.
+var field_name := ""
+var field_title := ""
 
 
 func _ready() -> void:
@@ -79,8 +86,10 @@ func start(p_scenario: String, p_seed: int) -> void:
 	for c in get_children():
 		c.queue_free()
 	var rules := CombatRules.new()
-	var field := Scenario.build(p_scenario, p_seed, rules)
+	var field := Scenario.build(p_scenario, p_seed, rules, true, band, template)
 	battle = field.battle
+	field_name = field.field_name
+	field_title = (field.field as Field).title() if field.field != null else ""
 	var ours: Array[Warrior] = field.ours
 	player = ours[0]
 
