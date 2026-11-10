@@ -70,8 +70,10 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		if is_flanked(grid, w):
 			delta += rules.morale_flanked
 		# Heart comes from the man at your shoulder: no shield-friend beside
-		# him in his line, and a man feels alone whoever is milling about.
-		if grid.line_neighbors(w).is_empty():
+		# him in his line, and a man feels alone whoever is milling about. A
+		# friend straight ahead or at his back is company too: a file on the
+		# march, or a second rank, is not a mob.
+		if grid.line_neighbors(w).is_empty() and not in_file(grid, w):
 			delta += rules.morale_alone
 		_shift(w, delta)
 
@@ -142,6 +144,16 @@ static func is_flanked(grid: BattleGrid, w: Warrior) -> bool:
 			continue
 		var arc := BattleGrid.arc_of(w, e.pos)
 		if arc == CombatTypes.Arc.RIGHT or arc == CombatTypes.Arc.REAR:
+			return true
+	return false
+
+
+## Whether a friend stands directly ahead of or behind w: the file he
+## marches in, or the rank before or behind his.
+static func in_file(grid: BattleGrid, w: Warrior) -> bool:
+	for c in [w.pos + w.facing, w.pos - w.facing]:
+		var f := grid.occupant(c)
+		if f != null and f.side == w.side and f.is_active() and not f.broken:
 			return true
 	return false
 

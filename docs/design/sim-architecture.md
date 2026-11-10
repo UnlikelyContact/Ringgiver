@@ -133,6 +133,33 @@ fight (field, objective, role, enemy, doctrine, outcome) and takes
 and to try tunables, and `log` for the whole log with the field drawn
 after every round.
 
+## The ambush (`Scenario.build_ambush`, 10 Nov 2026)
+
+`Scenario.build("ambush", seed, rules, _, band)` is the fight you chose
+(concept.md, "Picking your fights"). No objective, no Field template: the
+enemy, drawn at `ambush_more_shields` (half) more shields than yours and
+as many spears and bows, stands in a column along `track_row` (the row
+above the middle), leader in the centre, the rest in march order either
+side of him with every `ambush_gap_every`th (third) place empty, all
+facing east with `line_facing` east and a `line()` formation. Your band
+forms in ranks `ambush_distance` (2) rows below facing up, the wood
+(TREE, three in four hexes, then nine in ten) from two rows behind your
+line to the edge, and three trees or mud patches about the track.
+`Battle.surprise(side, rounds, morale)` sets `ambushed_side` and strikes
+the leader dumb: no shout for `ambush_surprise_rounds` (2, logged once),
+his men lose `ambush_morale` (0 now; a point or two and the column runs
+before it has fought) never below the break threshold. The round he
+wakes, `_face_about` sets his stance (`BattleGrid.state_toward`) to face
+the ambushers, so the column is a line where it stands and his men need
+only turn; `LeaderAI.choose` counts its forming rounds from then, skips
+the "scattered, gather" rule for an ambushed side (a column is strung
+out, not milling), and the doctrine is steady or cunning, never one that
+charges. `Morale.in_file`: a friend straight ahead or behind is company,
+so neither a file nor a second rank takes the alone penalty. The HUD's
+result panel toggles "Lay an ambush" / "Take the field"; `is_surprised`
+shows "they: surprised" in the status line. Three tests in
+`test_ambush.gd`, the third a gate at six wins in ten.
+
 ## Fields and terrain (`field.gd`, `battle_grid.gd`, 10 Nov 2026)
 
 `CombatTypes.Terrain` is FLAT, MUD, WATER, SLOPE, TREE, ROCK, FENCE,

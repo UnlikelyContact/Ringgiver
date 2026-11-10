@@ -89,7 +89,7 @@ func start(p_scenario: String, p_seed: int) -> void:
 	var field := Scenario.build(p_scenario, p_seed, rules, true, band, template)
 	battle = field.battle
 	field_name = field.field_name
-	field_title = (field.field as Field).title() if field.field != null else ""
+	field_title = field.title
 	var ours: Array[Warrior] = field.ours
 	player = ours[0]
 

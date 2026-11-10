@@ -56,7 +56,18 @@ static func field_size(n: int, rules: CombatRules) -> Vector2i:
 ## objective's choice, or a weighted draw for an open fight; `template`
 ## ("meadow", "river", ...) forces one, for tools. The symmetric field
 ## (`vary` false) never has an objective or a template.
+##
+## `name` "ambush" is the fight you chose (concept.md, "Picking your
+## fights"): the enemy band is on the march along a track across the
+## middle of the field, in a column facing along it, every third place
+## empty, and your band stands formed two rows below it with the trees at
+## its back, in range to throw at once. Their leader is struck dumb for
+## `ambush_surprise_rounds` and his men have lost `ambush_morale` heart.
+## No objective; the enemy is drawn as for any varied fight. `build_ambush`
+## does the placing.
 static func build(name: String, seed_in: int, rules: CombatRules, vary := true, band := 12, template := "") -> Dictionary:
+	if name == "ambush":
+		return build_ambush(seed_in, rules, band)
 	var t: Array = TIERS.get(name, TIERS["equal_green"])
 	var size := field_size(band, rules)
 	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
@@ -125,4 +136,79 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true, 
 	ours[0].display_name = "You"
 	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": offset,
 			"objective": objective, "field": field, "field_name": field.name if field != null else "flat",
+			"title": field.title() if field != null else "", "band": band, "size": size}
+
+
+## The ambush: see `build`. Returns the same dictionary, `field_name`
+## "ambush", `title` "Ambush", `objective` null.
+static func build_ambush(seed_in: int, rules: CombatRules, band := 12) -> Dictionary:
+	var size := field_size(band, rules)
+	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
+	var centre := size.x / 2
+	var track_row := size.y / 2 - 1
+	var our_row := track_row + rules.ambush_distance
+	var brng := SimRng.new(seed_in).fork("bands")
+	var frng := SimRng.new(seed_in).fork("field")
+	var split := band_split(band, rules)
+	var their_shields := frng.randi_range(split[0], split[0] + roundi(split[0] * rules.ambush_more_shields))
+	# A leader caught on the march is careful afterwards: steady or cunning,
+	# never one who charges a formed wall with a column half turned about.
+	var doctrine := LeaderAI.Doctrine.CUNNING if frng.randf() < 0.4 else LeaderAI.Doctrine.STEADY
+	var ours := BandFactory.make_mixed_band(brng.fork("a"), 0, split[0], split[1], split[2], CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1)
+	var theirs := BandFactory.make_mixed_band(brng.fork("b"), 1, their_shields, split[1], split[2], CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 16, 101)
+	# The ground: the wood your men come out of, two rows behind your line
+	# and thicker further back, and a few trees and mud about the track.
+	var tr := SimRng.new(seed_in).fork("ambush-wood")
+	for row in range(our_row + 2, size.y):
+		for col in size.x:
+			var chance := 0.75 if row == our_row + 2 else 0.9
+			if tr.randf() < chance:
+				battle.grid.set_terrain(BattleGrid.from_offset(col, row), CombatTypes.Terrain.TREE)
+	for i in 3:
+		var c := BattleGrid.from_offset(tr.randi_range(1, size.x - 2), tr.randi_range(1, track_row - 2))
+		battle.grid.set_terrain(c, CombatTypes.Terrain.TREE if tr.randf() < 0.6 else CombatTypes.Terrain.MUD)
+	# Their column: the leader in the middle of the track, the rest strung
+	# out either side of him in march order, every `ambush_gap_every`th
+	# place empty, all facing the way they were going (east, along the row).
+	var east := Vector2i(1, 0)
+	var leader: Warrior = theirs[0]
+	for w in theirs:
+		w.reset_for_battle(rules)
+		w.facing = east
+	leader.line_facing = east
+	leader.formation = FormationTemplate.line()
+	battle.grid.place(leader, BattleGrid.from_offset(centre, track_row))
+	var rest: Array[Warrior] = []
+	for w in theirs:
+		if w != leader:
+			rest.append(w)
+	var place := 1
+	var k := 0
+	while k < rest.size():
+		for sgn in [1, -1]:
+			if k >= rest.size():
+				break
+			if place % rules.ambush_gap_every == 0 and sgn == 1:
+				continue  # an empty place: the column is strung out
+			var col: int = centre + sgn * place
+			if col < 0 or col >= size.x:
+				continue
+			var c := BattleGrid.from_offset(col, track_row)
+			if battle.grid.is_free(c):
+				battle.grid.place(rest[k], c)
+				k += 1
+		place += 1
+		if place > size.x:
+			break
+	# Yours: formed in ranks below the track, facing up at it, out of the trees.
+	BandFactory.deploy_formation(battle.grid, ours, BattleGrid.from_offset(centre, our_row), Vector2i(0, -1), rules, FormationTemplate.ranks())
+	battle.add_band(ours)
+	battle.add_band(theirs)
+	battle.set_ai(1, LeaderAI.new(doctrine))
+	battle.surprise(1, rules.ambush_surprise_rounds, rules.ambush_morale)
+	for side in 2:
+		battle.result.started[side] = battle.active(side).size()
+	ours[0].display_name = "You"
+	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": 0,
+			"objective": null, "field": null, "field_name": "ambush", "title": "Ambush",
 			"band": band, "size": size}

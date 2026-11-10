@@ -421,14 +421,17 @@ func choose(battle: Battle, side: int) -> CombatTypes.Shout:
 		return CombatTypes.Shout.BREAK_THEM
 	if doctrine == Doctrine.RECKLESS:
 		return CombatTypes.Shout.BREAK_THEM
-	# Scattered: gather.
+	# Scattered: gather. Not a column caught on the march (an ambush): its
+	# men are strung out along a track, not milling about, and the shield
+	# wall closes them up where they stand faster than a huddle would.
 	var spread := 0
 	for w in mine:
 		spread += BattleGrid.chebyshev(w.pos, leader.pos)
-	if mine.size() > 1 and spread > mine.size() * battle.rules.ai_scatter_mean_distance:
+	if mine.size() > 1 and spread > mine.size() * battle.rules.ai_scatter_mean_distance 			and battle.ambushed_side != side:
 		return CombatTypes.Shout.TO_ME
-	# Form first, then hold until contact, then push.
-	if battle.round <= battle.rules.ai_form_rounds:
+	# Form first, then hold until contact, then push. A leader caught by
+	# surprise forms from the round he has his wits again.
+	if battle.round <= battle.rules.ai_form_rounds + battle.surprised_until(side):
 		return CombatTypes.Shout.SHIELD_WALL
 	var in_contact := 0
 	for w in mine:

@@ -14,9 +14,18 @@ func _init() -> void:
 	var only := ""  # kind=ford: only fights of that kind; role=attack: only that role
 	var role := ""
 	var logging := false
+	var scenario := "mixed"
 	for a in args.slice(3):
 		if a == "log":
 			logging = true
+		elif a.begins_with("scenario="):
+			scenario = a.substr(9)
+		elif a.begins_with("ambush_more="):
+			rules.ambush_more_shields = float(a.substr(12))
+		elif a.begins_with("surprise="):
+			rules.ambush_surprise_rounds = int(a.substr(9))
+		elif a.begins_with("shaken="):
+			rules.ambush_morale = int(a.substr(7))
 		elif a.begins_with("kind="):
 			only = a.substr(5)
 		elif a.begins_with("role="):
@@ -32,7 +41,7 @@ func _init() -> void:
 	var wins := 0
 	var fights := 0
 	for i in n:
-		var sc := Scenario.build("mixed", seed_in + i, rules, true, 12)
+		var sc := Scenario.build(scenario, seed_in + i, rules, true, 12)
 		var b: Battle = sc.battle
 		var obj: Objective = sc.objective
 		var we_attack := obj != null and obj.attacker == 0

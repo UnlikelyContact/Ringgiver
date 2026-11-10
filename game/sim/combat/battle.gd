@@ -24,6 +24,10 @@ var _contact_logged := {}  # side -> bool, so "in contact" is logged once per sp
 var _wall_step := {}  # side -> true when the leader asks his wall to step forward this round
 var _volleyed := {}  # side -> true once the wall has paused to throw its spears
 var _routing_logged := {}  # side -> true while its wall is making for a way round
+## The side taken by surprise (an ambush), or -1, and the last round its
+## leader is struck dumb: no order comes from him until then.
+var ambushed_side := -1
+var _surprised_until := {}  # side -> round
 var _taunted_round := {}  # side -> the last round that side was taunted
 var _blows_ever := false
 var _rounds_without_blow := 0
@@ -503,7 +507,12 @@ func run_round() -> void:
 		if _pending_shout.has(side):
 			shout = _pending_shout[side]
 			_pending_shout.erase(side)
+		elif _ai.has(side) and leader != null and is_surprised(side):
+			if round == 1:
+				log.append("%s's men are taken by surprise: no order comes" % leader.display_name)
 		elif _ai.has(side) and leader != null:
+			if round == surprised_until(side) + 1 and surprised_until(side) > 0:
+				_face_about(side, leader)
 			shout = (_ai[side] as LeaderAI).choose(self, side)
 			shout = _objective_nudge(side, leader, shout)
 		_last_shout[side] = shout
@@ -667,6 +676,43 @@ func run_round() -> void:
 			return
 		_finish(-1, "neither side will close again; both draw off")
 		return
+
+
+## A surprised leader with his wits back turns his column into a line: his
+## wall's stance becomes the one that faces the ambush, so the men stand
+## in it where they are and need only turn.
+func _face_about(side: int, leader: Warrior) -> void:
+	var theirs := active(1 - side)
+	if theirs.is_empty():
+		return
+	var centre := Vector2.ZERO
+	for e in theirs:
+		centre += BattleGrid.to_cart(Vector2(e.pos))
+	centre /= theirs.size()
+	var s := BattleGrid.state_toward(centre - BattleGrid.to_cart(Vector2(leader.pos)))
+	leader.line_axis = s[0]
+	leader.line_facing = s[1]
+	leader.facing = s[1]
+	log.append("%s turns his men to face the ambush" % leader.display_name)
+
+
+## Takes a side by surprise: its leader gives no order for `rounds` rounds
+## (his men stand as the surprise finds them), and every man of it loses
+## `morale` heart, never below the break threshold.
+func surprise(side: int, rounds: int, morale: int) -> void:
+	ambushed_side = side
+	_surprised_until[side] = rounds
+	for w in active(side):
+		w.morale = maxi(rules.morale_break_threshold, w.morale + morale)
+
+
+func is_surprised(side: int) -> bool:
+	return round <= surprised_until(side)
+
+
+## The last round a side is struck dumb by surprise; 0 when it never was.
+func surprised_until(side: int) -> int:
+	return _surprised_until.get(side, 0)
 
 
 ## Whether the lines have met: a standing man of either side at arm's

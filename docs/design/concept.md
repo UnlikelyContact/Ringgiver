@@ -1180,6 +1180,51 @@ held ford stays the hardest thing on the field: the men come through the
 water unlocked, a few at a time, into a formed line. The bridge on the
 flank, when there is one, is the way.
 
+**Picking your fights (10 Nov 2026).** Defending wins about three fights
+in four and a frontal attack on a held ford one in four, and that is
+right: it is the 3:1 the military manuals give an attacker. The game's
+job is not to flatten it but to put the choice in the player's hands,
+which the prototype does not yet do: it deals you attacker or defender
+and the field at random. What the main game needs, in order:
+
+- *Scouting before committing.* A scout's report (numbers, arms, who
+  leads them, the ground) is what makes declining a fight a decision and
+  not a guess; veterans and Wits make the report truer.
+- *Declining and withdrawing as real outcomes.* Fall back is a manoeuvre
+  now; a band that sees a bad fight and fades off the field should lose
+  some standing, not the battle. The sagas are full of leaders who did
+  not care to fight that day.
+- *Choosing the ground.* The hillside already gives the push bonus on the
+  slope and the river gives the defender the bank; the missing piece is
+  that whoever arrives first, or scouts better, picks where the lines
+  form. That turns the ford from a trap into something you do to the
+  enemy.
+- *Ambush.* The attacker's answer to the defender's advantage, and the
+  trees, fences and fords are the ground for it.
+- *Numbers.* The attacker's extra shields are a gift from the scenario
+  now; in the campaign they should be the player's doing, which also
+  makes the small early band's fights about picking the right ones.
+
+The first of these is in the prototype: "Lay an ambush" on the result
+panel (and `Scenario.build("ambush")`). The enemy band, at full strength
+and half again your shields, is on the march along a track across the
+field, strung out in a column every third place empty, facing the way it
+was going; your band stands formed two rows off with the wood at its
+back, your spears in range at once. Their leader is struck dumb for two
+rounds (no order comes; the green strike back only at what is in their
+faces), then turns his column about into a line where it stands and
+forms. A hundred fights: pushing at once wins 98-100%, even against
+twice your shields; holding and shooting wins 90-94% with the rest
+drawn. A column caught in flank at two hexes is destroyed by the morale
+cascade (spears and arrows, men alone, panic spreading) before it can
+form, whatever the player does after the first round, so the decision
+the ambush offers is the one before it: to lay it. Open: an ambushed
+leader who is not pressed should get his men away (a draw-off that
+counts for less than a rout), so that waiting costs something; and the
+"alone" heart loss now spares a man with a comrade straight ahead or
+behind him (a file on the march, a second rank), which the symmetric
+batches did not move.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art

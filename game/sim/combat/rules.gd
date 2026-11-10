@@ -373,6 +373,27 @@ var objective_attacker_shields := 2
 ## the patch than the defender at the end of this round; otherwise the
 ## defender has held it.
 var objective_ford_rounds := 16
+# --- The ambush (scenario.gd "ambush") -------------------------------------
+## The ambushed leader gives no order for this many rounds: his men stand
+## where the surprise finds them, strung out along the track, and only the
+## green strike back at what is in their faces (Decision, no order).
+var ambush_surprise_rounds := 2
+## Heart the surprised men lose at the start, never below the break
+## threshold. Zero: the surprise itself (no order, no line, your spears in
+## their faces) is enough; a point or two and the column runs before it
+## has fought at all.
+var ambush_morale := 0
+## Rows between the track and your line: two, so your spears can be thrown
+## at once and your wall is on them in a step.
+var ambush_distance := 2
+## Every so many places in the column is empty: a band on the march is
+## strung out, and a wall that forms from it has gaps to close.
+var ambush_gap_every := 3
+## A band on the march is at full strength: it brings your shields to this
+## share more (half: eight to twelve at twelve), and as many spears and
+## bows as you. The ambush is the way to fight a band bigger than yours.
+var ambush_more_shields := 0.5
+
 ## The objective's clock counts from the round the lines meet; an attacker
 ## who has not closed by this round has given the day up to the defender.
 var objective_approach_rounds := 24

@@ -272,11 +272,21 @@ func _on_finished(result: BattleResult) -> void:
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.text = _result_text(result)
 	box.add_child(body)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
 	var again := Button.new()
 	again.text = "Fight again"
 	again.custom_minimum_size = Vector2(160, 44)
 	again.pressed.connect(func() -> void: main.start(main.scenario, main.seed_in + 1))
-	box.add_child(again)
+	row.add_child(again)
+	# The other kind of fight: an ambush you laid, or back to the open field.
+	var other := Button.new()
+	var ambush: bool = main.scenario == "ambush"
+	other.text = "Take the field" if ambush else "Lay an ambush"
+	other.custom_minimum_size = Vector2(160, 44)
+	other.pressed.connect(func() -> void: main.start("equal_green" if ambush else "ambush", main.seed_in + 1))
+	row.add_child(other)
 	_refresh()
 
 
@@ -312,6 +322,8 @@ func _refresh() -> void:
 		calls += "  you: " + CombatTypes.SHOUT_NAMES[order]
 	if their_order != CombatTypes.Shout.NONE:
 		calls += "  they: " + CombatTypes.SHOUT_NAMES[their_order]
+	if b.ambushed_side == 1 and b.is_surprised(1) and b.round > 0:
+		calls += "  they: surprised"
 	var stance: String = BattleGrid.AXIS_NAMES[view.player.wall_axis()] if view.player != null else ""
 	var round_text := "Round %d" % b.round
 	if b.objective != null:
@@ -326,6 +338,8 @@ func _refresh() -> void:
 	var hint := "tap a cell to step or an enemy to strike; tap yourself to act with the line"
 	if b.objective != null and b.round == 0:
 		hint = "you: " + b.objective.brief(0)  # the task, before you act
+	elif b.ambushed_side == 1 and b.round == 0:
+		hint = "they are strung out: hit them before they form"
 	var ground: String = main.get("field_title") if main != null and main.get("field_title") != null else ""
 	if ground != "" and b.round == 0:
 		hint = "%s. %s" % [ground, hint]  # the ground, before you act
