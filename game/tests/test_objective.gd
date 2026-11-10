@@ -19,6 +19,15 @@ func _field(rules: CombatRules) -> Battle:
 	return b
 
 
+## Moves the first `n` men of `side` over the stream onto the other side's
+## bank: the attacker's (side 0, from row 8) to row 2, the defender's to row 9.
+func _over(b: Battle, side: int, n: int) -> void:
+	var men := b.active(side)
+	var row := 2 if side == 0 else 9
+	for i in n:
+		b.grid.place(men[i], BattleGrid.from_offset(2 + i, row))
+
+
 ## Moves the first `n` men of `side` onto the objective's cells.
 func _occupy(b: Battle, obj: Objective, side: int, n: int) -> void:
 	var men := b.active(side)
@@ -42,24 +51,41 @@ func test_ford_goes_to_more_men_at_the_end_of_its_rounds() -> void:
 	assert_eq(obj.rounds, 16, "the ford is held for sixteen rounds by default")
 	assert_true(obj.cells.size() >= 4 and obj.cells.size() <= 5, "four or five crossing hexes")
 	for c in obj.cells:
-		assert_eq(BattleGrid.to_offset(c).y, 5, "the ford is the stream's crossing, two rows before the defender's line")
+		assert_eq(BattleGrid.to_offset(c).y, 4, "the ford is the stream's crossing, directly before the defender's line")
 	_occupy(b, obj, 0, 2)
-	b.round = 10
-	assert_eq(obj.check(b), -1, "nothing is decided before the end of round 16")
 	b.round = 16
-	assert_eq(obj.check(b), 0, "two attackers to none: the attacker has the ford")
+	assert_eq(obj.check(b), -1, "the lines have not met: the clock has not started")
+	obj.clock_start = 0
+	b.round = 10
+	assert_eq(obj.check(b), -1, "nothing is decided before sixteen rounds of the clock")
+	b.round = 16
+	assert_eq(obj.check(b), 1, "two attackers in the water and none over: the defender keeps the ford")
+	# The foothold is four men over the stream (sized like the ships' task).
+	_over(b, 0, 3)
+	obj = Objective.new(Objective.Kind.HOLD_GROUND, 0, 5, rules)
+	obj.place(b.grid, 3, -1, 8)
+	obj.clock_start = 0
+	b.objective = obj
+	assert_eq(obj.ford_men, 4, "four men over take the ford by default (three of a band of twelve, sized)")
+	assert_eq(obj.check(b), 1, "three over: no foothold, the defender keeps it")
+	_over(b, 0, 4)
+	obj = Objective.new(Objective.Kind.HOLD_GROUND, 0, 5, rules)
+	obj.place(b.grid, 3, -1, 8)
+	obj.clock_start = 0
+	b.objective = obj
+	assert_eq(obj.check(b), 0, "four over: the attacker has the ford")
 	assert_true(obj.reason.begins_with("side 0"), obj.reason)
 
 
-func test_ford_tie_goes_to_the_defender() -> void:
+func test_ford_men_on_the_crossing_count_toward_the_foothold() -> void:
 	var rules := CombatRules.new()
 	var b := _field(rules)
 	var obj := Objective.new(Objective.Kind.HOLD_GROUND, 0, 5, rules)
 	obj.place(b.grid, 3, -1, 8)
-	_occupy(b, obj, 0, 1)
-	_occupy(b, obj, 1, 1)
+	obj.clock_start = 0
+	_occupy(b, obj, 0, 4)
 	b.round = 16
-	assert_eq(obj.check(b), 1, "one each: the defender still holds it")
+	assert_eq(obj.check(b), 0, "four men standing on the crossing itself are a foothold: the attacker has it")
 
 
 func test_ships_are_reached_with_enough_men() -> void:
@@ -67,6 +93,7 @@ func test_ships_are_reached_with_enough_men() -> void:
 	var b := _field(rules)
 	var obj := Objective.new(Objective.Kind.REACH_THE_SHIPS, 0, 5, rules)
 	obj.place(b.grid, 3, -1, 8)
+	obj.clock_start = 0
 	for c in obj.cells:
 		assert_eq(BattleGrid.to_offset(c).y, 0, "the ships lie along the defender's edge")
 	b.round = 4
@@ -82,6 +109,7 @@ func test_ships_safe_when_time_runs_out() -> void:
 	var b := _field(rules)
 	var obj := Objective.new(Objective.Kind.REACH_THE_SHIPS, 1, 5, rules)
 	obj.place(b.grid, 8, 1, 8)
+	obj.clock_start = 0
 	for c in obj.cells:
 		assert_eq(BattleGrid.to_offset(c).y, 11, "our ships, along the bottom edge")
 	b.round = 19
@@ -96,6 +124,7 @@ func test_hall_needs_half_its_cells_two_rounds_running() -> void:
 	var b := _field(rules)
 	var obj := Objective.new(Objective.Kind.THE_HALL, 0, 5, rules)
 	obj.place(b.grid, 3, -1, 8)
+	obj.clock_start = 0
 	assert_true(obj.cells.size() >= 2 and obj.cells.size() <= 4, "one or two doors and one or two hexes of floor")
 	var half := (obj.cells.size() + 1) / 2
 	_occupy(b, obj, 0, half)
@@ -111,6 +140,7 @@ func test_hall_streak_breaks_when_they_are_thrown_off() -> void:
 	var b := _field(rules)
 	var obj := Objective.new(Objective.Kind.THE_HALL, 0, 5, rules)
 	obj.place(b.grid, 3, -1, 8)
+	obj.clock_start = 0
 	var half := (obj.cells.size() + 1) / 2
 	_occupy(b, obj, 0, half)
 	b.round = 3
@@ -132,6 +162,7 @@ func test_battle_finishes_on_the_objective() -> void:
 	var obj := Objective.new(Objective.Kind.REACH_THE_SHIPS, 1, 5, rules)
 	obj.rounds = 2
 	obj.place(b.grid, 8, 1, 8)
+	obj.clock_start = 0  # as if the lines had met at once
 	b.objective = obj
 	b.run_round()
 	assert_true(not b.is_over(), "round one: still time")

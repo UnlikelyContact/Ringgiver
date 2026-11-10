@@ -80,8 +80,26 @@ draws its ground and lists every hex it drew in `features`), `rounds`,
 side and sets `reason`; it counts once per round (the hall's two-round
 streak), so a second call in a round is free.
 
-- Ford: at the end of round `objective_ford_rounds` (16) the side with more
-  standing men on the cells has it; ties go to the defender.
+*The clock (10 Nov 2026).* `rounds` count from the round the lines meet,
+not from round one: `check` sets `clock_start` the first round
+`Battle.lines_met()` is true (a standing man of one side at arm's length of
+one of the other) and logs it ("the lines meet: 16 rounds for side 0 to
+take the ford"); `elapsed`, `rounds_left`, `clock_running` and
+`clock_text` ("16 once they meet", "10 left") read it. So the walk across
+the field, a green wall's hesitations (a quarter of its rounds) and the
+ground in the way cost the attacker nothing; before this the attacker on
+a ford often never reached the enemy before the clock ran out. An
+attacker who has not closed by `objective_approach_rounds` (24) has given
+the day up. The AI attacker's nudge to push fires at half the rounds by
+either count.
+
+- Ford: when the clock runs out the attacker has it if `ford_men` of his
+  standing men are on the crossing or over the stream, on the defender's
+  bank (`ford_count`); fewer, and the defender keeps it. `size_for_band`
+  sets `ford_men` to `ceil(band * objective_ford_fraction)` (a quarter:
+  three of twelve), at least `objective_ships_min_men`. Forcing a held
+  crossing is the hardest task on the field: the men come through the
+  water a few at a time, unlocked, into a formed line.
 - Ships: `ships_men` standing attackers on the strip wins at once; the
   defender wins at `objective_ships_rounds` (20). `size_for_band(band)` sets
   `ships_men` to `ceil(band * objective_ships_fraction)` (a third), at least
@@ -100,15 +118,20 @@ told to push while none of his men is engaged holds.
 
 `Scenario.build(..., vary=true)` draws the objective from its own seed fork
 (`objective_chance` 0.7, `objective_player_attacks` 0.5) and places it at
-the defender's end, before anyone deploys: the ford is a stream two rows
-before his line (see "Fields and terrain"), the ships a strip three rows
+the defender's end, before anyone deploys: the ford is a stream on the
+row before his line, so his line is the bank (see "Fields and terrain"),
+the ships a strip three rows
 behind his front, the hall a building four rows behind it. The attacking
 side brings `objective_attacker_shields` (2 at twelve men, scaled to the
 band) more shields than the defender's draw would give. `vary=false` never
 has an objective.
 `tools/batch_player.gd` reports per strategy how fights ended (objective,
 lines broke, drawn), the mix of fields and the win rate attacking,
-defending and in the open.
+defending and in the open. `tools/diag_mixed.gd` prints one line per
+fight (field, objective, role, enemy, doctrine, outcome) and takes
+`kind=ford role=attack edge=N more=F ford_frac=F ford_rounds=N` to filter
+and to try tunables, and `log` for the whole log with the field drawn
+after every round.
 
 ## Fields and terrain (`field.gd`, `battle_grid.gd`, 10 Nov 2026)
 
@@ -131,6 +154,22 @@ BUILDING, FORD, BRIDGE, DOOR.
   with a stream or a tree in front of one man it froze the whole wall, the
   hold cascading man to man. Now the line flows past him, and he finds his
   place again once he is round (he may drop out of the chain for a round).
+  *The way round (10 Nov 2026).* A whole line at a stream was another
+  matter: the men before water held, the men before the crossing stepped
+  into it, fell out of the chain there (a man straight ahead of his
+  neighbour is not at his shoulder), and Decision's "rejoin the wall"
+  stepped them back out of the water the next round, for ever; an attack
+  on a ford never reached the far bank. Three rules end it. In the wall
+  step a third pass sends every ground-held man along the first step of
+  the shortest walk over passable ground to the enemy (`LeaderAI.route`),
+  letting go of the men beside him, run to a fixpoint so a file of men
+  steps into each other's places; logged once ("make for the way round").
+  A man ordered to push who stands in a ford goes on over, in the chain or
+  not (`Decision._push`): there is no line to rejoin in the water. And
+  `Decision._step_toward`, when no neighbouring hex brings a man nearer
+  his mark, takes the first step of `BattleGrid.path_to` round the ground
+  in the way, so stragglers rejoining a wall that has crossed come through
+  the crossing after it.
 - *MUD and FORD* cost breath: a man who ends a step in either spends
   `breath_cost_move * terrain_breath_extra` more (`Battle._wade`), whether
   he walked there alone or stepped with the wall (the wall step paid no mud
@@ -173,14 +212,14 @@ that the template's features are cleared.
 
 *Objectives on features.* The ford (`Objective._place_ford`,
 `stream_crossings`) is a stream of WATER the whole width of the field on
-the second row before the defender's line (a row of dry bank between),
+the row before the defender's line, so his line stands on the bank,
 crossed by one ford four hexes wide or two fords two wide, and two times in
 five a one-hex bridge on a flank: the four or five crossing hexes are the
-objective, so the fight for the ford is a fight for the crossing. (On the
-row just before his line, as the old ford patch was, the attacker could
-only come at the line through the crossing, unlocked and a man at a time,
-and took it in one fight in fifteen; one row out, the crossing is ground
-either side must come to.) The hall (`_place_hall`, `hall_shape`) is one or
+objective, and the attacker takes it with a foothold of `ford_men` on or
+over them when the clock runs out. (A row of dry bank between, which the
+first version had, was no kinder to the attacker, 19% against 23-28%,
+and cost the defender who held his line: the attacker crossed unopposed
+and stood "over" at once.) The hall (`_place_hall`, `hall_shape`) is one or
 two hexes of floor four rows behind the defender's front (or on his edge
 row), ringed by BUILDING, with one or two DOOR hexes in the ring toward the
 fight: four to six walls, and the doors and floor are the objective. On the

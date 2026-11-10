@@ -75,7 +75,7 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true, 
 	var doctrine := LeaderAI.Doctrine.STEADY
 	if vary:
 		# About your own strength on average, mixed differently.
-		their_shields = frng.randi_range(split[0], split[0] + roundi(split[0] / 4.0))
+		their_shields = frng.randi_range(split[0], split[0] + roundi(split[0] * rules.enemy_more_shields))
 		their_spears = frng.randi_range(maxi(0, split[1] - 1), split[1])
 		their_bows = frng.randi_range(maxi(0, split[2] - 1), split[2])
 		offset = frng.randi_range(-3, 3)

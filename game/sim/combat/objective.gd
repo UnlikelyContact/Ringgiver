@@ -7,12 +7,15 @@ extends RefCounted
 ## lines can still break first: Battle checks the objective before its own
 ## end checks each round, and they stay as they were.
 ##
-##   HOLD_GROUND     the ford: a stream across the field just before the
-##                   defender's line, WATER but for its crossings (fords, and
-##                   sometimes a bridge); the crossing cells are the
-##                   objective. At the end of round `rounds` the side with
-##                   more standing men on them has it; ties (and nobody on
-##                   them) go to the defender.
+##   HOLD_GROUND     the ford: a stream across the field directly before
+##                   the defender's line, so his line is the bank; WATER but
+##                   for its crossings (fords, and sometimes a bridge), which
+##                   are the objective. When the clock runs out the
+##                   attacker has it if `ford_men` of his standing men are
+##                   on the crossing or over it, on the defender's bank: a
+##                   foothold he has not been thrown back from. Fewer, and
+##                   the defender keeps it. A man in the ford locks with
+##                   nobody, so the bank is the place to hold it from.
 ##   REACH_THE_SHIPS the ships: a strip behind the defender's line. The
 ##                   attacker wins the moment `ships_men` of his standing men
 ##                   are on it; the defender wins if `rounds` pass first.
@@ -21,6 +24,12 @@ extends RefCounted
 ##                   the objective is the doors and the floor inside. The
 ##                   attacker wins once he has stood on at least half of them
 ##                   for `hall_streak` rounds running; else the defender.
+##
+## The clock: `rounds` are counted from the round the lines meet
+## (Battle.lines_met: a man of one side at arm's length of the other), not
+## from the first round, so the walk across the field, a green wall's
+## hesitations and the ground in the way cost the attacker nothing. An
+## attacker who has not closed by `approach_rounds` has given the day up.
 ##
 ## Built from a seed and a kind; `place` draws its ground on a grid and
 ## lists every cell it drew in `features` (Field keeps its own features off
@@ -38,12 +47,21 @@ var cells: Array[Vector2i] = []
 ## (the stream's water, the hall's walls).
 var features: Array[Vector2i] = []
 var rounds := 16
+## The round the lines met and the clock started; -1 while they have not.
+var clock_start := -1
+## The attacker's time to close with the defender before the day is given up.
+var approach_rounds := 24
 var name := ""
 var ships_men := 4
+## The foothold over the stream that takes the ford, sized like the ships'.
+var ford_men := 4
 var ships_depth := 3  # rows behind the defender's front the ships lie
 var hall_streak := 2
 ## Set when `check` decides: the finish line for the log ("side 0 takes the hall").
 var reason := ""
+## The ford: the stream's row and which way the defender's rear lies from it.
+var stream_row := -1
+var back := 0
 var _seed := 0
 var _streak := 0  # rounds running the attacker has held the hall
 var _checked_round := -1
@@ -58,7 +76,9 @@ func _init(p_kind: Kind, p_attacker: int, seed_in: int, rules: CombatRules = nul
 	var r := rules if rules != null else CombatRules.new()
 	ships_depth = r.objective_ships_depth
 	ships_men = r.objective_ships_men
+	ford_men = r.objective_ships_men
 	hall_streak = r.objective_hall_streak
+	approach_rounds = r.objective_approach_rounds
 	match kind:
 		Kind.HOLD_GROUND:
 			rounds = r.objective_ford_rounds
@@ -68,12 +88,12 @@ func _init(p_kind: Kind, p_attacker: int, seed_in: int, rules: CombatRules = nul
 			rounds = r.objective_hall_rounds
 
 
-## Sizes the ships' task to a band of `band` men: a share of it
-## (`objective_ships_fraction`, rounded up), never fewer than
-## `objective_ships_min_men`. The ford and the hall scale already: the one
-## is a count against the defender, the other half its cells.
+## Sizes the ships' task and the ford's foothold to a band of `band` men: a
+## share of it (`objective_ships_fraction`, rounded up), never fewer than
+## `objective_ships_min_men`. The hall scales already: half its cells.
 func size_for_band(band: int, rules: CombatRules) -> void:
 	ships_men = maxi(rules.objective_ships_min_men, ceili(band * rules.objective_ships_fraction - 0.0001))
+	ford_men = maxi(rules.objective_ships_min_men, ceili(band * rules.objective_ford_fraction - 0.0001))
 
 
 func defender() -> int:
@@ -84,16 +104,31 @@ func short_name() -> String:
 	return SHORT[kind]
 
 
+## Whether the clock has started: the lines have met.
+func clock_running() -> bool:
+	return clock_start >= 0
+
+
+## Rounds of the clock run so far; 0 the round the lines meet, -1 before.
+func elapsed(battle: Battle) -> int:
+	return -1 if clock_start < 0 else battle.round - clock_start
+
+
+## Rounds the attacker has left: all of them until the lines meet.
+func rounds_left(battle: Battle) -> int:
+	return rounds if clock_start < 0 else maxi(0, rounds - elapsed(battle))
+
+
 ## Draws the objective on `grid`. `front_row` is the defender's front line
 ## (offset row), `back` is +1 or -1, the way his rear lies (toward his edge
 ## of the map), `centre_col` the column his leader stands on. Drawn from the
 ## seed:
 ##
-## - the ford: a stream across the whole field on the second row in front
-##   of his line (a row of dry bank between), crossed by one ford four hexes
+## - the ford: a stream across the whole field on the row in front of his
+##   line (his line stands on the bank), crossed by one ford four hexes
 ##   wide or two fords two wide, and two times in five a one-hex bridge out
-##   on a flank: four or five crossing hexes, which are the objective. They
-##   lie between the lines, so whoever wants the ford must come to it.
+##   on a flank: four or five crossing hexes, which are the objective.
+##   Whoever wants the ford must come through the water to the bank.
 ## - the ships: a strip of eight to ten hexes `ships_depth` rows behind his
 ##   front (or on his edge row, if that is nearer).
 ## - the hall: one or two hexes of floor four rows behind his front (or on
@@ -102,13 +137,16 @@ func short_name() -> String:
 ##   and floor are the objective. On the smallest fields its front wall
 ##   stands on his third rank's row; it is drawn before anyone deploys, so
 ##   the men who would have stood there stand elsewhere.
-func place(grid: BattleGrid, front_row: int, back: int, centre_col: int) -> void:
+func place(grid: BattleGrid, front_row: int, p_back: int, centre_col: int) -> void:
+	var back := p_back
 	var r := SimRng.new(_seed).fork("objective-cells")
 	cells.clear()
 	features.clear()
 	match kind:
 		Kind.HOLD_GROUND:
-			_place_ford(grid, r, clampi(front_row - 2 * back, 0, grid.height - 1), centre_col)
+			stream_row = clampi(front_row - back, 0, grid.height - 1)
+			self.back = p_back
+			_place_ford(grid, r, stream_row, centre_col)
 		Kind.REACH_THE_SHIPS:
 			var n := r.randi_range(8, 10)
 			var left := -(n / 2)
@@ -222,6 +260,22 @@ func has_cell(c: Vector2i) -> bool:
 	return cells.has(c)
 
 
+## A side's standing men on the crossing or over the stream, on the other
+## side's bank. Before `place`, the men on the crossing itself.
+func ford_count(battle: Battle, side: int) -> int:
+	if stream_row < 0 or back == 0:
+		return men_on(battle, side)
+	# The defender's bank lies `back` of the stream; the attacker's the other way.
+	var over := back if side == attacker else -back
+	var n := 0
+	for w in battle.active(side):
+		if w.broken:
+			continue
+		if has_cell(w.pos) or (BattleGrid.to_offset(w.pos).y - stream_row) * over > 0:
+			n += 1
+	return n
+
+
 ## Standing (active, unbroken) men of `side` on the objective's cells.
 func men_on(battle: Battle, side: int) -> int:
 	var n := 0
@@ -237,18 +291,26 @@ func brief(side: int) -> String:
 	var attacking := side == attacker
 	match kind:
 		Kind.HOLD_GROUND:
-			return ("Take the ford and hold it at round %d" % rounds) if attacking else ("Hold the ford until round %d" % rounds)
+			return ("Get %d men over the ford, %d rounds from contact" % [ford_men, rounds]) if attacking else ("Keep them off the ford, %d rounds from contact" % rounds)
 		Kind.REACH_THE_SHIPS:
-			return ("Get %d men to the ships before round %d" % [ships_men, rounds]) if attacking else ("Keep them from the ships until round %d" % rounds)
+			return ("Get %d men to the ships, %d rounds from contact" % [ships_men, rounds]) if attacking else ("Keep them from the ships, %d rounds from contact" % rounds)
 		_:
-			return ("Take the hall before round %d" % rounds) if attacking else ("Hold the hall until round %d" % rounds)
+			return ("Take the hall, %d rounds from contact" % rounds) if attacking else ("Hold the hall, %d rounds from contact" % rounds)
+
+
+## The clock for the HUD: "12 left" once the lines have met, else how long
+## the attacker will have ("16 once they meet").
+func clock_text(battle: Battle) -> String:
+	if clock_start < 0:
+		return "%d once they meet" % rounds
+	return "%d left" % rounds_left(battle)
 
 
 ## The state of play for the HUD ("hall: 2 of 5 held, round 9 of 18").
 func progress(battle: Battle) -> String:
 	match kind:
 		Kind.HOLD_GROUND:
-			return "ford %d:%d" % [men_on(battle, attacker), men_on(battle, defender())]  # attackers : defenders on it
+			return "ford %d/%d" % [ford_count(battle, attacker), ford_men]  # attackers on or over the crossing
 		Kind.REACH_THE_SHIPS:
 			return "ships %d/%d" % [men_on(battle, attacker), ships_men]
 		_:
@@ -262,18 +324,27 @@ func check(battle: Battle) -> int:
 	if battle.round == _checked_round:
 		return _decision
 	_checked_round = battle.round
+	if clock_start < 0 and battle.lines_met():
+		clock_start = battle.round
+		battle.log.append("the lines meet: %d rounds for side %d to take %s" % [rounds, attacker, name])
 	_decision = _decide(battle)
 	return _decision
 
 
 func _decide(battle: Battle) -> int:
+	if clock_start < 0:
+		if battle.round >= approach_rounds:
+			reason = "side %d never comes on: %s is side %d's" % [attacker, name, defender()]
+			return defender()
+		return -1
 	var a := men_on(battle, attacker)
+	var left := rounds_left(battle)
 	match kind:
 		Kind.HOLD_GROUND:
-			if battle.round < rounds:
+			if left > 0:
 				return -1
-			if a > men_on(battle, defender()):
-				reason = "side %d holds the ford with more men" % attacker
+			if ford_count(battle, attacker) >= ford_men:
+				reason = "side %d is over the ford in strength" % attacker
 				return attacker
 			reason = "the ford is held: side %d keeps it" % defender()
 			return defender()
@@ -286,7 +357,7 @@ func _decide(battle: Battle) -> int:
 			if _streak >= hall_streak:
 				reason = "side %d takes the hall" % attacker
 				return attacker
-	if battle.round >= rounds:
+	if left <= 0:
 		reason = time_up_reason()
 		return defender()
 	return -1

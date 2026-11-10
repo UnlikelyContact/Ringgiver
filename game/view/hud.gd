@@ -315,7 +315,7 @@ func _refresh() -> void:
 	var stance: String = BattleGrid.AXIS_NAMES[view.player.wall_axis()] if view.player != null else ""
 	var round_text := "Round %d" % b.round
 	if b.objective != null:
-		round_text = "Round %d/%d  %s" % [b.round, b.objective.rounds, b.objective.progress(b)]
+		round_text = "Round %d  %s  %s" % [b.round, b.objective.progress(b), b.objective.clock_text(b)]
 	status.text = "%s  wall %d/%d%s (%s)  theirs %d/%d%s" % [round_text, mine[0], mine[1], arms_text, stance, theirs[0], theirs[1], calls]
 	form_btn.text = "Form: " + view.formation_name()
 	var warn := ""

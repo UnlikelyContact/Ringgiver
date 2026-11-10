@@ -203,7 +203,7 @@ func test_the_ford_is_the_crossing_of_a_stream() -> void:
 		obj.place(g, 5, -1, 11)
 		assert_true(obj.cells.size() >= 4 and obj.cells.size() <= 5, "seed %d: four or five crossing hexes" % s)
 		for col in 22:
-			var c := BattleGrid.from_offset(col, 7)
+			var c := BattleGrid.from_offset(col, 6)  # directly before the defender's line on row 5
 			var t := g.terrain_at(c)
 			if obj.has_cell(c):
 				assert_true(t == CombatTypes.Terrain.FORD or t == CombatTypes.Terrain.BRIDGE, "seed %d: a crossing" % s)

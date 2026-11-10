@@ -23,6 +23,7 @@ var _standing := {}  # side -> the last order given that was not NONE
 var _contact_logged := {}  # side -> bool, so "in contact" is logged once per spell
 var _wall_step := {}  # side -> true when the leader asks his wall to step forward this round
 var _volleyed := {}  # side -> true once the wall has paused to throw its spears
+var _routing_logged := {}  # side -> true while its wall is making for a way round
 var _taunted_round := {}  # side -> the last round that side was taunted
 var _blows_ever := false
 var _rounds_without_blow := 0
@@ -269,6 +270,38 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 					claimed[best] = true
 					faces[w] = best_face
 					changed = true
+		# Pass three: a man held by the ground (water, a tree, a wall in his
+		# way) makes for the way round: the first step of the shortest walk
+		# over passable ground to the enemy, which runs through the ford, the
+		# bridge, the gap in the fence. He lets go of the men beside him to
+		# do it; the line funnels through and forms again on the far side
+		# (Decision brings the stragglers after it the same way).
+		var routed := 0
+		var filed := true
+		while filed:  # to a fixpoint, so a file of men steps into each other's places
+			filed = false
+			for w in ground_held:
+				if targets.has(w) or engaged.has(w):
+					continue
+				var way := LeaderAI.route(grid, w.pos, theirs)
+				if way.is_empty():
+					continue
+				var c: Vector2i = way[0]
+				if claimed.has(c):
+					continue
+				var occ2 := grid.occupant(c)
+				if occ2 != null and not (members.has(occ2) and targets.has(occ2)):
+					continue  # taken, and not by a man stepping out of it
+				targets[w] = c
+				claimed[c] = true
+				faces[w] = w.facing
+				routed += 1
+				filed = true
+		if routed > 0 and not _routing_logged.get(side, false):
+			log.append("%s's men make for the way round, %d of them" % [leader.display_name, routed])
+			_routing_logged[side] = true
+		elif routed == 0:
+			_routing_logged[side] = false
 	if targets.is_empty():
 		if not _contact_logged.get(side, false):
 			log.append("%s's wall cannot step: every man is held or blocked" % leader.display_name)
@@ -636,6 +669,19 @@ func run_round() -> void:
 		return
 
 
+## Whether the lines have met: a standing man of either side at arm's
+## length of one of the other. The objective's clock starts here.
+func lines_met() -> bool:
+	for w in active(0):
+		if w.broken:
+			continue
+		for c in grid.neighbors(w.pos):
+			var e := grid.occupant(c)
+			if e != null and e.side == 1 and e.is_active() and not e.broken:
+				return true
+	return false
+
+
 ## The objective's light hand on an AI leader's order (leader_ai.gd knows
 ## nothing of objectives). Two overrides only: an attacker who is still
 ## holding past half his time comes on; a defender who would push while
@@ -644,11 +690,11 @@ func run_round() -> void:
 func _objective_nudge(side: int, leader: Warrior, shout: CombatTypes.Shout) -> CombatTypes.Shout:
 	if objective == null:
 		return shout
-	if objective.attacker == side and shout == CombatTypes.Shout.HOLD and round > objective.rounds / 2:
+	if objective.attacker == side and shout == CombatTypes.Shout.HOLD and (round > objective.rounds / 2 or objective.elapsed(self) > objective.rounds / 2):
 		if standing_order(side) != CombatTypes.Shout.PUSH:
 			log.append(objective.ai_line(leader.display_name, true))
 		return CombatTypes.Shout.PUSH
-	if objective.attacker != side and shout == CombatTypes.Shout.PUSH and round <= objective.rounds:
+	if objective.attacker != side and shout == CombatTypes.Shout.PUSH and objective.rounds_left(self) > 0:
 		for w in active(side):
 			if not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
 				return shout

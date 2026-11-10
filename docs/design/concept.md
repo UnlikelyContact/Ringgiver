@@ -1159,6 +1159,27 @@ again; its fight ends only by the other rules (nobody standing, the
 objective's clock, the stall). Ordered back into the edge it halts there
 and the log says so once ("can give no more ground").
 
+**Attacking is possible again (10 Nov 2026).** The player's defeats came
+from the attack: 14% attacking an objective and 23% in the open fight
+against 72% defending. Three causes. The objective's clock ran from round
+one, so the walk across the field and a green wall's hesitations (a
+quarter of its rounds) ate it; now it starts the round the lines meet,
+and the HUD reads "ford 0/3  16 once they meet", then "10 left". A line
+at a stream never crossed: men who stepped into the ford fell out of the
+wall and stepped back out of the water next round, for ever; now men
+held by the water file through the crossing by the shortest way round,
+and a man in the ford goes on over. And the varied enemy brought eight
+to ten shields against eight; now eight or nine. The ford itself is
+redrawn: the stream runs directly before the defender's line, so his
+line is the bank, and the attacker takes it with three of twelve men on
+or over the crossing when the clock runs out. A hundred varied fights at
+twelve men, pushing when attacking and holding when defending: 56% won,
+attacking 40% (the ford about 25%, the hall 46%, the ships 31%),
+defending 77%, the open fight 41%; pushing everywhere 47%. Forcing a
+held ford stays the hardest thing on the field: the men come through the
+water unlocked, a few at a time, into a formed line. The bridge on the
+flank, when there is one, is the way.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art

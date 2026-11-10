@@ -271,6 +271,9 @@ var field_min_height := 12
 ## (rounded), the rest split between spears and bows, spears taking the odd
 ## man. Twelve men are eight, two and two; six are four, one and one.
 var band_shield_share := 2.0 / 3.0
+## A varied enemy brings your shields to this share more (rounded): an
+## eighth at twelve men is eight or nine shields against your eight.
+var enemy_more_shields := 0.125
 ## A side whose leader has called "fall back" and whose men are all at least
 ## this far from every enemy has left the field and loses.
 var withdraw_distance := 4
@@ -370,6 +373,9 @@ var objective_attacker_shields := 2
 ## the patch than the defender at the end of this round; otherwise the
 ## defender has held it.
 var objective_ford_rounds := 16
+## The objective's clock counts from the round the lines meet; an attacker
+## who has not closed by this round has given the day up to the defender.
+var objective_approach_rounds := 24
 ## Reach the ships: the attacker must get this many standing men onto the
 ## strip along the defender's back edge before the end of this round.
 var objective_ships_rounds := 20
@@ -379,6 +385,11 @@ var objective_ships_men := 4
 ## `objective_ships_min_men`: four of twelve, two of four or six.
 var objective_ships_fraction := 1.0 / 3.0
 var objective_ships_min_men := 2
+## The foothold that takes the ford: this share of the band over the
+## stream or on the crossing when the clock runs out (three of twelve),
+## never fewer than `objective_ships_min_men`. Forcing a held crossing is
+## the hardest task on the field; the foothold is smaller than the ships'.
+var objective_ford_fraction := 0.25
 ## The hall: the attacker must stand on at least half its cells for this many
 ## rounds running before the end of this round.
 var objective_hall_rounds := 18

@@ -751,7 +751,7 @@ static func _push(m: Mind) -> Action:
 		return Action.brace()
 	var toward := BattleGrid.direction_to(w.pos, near.pos)
 	var anchor := leader if leader != null and leader.is_active() and leader.side == w.side else w
-	if _in_leaders_wall(grid, w, anchor) and not grid.line_neighbors(w).is_empty():
+	if _in_leaders_wall(grid, w, anchor) and (not grid.line_neighbors(w).is_empty() or grid.in_ford(w.pos)):
 		# One direction for the whole line, taken from the leader's position.
 		# A wall advances the way it faces; without a set wall facing, toward the enemy.
 		var wall := anchor.line_facing if anchor.line_facing != Vector2i.ZERO else _advance_direction(anchor, enemies)
@@ -764,6 +764,11 @@ static func _push(m: Mind) -> Action:
 		var occ := grid.occupant(ahead)
 		if occ != null and occ.side == w.side:
 			return Action.brace(advance)
+	# A man standing in a ford goes on over: there is no line to rejoin in
+	# the water, and back is the one way the order does not mean.
+	if grid.in_ford(w.pos):
+		var over := _step_toward(grid, w, near.pos, toward)
+		return over if over != null else Action.brace(toward)
 	# Not in the wall: rejoin it rather than push ahead alone.
 	if leader != null and leader.is_active() and leader.side == w.side and leader != w and not m.all.is_empty():
 		return _form(m, false)
@@ -959,6 +964,11 @@ static func _step_toward(grid: BattleGrid, w: Warrior, target: Vector2i,
 			best_d = cd
 			best_e = ce
 	if best.x < 0:
+		# No neighbour brings him nearer: the ground is in the way (a stream,
+		# a wall). The first step of the shortest walk round it, if it is free.
+		var way := grid.path_to(w.pos, target)
+		if way.size() > 1 and grid.is_free(way[0]):
+			return Action.move_to(way[0], facing)
 		return null
 	return Action.move_to(best, facing)
 

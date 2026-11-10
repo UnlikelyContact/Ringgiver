@@ -370,6 +370,36 @@ static func facing_steps(a: Vector2i, b: Vector2i) -> int:
 	return mini(d, 6 - d)
 
 
+## The shortest walk over passable hexes from `from` to `to`, without
+## `from` itself (men do not block it: they move). Empty when there is none
+## or he is there already. Breadth-first in DIRS order, so the same ground
+## gives the same walk.
+func path_to(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if from == to or not in_bounds(to) or not is_passable(to):
+		return out
+	var came := {from: from}
+	var queue: Array[Vector2i] = [from]
+	var found := false
+	while not queue.is_empty() and not found:
+		var c: Vector2i = queue.pop_front()
+		for n in neighbors(c):
+			if came.has(n) or not is_passable(n):
+				continue
+			came[n] = c
+			if n == to:
+				found = true
+				break
+			queue.append(n)
+	if not found:
+		return out
+	var c := to
+	while c != from:
+		out.push_front(c)
+		c = came[c]
+	return out
+
+
 ## Friends at w's shoulders: active men linked to him in his line (`linked`),
 ## whose shields lock with his. The same rule builds the wall, groups the
 ## push and draws the bars, so what is counted is what is drawn and fought.
