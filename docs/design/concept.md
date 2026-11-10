@@ -1088,6 +1088,31 @@ field's edge. Deployment, mud and objectives are placed relative to the
 field (`CombatRules.field_width`, `field_height`). Balance unchanged:
 pushing wins 52%, taking the objective 54%, the steady AI on your side 48%.
 
+**Men who think (10 Nov 2026):** men read as counters, because a veteran
+and a green man in the same spot did the same thing. A man's decision is
+now a weighed choice among the things he could do (hold, strike this man
+or that, throw, step, close a gap, drop back hurt, cover the leader,
+charge, run), where what he *sees* depends on his tier and how he
+*weighs* it on his personality. A green man sees the man in front and the
+order, a little blurred, and when he missed the shout he does as the men
+at his shoulders do; a blooded man also sees his neighbours, closes up
+where one has just fallen and, with a spear, strikes the man pressing his
+friend; a veteran sees the flank, any gap, and the leader beset; a
+champion reads intentions, bracing the round before a rush lands and
+throwing the round before the lines meet. Bands now carry personalities
+(three men in ten none, one in ten two): a reckless man alone charges
+whatever the order, though the men at his shoulders hold him in a wall; a
+steady or grim one holds; a boastful one goes for the enemy leader and
+steps out where he will be seen; a greedy one leaves the line to strip a
+fallen leader; a superstitious one swings with the banners. When a man
+does something other than the plain default he says why ("Olvir is hurt
+and falls back behind Thorolf", "Bard will not wait: he goes at them"),
+up to three such lines a round in the log, and the muster preview marks
+him with a gold dot before Next round. A grievously wounded man sags over
+his shadow, and a reckless one stands a hair forward of his line. Balance
+is unchanged within noise: pushing wins 51.5%, holding 35%, the steady AI
+48%; equal fights 49/51 and green against veteran 0/100.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art

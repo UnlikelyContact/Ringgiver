@@ -180,10 +180,26 @@ func _on_shout(s: CombatTypes.Shout) -> void:
 
 
 func _on_round(lines: PackedStringArray) -> void:
+	# Men thinking for themselves (Decision's reasons): kept, in their own
+	# colour, at most three a round. Read from the men, so they show whether
+	# or not the battle logged them (your own man's account is his line).
+	const REASONS_PER_ROUND := 3
+	var reasons := {}
+	for w in view.battle.warriors:
+		if w.is_active() and w.last_reason != "" and w != view.player:
+			reasons[w.last_reason] = true
+	var shown_reasons := 0
 	for line in lines:
 		var col := Palette.DIM
 		var keep := false
-		if line.contains("DOWN") or line.contains("breaks") or line.contains("flees") or line.contains("===") or line.contains("drives forward"):
+		if reasons.has(line):
+			reasons.erase(line)
+			if shown_reasons >= REASONS_PER_ROUND:
+				continue
+			shown_reasons += 1
+			col = Palette.TEXT
+			keep = true
+		elif line.contains("DOWN") or line.contains("breaks") or line.contains("flees") or line.contains("===") or line.contains("drives forward"):
 			col = Palette.WARN
 			keep = true
 		elif line.contains("taunts the enemy") or line.contains("called a coward") or line.contains("answer with their feet") or line.contains("take it, and like it less") or line.contains("stands for it") \
@@ -203,6 +219,13 @@ func _on_round(lines: PackedStringArray) -> void:
 			continue
 		log_label.push_color(col)
 		log_label.add_text(line.replace("the leader", "").strip_edges() + "\n")
+		log_label.pop()
+	for line in reasons:
+		if shown_reasons >= REASONS_PER_ROUND:
+			break
+		shown_reasons += 1
+		log_label.push_color(Palette.TEXT)
+		log_label.add_text(line.strip_edges() + "\n")
 		log_label.pop()
 	while log_label.get_line_count() > 7:
 		log_label.remove_paragraph(0)

@@ -6,8 +6,14 @@ const NORTH := Vector2i(0, -1)
 const SOUTH := Vector2i(0, 1)
 
 
+## Men without personalities: these tests are about arms and the wall, and
+## a reckless man breaking from a forming wall at three hexes (as he now
+## does, test_decision_model.gd) would spoil the count.
 func _band(rules: CombatRules, side: int, shields: int, spears: int, bows: int, first_id := 1) -> Array[Warrior]:
-	return BandFactory.make_mixed_band(SimRng.new(3 + side), side, shields, spears, bows, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, first_id)
+	var band := BandFactory.make_mixed_band(SimRng.new(3 + side), side, shields, spears, bows, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, first_id)
+	for w in band:
+		w.personality = []
+	return band
 
 
 func test_ranks_template_puts_spears_behind_and_bows_two_behind() -> void:

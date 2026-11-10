@@ -153,6 +153,102 @@ var reckless_charge_radius := 3
 ## run for the round instead of stepping back in order.
 var fall_back_steady_morale := 4
 
+# --- Decision model (decision.gd) -----------------------------------------
+## A man weighs his options (sim-architecture.md, "Decision model"). Doing
+## what his order says scores dm_order, plus dm_order_active when that
+## means a step, a blow or a run; every alternative is scored below and
+## the best wins. The ladder is spaced a point or more apart so the green
+## blur (a jitter of +-dm_green_blur/2) only settles near-ties.
+var dm_order := 10.0
+var dm_order_active := 3.0
+## The heard order weighs against leaving one's place under Hold, Shield
+## wall or To me, for going forward under Push or Break them, and for
+## dropping back under Fall back, by this much.
+var dm_order_bearing := 1.0
+## A man with friends at his shoulders is held in the wall: charging or
+## stepping out from it costs this much (a reckless man in a wall leans to
+## the blow instead; alone, he goes).
+var dm_leave_wall := 6.0
+var dm_green_blur := 0.6
+## A green man who missed the shout does as the men at his shoulders do
+## when this many of them (and all of them) act on one order.
+var dm_green_copy_neighbours := 2
+## Choosing a mark: the man in front over the man beside over the man at
+## a spear's reach; then per wound step; a blooded man also sees a spoiled
+## shield and (at reach) each friend the enemy is pressing, up to the cap;
+## a boastful man adds dm_boast_mark for the enemy leader or a champion.
+var dm_mark_front := 14.0
+var dm_mark_beside := 7.0
+var dm_mark_wound := 1.0
+var dm_mark_shieldless := 1.0
+var dm_mark_pressing := 1.0
+var dm_mark_pressing_cap := 2
+var dm_boast_mark := 11.0
+## Covering a beset leader (men of guard_min_tier and better), a bowman
+## giving ground when closed with, closing a gap (blooded: where a
+## neighbour has just fallen; veteran: any), an end man turning to a
+## flanker within sight (blooded 2 hexes, veteran 3).
+var dm_cover_leader := 15.0
+var dm_give_ground := 14.0
+var dm_fill_gap := 12.0
+var dm_face_flank := 11.5
+var dm_flank_sight_blooded := 2
+var dm_flank_sight_veteran := 3
+## A hurt man drops back behind a friend: grievous (anyone feels that),
+## wounded (blooded and better), more with his shield gone; less if he is
+## reckless or grim.
+var dm_drop_grievous := 14.0
+var dm_drop_wounded := 6.0
+var dm_drop_shieldless := 3.0
+var dm_reckless_drop := 8.0
+var dm_grim_drop := 4.0
+## Champions read intentions: they throw the round before the lines meet
+## and brace the round before a rush (an enemy two off under Break them or
+## Push) lands.
+var dm_read_throw := 14.0
+var dm_read_brace := 14.0
+## Personality. Reckless: charge anything within reckless_charge_radius
+## whatever the order, and lean to the blow. Steady and grim: lean to
+## holding and covering, and away from charging. Greedy: strip a fallen
+## leader or banner man within dm_loot_radius, once. Boastful: step out
+## toward the enemy leader within reckless_charge_radius. Superstitious:
+## charge when the enemy's banner falls; when his own does, his order is
+## worth less to him and running more (most when shaken).
+var dm_reckless_charge := 16.0
+var dm_reckless_strike := 1.0
+var dm_steady_charge := 6.0
+var dm_steady_hold := 1.0
+var dm_greedy_loot := 14.0
+var dm_loot_radius := 3
+var dm_boast_step := 11.5
+var dm_omen_charge := 16.0
+var dm_omen_run := 9.0
+var dm_omen_run_shaken := 3.0
+## What his order is worth to a superstitious man whose own banner is down.
+var dm_omen_order := 2.0
+## A loose veteran goes for a hurt enemy two cells off: base plus per wound step.
+var dm_wounded_step_base := 8.0
+var dm_wounded_step_per := 1.5
+## A loose man of the attacking side steps toward the objective rather
+## than wherever his order would take him (only when the battle passes it).
+var dm_objective_step := 13.5
+
+# --- Personalities in made bands (band_factory.gd) ------------------------
+## Chance a man has no personality trait, and that a man with one has a
+## second (never one that conflicts, CampaignRules.personality_conflicts).
+## Leaders are a little more likely to have one. Weights per trait.
+var personality_none_chance := 0.3
+var personality_leader_none_chance := 0.2
+var personality_second_chance := 1.0 / 7.0
+var personality_weights := {
+	CombatTypes.Personality.STEADY: 3,
+	CombatTypes.Personality.RECKLESS: 3,
+	CombatTypes.Personality.GRIM: 2,
+	CombatTypes.Personality.BOASTFUL: 2,
+	CombatTypes.Personality.GREEDY: 1,
+	CombatTypes.Personality.SUPERSTITIOUS: 1,
+}
+
 # --- Battle loop (battle.gd) ----------------------------------------------
 var max_rounds := 40
 ## The prototype's field (hexes across and down). The lines deploy five rows

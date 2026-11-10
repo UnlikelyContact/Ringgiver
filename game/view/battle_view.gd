@@ -327,6 +327,9 @@ func _player_summary(lines: PackedStringArray) -> String:
 			out.append(line.split(" beats ")[0] + " struck you" + line.split("You")[1])
 		elif line.begins_with("You is shoved") or line.begins_with("You is pressed"):
 			out.append("you were pushed back")
+	# His own reason, when he chose for himself this round (it is in the log).
+	if out.is_empty() and player.last_reason != "" and lines.has(player.last_reason):
+		out.append(player.last_reason.replace("You ", "you ").replace("You's", "your"))
 	if out.is_empty():
 		var a: Action = battle.last_actions.get(player, null)
 		if a != null:
@@ -446,8 +449,9 @@ func _locked_neighbours(w: Warrior) -> Array[Warrior]:
 
 
 ## The muster preview: what each of our men, you included, would likely do
-## if the pending shout were given now, with how surely he would hear it.
-## Does not change the sim.
+## if the pending shout were given now, with how surely he would hear it,
+## and his reason when that is not the plain default for the order
+## ("" when it is). Does not change the sim.
 func preview() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var shout := pending_shout
@@ -462,16 +466,24 @@ func preview() -> Array[Dictionary]:
 			chance = Shouts.hear_chance(rules, dist, w.wits, horn, battle.fog)
 		var saved_order := w.heard_order
 		var saved_lag := w.order_lag
+		var saved_reason := w.last_reason
+		var saved_option := w.last_option
+		var saved_looted := w.looted
 		if shout != CombatTypes.Shout.NONE and chance > 0.0:
 			w.heard_order = shout
 		var a: Action
+		var reason := ""
 		if w == player and pending_action != null:
 			a = pending_action
 		else:
 			a = Decision.choose(SimRng.new(w.id * 31 + battle.round), rules, battle.grid, w, leader, battle.warriors)
+			reason = w.last_reason
 		w.heard_order = saved_order
 		w.order_lag = saved_lag
-		out.append({"warrior": w, "action": a, "chance": chance})
+		w.last_reason = saved_reason
+		w.last_option = saved_option
+		w.looted = saved_looted
+		out.append({"warrior": w, "action": a, "chance": chance, "reason": reason})
 	return out
 
 
@@ -610,6 +622,13 @@ func _draw() -> void:
 					draw_arc(from, 21, 0, TAU, 20, col, 2.5 if w == player else 2.0)
 				_:
 					pass
+			# A man thinking for himself (not the plain default for the
+			# order) gets a small dot above his head: gold on our side.
+			if p.reason != "":
+				var at: Vector2 = (tokens[w] as Token).position if tokens.has(w) else from
+				var dot := at + Vector2(-Token.R - 6, -Token.R - 16)
+				draw_circle(dot, 4.5, Palette.OUTLINE)
+				draw_circle(dot, 3.5, Color(Palette.GOLD, alpha))
 
 
 ## The objective's ground, behind the tokens: each cell filled faintly and

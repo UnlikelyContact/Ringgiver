@@ -18,14 +18,24 @@ const TIER_CENTER := {
 	CombatTypes.Tier.CHAMPION: 7,
 }
 
+## Traits that never go together in one man (as CampaignRules.personality_conflicts).
+const CONFLICTS := [
+	[CombatTypes.Personality.RECKLESS, CombatTypes.Personality.STEADY],
+	[CombatTypes.Personality.BOASTFUL, CombatTypes.Personality.GRIM],
+]
+
+
 ## Ids are assigned from `first_id` so a battle is reproducible: rng streams
 ## are forked by id, so ids must not depend on how many bands were made
-## before in the same process.
+## before in the same process. Personalities come from their own fork of
+## `rng`, so the stats drawn are the same with or without them.
 static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier,
 		armor: CombatTypes.Armor = CombatTypes.Armor.NONE, name_offset := 0, first_id := 1,
-		stat_center := -1) -> Array[Warrior]:
+		stat_center := -1, rules: CombatRules = null) -> Array[Warrior]:
 	var out: Array[Warrior] = []
 	var center: int = TIER_CENTER[tier] if stat_center < 0 else stat_center
+	var prules := rules if rules != null else CombatRules.new()
+	var prng := rng.fork("personality")
 	for i in count:
 		var stats: Array = []
 		for s in 5:
@@ -44,8 +54,52 @@ static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier
 			w.is_banner = true
 		elif i == 2:
 			w.is_horn = true
+		w.personality = roll_personality(prng, prules, w.is_leader)
 		out.append(w)
 	return out
+
+
+## Zero, one or (rarely) two personality traits from the odds and weights in
+## CombatRules (personality_*), never two that conflict.
+static func roll_personality(rng: SimRng, rules: CombatRules, leader := false) -> Array[CombatTypes.Personality]:
+	var out: Array[CombatTypes.Personality] = []
+	var none := rules.personality_leader_none_chance if leader else rules.personality_none_chance
+	if rng.randf() < none:
+		return out
+	out.append(_weighted_trait(rng, rules, out))
+	if rng.randf() < rules.personality_second_chance:
+		var second := _weighted_trait(rng, rules, out)
+		if int(second) >= 0:
+			out.append(second)
+	return out
+
+
+## A trait drawn by weight from those that neither repeat nor conflict with
+## `have`; -1 if none is left.
+static func _weighted_trait(rng: SimRng, rules: CombatRules, have: Array[CombatTypes.Personality]) -> int:
+	var pool: Array[int] = []
+	var total := 0
+	for p in CombatTypes.Personality.values():
+		if have.has(p):
+			continue
+		var clash := false
+		for pair in CONFLICTS:
+			if (have.has(pair[0]) and p == pair[1]) or (have.has(pair[1]) and p == pair[0]):
+				clash = true
+		if clash:
+			continue
+		var wgt: int = rules.personality_weights.get(p, 0)
+		if wgt > 0:
+			pool.append(p)
+			total += wgt
+	if total == 0:
+		return -1
+	var roll := rng.randi_range(1, total)
+	for p in pool:
+		roll -= int(rules.personality_weights[p])
+		if roll <= 0:
+			return p
+	return pool[pool.size() - 1]
 
 
 ## A band of mixed arms: `shields` shield-bearers (the leader, banner and
@@ -54,7 +108,7 @@ static func make_band(rng: SimRng, side: int, count: int, tier: CombatTypes.Tier
 static func make_mixed_band(rng: SimRng, side: int, shields: int, spears: int, bows: int,
 		tier: CombatTypes.Tier, rules: CombatRules, armor: CombatTypes.Armor = CombatTypes.Armor.NONE,
 		name_offset := 0, first_id := 1) -> Array[Warrior]:
-	var out := make_band(rng, side, shields + spears + bows, tier, armor, name_offset, first_id)
+	var out := make_band(rng, side, shields + spears + bows, tier, armor, name_offset, first_id, -1, rules)
 	for i in out.size():
 		var w: Warrior = out[i]
 		if i < shields:

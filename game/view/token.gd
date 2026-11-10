@@ -21,6 +21,8 @@ var _tense := false
 var _locked := false  # in a wall: a bigger shield set tight, and less sway
 
 const R := 15.0
+const GRIEVOUS_SAG := 3.0
+const RECKLESS_LEAN := 0.5
 
 
 func setup(w: Warrior, p_rules: CombatRules, player := false) -> void:
@@ -73,8 +75,8 @@ func _draw() -> void:
 	var side := Palette.side_color(warrior.side)
 	# Ground shadow stays put; the man sways above it.
 	draw_circle(Vector2(0, 6), R * 0.9, Color(0, 0, 0, 0.25))
-	draw_set_transform(_sway, 0.0, Vector2.ONE * (1.22 if _locked else 1.0))
 	var f := Iso.to_screen_f(Vector2(warrior.facing)).normalized()
+	draw_set_transform(_sway + _tell(f), 0.0, Vector2.ONE * (1.22 if _locked else 1.0))
 	var tip := f * (R + 9)
 	var side_v := Vector2(-f.y, f.x) * 5
 	draw_colored_polygon(PackedVector2Array([tip, f * R * 0.7 + side_v, f * R * 0.7 - side_v]), Palette.BONE if is_player else Palette.UNDYED)
@@ -127,6 +129,18 @@ func _draw() -> void:
 	_draw_readouts()
 	if flash > 0.0:
 		draw_circle(Vector2.ZERO, R + 6, Color(flash_color, flash * 1.6))
+
+
+## Tells from his state, drawn as an offset from his shadow: a grievously
+## wounded man sags a little lower over it; a reckless man leans half a
+## pixel forward of his line.
+func _tell(f: Vector2) -> Vector2:
+	var t := Vector2.ZERO
+	if warrior.wound == CombatTypes.Wound.GRIEVOUS:
+		t.y += GRIEVOUS_SAG
+	if warrior.has_personality(CombatTypes.Personality.RECKLESS):
+		t += f * RECKLESS_LEAN
+	return t
 
 
 func _draw_device(side: Color) -> void:

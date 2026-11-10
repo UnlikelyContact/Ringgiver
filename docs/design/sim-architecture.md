@@ -346,7 +346,8 @@ Rules to implement:
   a slot keeps it and a man walking to his slot is not re-routed (ties: man
   nearer the leader's side of the line, then id, then slot order). Slots
   never include the leader's own cell.
-- **Decisions.** In priority order:
+- **Decisions.** In priority order (the first cut; now a weighed choice,
+  see "Decision model" below):
   1. `broken` → FLEE one cell directly away from the nearest active enemy
      (prefer a free cell; if none, IDLE).
   2. `order_lag > 0` → decrement, then act on the *previous* behavior:
@@ -391,6 +392,105 @@ away in fog and forms a complete line within far more rounds than a
 VETERAN band does; write the comparison as a test over many seeds (drive
 the men by repeatedly calling `propagate`, `choose`, and applying MOVE
 actions to the grid yourself in the test).
+
+## Decision model (`decision.gd`, 10 Nov 2026)
+
+The priority list above was the first cut. `Decision.choose` is now a
+weighed choice, so a veteran and a green man in the same spot do
+different, sensible things, and so do a reckless and a steady one. The
+signature is unchanged apart from an optional last argument,
+`objective: Objective = null`.
+
+**Rules first (not judgement).** In order: an inactive man idles; a broken
+man runs; a man with `wall_move` set goes with his wall (standing, he still
+weighs whom to strike or whether to throw); a green man with `order_lag`
+braces; a frightened green man may freeze (`green_panic_ignore_chance`).
+The player's own action override stays in `Battle`.
+
+**Options.** ORDER is what his order says, the old per-order behaviour
+(`_by_order`: form, hold, push, to me, break them, fall back, wedge; bows
+shoot; a bracing man throws). The alternatives, in tie order: throw early,
+brace for a charge, fill a gap, face a flanker, drop back, cover the
+leader, give ground (bows), charge, loot, step out, go for a wounded man,
+make for the objective, lose heart (run). Each is built only if he can
+see it and it is possible, scored, and the best wins; ties go to the
+earlier option, so the order wins every tie.
+
+**Scores** (all `CombatRules.dm_*`, spaced a point or more apart):
+ORDER 10, plus 3 when it means a step, a blow or a run; throw early and
+brace for a charge 14; fill a gap 12; face a flanker 11.5; drop back 14
+grievous, 6 wounded, +3 without a shield, -8 reckless, -4 grim; cover the
+leader 15; give ground 14; charge 16 for a reckless man (16 for a
+superstitious one when the enemy's banner is down), -6 steady or grim;
+loot 14; step out 11.5; go for a wounded man 8 + 1.5 per wound step;
+objective 13.5; lose heart 9, +3 when shaken. The heard order bears on
+each (`dm_order_bearing`): Hold, Shield wall and To me weigh a point
+against leaving his place, Push and Break them a point for going forward,
+Fall back a point for dropping back. A man with friends at his shoulders
+is held in the wall: charging or stepping out from it costs
+`dm_leave_wall` (6), so a reckless man in a wall leans to the blow
+instead, and alone he goes.
+
+**Choosing a mark** is weighed too: the man in front (14) over the man
+beside (7) over the man at a spear's reach (0), then one point per wound
+step. Blooded and better add a point for a spoiled shield and, at reach,
+a point per friend the enemy is pressing (two at most), so a spearman
+strikes the man on his neighbour; a boastful man adds 11 for the enemy
+leader or a champion.
+
+**What a tier sees.**
+
+| Tier | Sees |
+|---|---|
+| Green | The man in front and the order; his own grievous wound. His weights are blurred by a jitter of ±0.3 (`dm_green_blur`) from `rng.fork("blur")`, so near-ties go either way. A green man who missed the shout does as the men at his shoulders do when two or more of them, and all of them, act on one order that is not his. |
+| Blooded | Also his neighbours: the gap where one has just fallen (a friend down on the cell), the enemy pressing his friends, a spoiled enemy shield, a flanker two hexes off the open end of his line; his own lesser wound and lost shield. |
+| Veteran | Also the flank (a flanker three off), any gap in his line, a hurt enemy two cells off when he stands alone, and a leader beset (`guard_min_tier`). |
+| Champion | Also intentions: an enemy two off under Break them or Push will land next round, so he braces toward him; the lines will meet next round, so he throws now. |
+
+**Personalities.** Reckless: charges anything within
+`reckless_charge_radius` whatever the order, leans to the blow, will not
+drop back. Steady and grim: lean to holding and covering, never charge;
+grim fights on hurt. Boastful: strikes the enemy leader or a champion over
+a hurt man, steps out where the enemy leader will see him. Greedy: leaves
+the line to strip a fallen enemy leader or banner man within three hexes,
+once (`Warrior.looted`). Superstitious: goes at them when the enemy's
+banner falls; when his own does, his order is worth two points less and
+running more, so a shaken superstitious man runs a step.
+`BandFactory.make_band` now rolls personalities from its own fork of the
+seed (`roll_personality`; stats are unchanged): 30% none, 60% one, 10%
+two (leaders 20% none), weighted steady 3, reckless 3, grim 2, boastful 2,
+greedy 1, superstitious 1, never reckless with steady or boastful with
+grim.
+
+**Reasons and tells.** When the chosen option is not the plain default
+for his order, `Warrior.last_reason` holds a short line in his voice by
+tier ("Olvir is hurt and falls back behind Thorolf", "Grim sees the gap
+and steps into it", "Bard will not wait: he goes at them", "Hallvard's
+spear goes for the man on Skalla") and it is appended to the `log` passed
+in; `last_option` names what he chose. Lines never contain " beats ",
+" shoots ", " spears " or "DOWN", so the blow scan and the view's parsing
+ignore them. The HUD keeps up to three a round in their own colour (read
+from the men, so they show whether or not `Battle` passes its log); the
+muster preview carries each man's reason and draws a gold dot over a man
+who is thinking for himself; a grievously wounded man is drawn three
+pixels lower over his shadow and a reckless man half a pixel forward of
+his line.
+
+**Not yet wired.** `Battle.run_round` calls `choose` without its log or
+objective, so reasons reach the HUD from the men, not the battle log, and
+loose attackers do not yet make for the objective. Passing `log` and
+`objective` in the two calls turns both on.
+
+**Measured** (`tools/batch_decisions.gd`, 100 varied fields with mixed
+tiers, Shield wall then Push): 11 reasons a fight; reasons are 2-3% of
+green, blooded and veteran decisions and 8% of champions' (brace for a
+charge 3.6%, throw early 1.9%). The symmetric batches did not move beyond
+noise (green vs veteran 0/100, equal green 49/51, equal veteran 53/47,
+mail 77/23), nor the varied field (push 51.5%, hold 35%, steady AI 48%).
+Before the wall held reckless men, personalities alone took equal green
+to 65/35 and push to 64%: reckless men broke from the holding side's wall
+piecemeal at three hexes while the pushing side's were carried by their
+wall's move.
 
 ## Module D — battle loop, leader AI, batch runner (after A–C merge)
 

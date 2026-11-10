@@ -61,6 +61,13 @@ const NO_WALL_MOVE := Vector2i(-9999, -9999)
 var wall_move := NO_WALL_MOVE
 var wall_face := Vector2i.ZERO  # the facing he takes with that step (ZERO: keeps his own)
 var turned_to_strike := false  # he turned off his wall's front to fight; he turns back once it is over
+## What he chose last time Decision weighed his options (Decision.OPT_NAMES,
+## or the plain action's name when he did what his order said), and, when
+## that was not the plain default for his order, why, in his own voice.
+var last_option := ""
+var last_reason := ""
+## A greedy man has stripped a fallen leader or banner man this battle.
+var looted := false
 ## Effort gained this battle, by CombatTypes.Stat -> int.
 var effort := {}
 var fate: CombatTypes.Fate = CombatTypes.Fate.RECOVERED
