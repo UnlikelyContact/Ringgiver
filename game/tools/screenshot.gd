@@ -1,7 +1,10 @@
 extends SceneTree
 ## Renders the prototype under a display and saves a screenshot.
 ##
-##   xvfb-run -a godot --path ring-giver/game --rendering-driver opengl3 -s tools/screenshot.gd -- [rounds] [out.png] [paused 0|1] [scenario] [seed]
+##   xvfb-run -a godot --path ring-giver/game --rendering-driver opengl3 -s tools/screenshot.gd -- [rounds] [out.png] [paused 0|1] [scenario] [seed] [template] [band]
+##
+## `template` forces the field's template (meadow, river, farmstead,
+## wood_edge, hillside; "-" for the seed's own), `band` your band's size.
 
 
 func _init() -> void:
@@ -13,6 +16,10 @@ func _init() -> void:
 	var seed_in := int(args[4]) if args.size() > 4 else 7
 	var scene = load("res://view/main.tscn").instantiate()
 	scene.scenario = scenario
+	if args.size() > 5 and args[5] != "-":
+		scene.template = args[5]
+	if args.size() > 6:
+		scene.band = int(args[6])
 	scene.seed_in = seed_in
 	scene.fixed_seed = true
 	get_root().add_child(scene)

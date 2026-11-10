@@ -40,9 +40,9 @@ func test_ford_goes_to_more_men_at_the_end_of_its_rounds() -> void:
 	obj.place(b.grid, 3, -1, 8)
 	b.objective = obj
 	assert_eq(obj.rounds, 16, "the ford is held for sixteen rounds by default")
-	assert_true(obj.cells.size() >= 3 and obj.cells.size() <= 5, "three to five hexes")
+	assert_true(obj.cells.size() >= 4 and obj.cells.size() <= 5, "four or five crossing hexes")
 	for c in obj.cells:
-		assert_eq(BattleGrid.to_offset(c).y, 4, "the ford lies just before the defender's line")
+		assert_eq(BattleGrid.to_offset(c).y, 5, "the ford is the stream's crossing, two rows before the defender's line")
 	_occupy(b, obj, 0, 2)
 	b.round = 10
 	assert_eq(obj.check(b), -1, "nothing is decided before the end of round 16")
@@ -96,7 +96,7 @@ func test_hall_needs_half_its_cells_two_rounds_running() -> void:
 	var b := _field(rules)
 	var obj := Objective.new(Objective.Kind.THE_HALL, 0, 5, rules)
 	obj.place(b.grid, 3, -1, 8)
-	assert_true(obj.cells.size() >= 4 and obj.cells.size() <= 6, "four to six hexes")
+	assert_true(obj.cells.size() >= 2 and obj.cells.size() <= 4, "one or two doors and one or two hexes of floor")
 	var half := (obj.cells.size() + 1) / 2
 	_occupy(b, obj, 0, half)
 	b.round = 3
@@ -168,10 +168,13 @@ func test_varied_fields_carry_objectives_about_seven_in_ten() -> void:
 		for c in obj.cells:
 			rows += BattleGrid.to_offset(c).y
 		var mean_row := float(rows) / obj.cells.size()
+		# Against the middle of the gap between the lines (their front three
+		# rows above the field's middle, ours two below it).
+		var mid := rules.field_height / 2 - 0.5
 		if obj.attacker == 0:
-			assert_true(mean_row < rules.field_height / 2.0, "seed %d: their end, at the top" % (1 + s))
+			assert_true(mean_row < mid, "seed %d: their end, at the top" % (1 + s))
 		else:
-			assert_true(mean_row > rules.field_height / 2.0, "seed %d: our end, at the bottom" % (1 + s))
+			assert_true(mean_row > mid, "seed %d: our end, at the bottom" % (1 + s))
 	assert_true(n_with >= 28 and n_with <= 42, "about 70%% have one (%d of 50)" % n_with)
 	assert_true(we_attack >= n_with * 0.3 and we_attack <= n_with * 0.7, "we attack about half (%d of %d)" % [we_attack, n_with])
 	for k in 3:

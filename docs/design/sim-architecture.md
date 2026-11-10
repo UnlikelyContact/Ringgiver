@@ -74,15 +74,19 @@ same commit and say so in your report.
 An `Objective` (RefCounted) gives a field something to take or hold, so one
 side must come on. Kinds: `HOLD_GROUND` (the ford), `REACH_THE_SHIPS`,
 `THE_HALL`. Each has `attacker` (side), `cells` (it owns the list; `place`
-marks them `Terrain.FLAT`), `rounds`, `name`, `brief(side)` and
+draws its ground and lists every hex it drew in `features`), `rounds`,
+`name`, `brief(side)` and
 `progress(battle)` for the HUD. `check(battle)` returns -1 or the winning
 side and sets `reason`; it counts once per round (the hall's two-round
 streak), so a second call in a round is free.
 
 - Ford: at the end of round `objective_ford_rounds` (16) the side with more
   standing men on the cells has it; ties go to the defender.
-- Ships: `objective_ships_men` (4) standing attackers on the strip wins at
-  once; the defender wins at `objective_ships_rounds` (20).
+- Ships: `ships_men` standing attackers on the strip wins at once; the
+  defender wins at `objective_ships_rounds` (20). `size_for_band(band)` sets
+  `ships_men` to `ceil(band * objective_ships_fraction)` (a third), at least
+  `objective_ships_min_men` (2): four for twelve men, two for four to six.
+  Built without a band it keeps `objective_ships_men` (4).
 - Hall: the attacker on at least half the cells for `objective_hall_streak`
   (2) rounds running; the defender wins at `objective_hall_rounds` (18).
 
@@ -96,13 +100,123 @@ told to push while none of his men is engaged holds.
 
 `Scenario.build(..., vary=true)` draws the objective from its own seed fork
 (`objective_chance` 0.7, `objective_player_attacks` 0.5) and places it at
-the defender's end: the ford on the row before his line, the ships on the
-edge row behind him, the hall on his second and third ranks' rows. The
-attacking side brings `objective_attacker_shields` (2) more shields than
-the defender's draw would give. `vary=false` never has an objective.
+the defender's end, before anyone deploys: the ford is a stream two rows
+before his line (see "Fields and terrain"), the ships a strip three rows
+behind his front, the hall a building four rows behind it. The attacking
+side brings `objective_attacker_shields` (2 at twelve men, scaled to the
+band) more shields than the defender's draw would give. `vary=false` never
+has an objective.
 `tools/batch_player.gd` reports per strategy how fights ended (objective,
 lines broke, drawn), the mix of fields and the win rate attacking,
 defending and in the open.
+
+## Fields and terrain (`field.gd`, `battle_grid.gd`, 10 Nov 2026)
+
+`CombatTypes.Terrain` is FLAT, MUD, WATER, SLOPE, TREE, ROCK, FENCE,
+BUILDING, FORD, BRIDGE, DOOR.
+
+- *Impassable:* WATER, TREE, ROCK, FENCE, BUILDING (`BattleGrid.blocks`).
+  `is_passable(c)` is on the map and not one of these; `is_free(c)` is
+  passable and empty. Every movement choice (the wall step, decisions,
+  formation slots through `Formation._usable`, shoves, follow-ups,
+  deployment) goes through `is_free`, so nobody ever stands there, and so
+  nobody is struck or flanked from there: a man with a wall of the hall at
+  his right is not flanked from that side because nobody can stand in it.
+  The wall step (`Battle._plan_wall`) and the push's follow-up
+  (`Push._advance`) treat any impassable hex as they treated water: the man
+  holds. In the wall step he no longer holds his neighbours with him: the
+  rule that a stepper who would lose a linked neighbour holds
+  (`_keeps_a_hand_on`) ignores a man held by the ground (`ground_held`).
+  Before terrain this never came up beyond a single test hex of water;
+  with a stream or a tree in front of one man it froze the whole wall, the
+  hold cascading man to man. Now the line flows past him, and he finds his
+  place again once he is round (he may drop out of the chain for a round).
+- *MUD and FORD* cost breath: a man who ends a step in either spends
+  `breath_cost_move * terrain_breath_extra` more (`Battle._wade`), whether
+  he walked there alone or stepped with the wall (the wall step paid no mud
+  toll before).
+- *FORD breaks the lock.* `BattleGrid.line_neighbors` returns nobody for a
+  man standing in a ford and never lists one: so he has no lock bonus, no
+  brace against a shove, no push line, and counts as alone for morale, and
+  his neighbours on the bank lose him from theirs. The check lives there
+  rather than in `MeleeExchange.is_locked` because the lock, the push
+  groups, the "alone" morale and the drawn shield bars all read
+  `line_neighbors`, so one rule covers what is counted and what is drawn.
+  `chain` (the wall's membership) is untouched: a wall wades across
+  together, unlocked.
+- *BRIDGE and DOOR* are plain passable ground (a stream's crossing, a
+  hall's doorway).
+- *SLOPE* is high ground: `Push.group_strength` adds `slope_push_bonus`
+  (3) times the share of the group standing on SLOPE.
+
+*Templates.* `Field.make(grid, rules, seed, their_row, our_row, objective,
+forced)` draws a named template from the seed (fork "field-template"):
+
+| template | features | when |
+|---|---|---|
+| `meadow` | 3-6 trees and rocks off the middle third, a fence line half the time | ships (3 in 4), open |
+| `river` | a stream across a middle row, fords and maybe a bridge, trees on the banks | the ford, open |
+| `farmstead` | a hall (the objective's, or a steading out on a flank), a yard fence, a tree or two | the hall, open |
+| `wood_edge` | trees thick along one flank, thinning inward | ships (1 in 4), open |
+| `hillside` | SLOPE under one side's lines and the row before them (the defender's, or either in an open fight) | open |
+
+Open fights draw by `field_weights` (40/5/5/15/35), which with objectives on
+seven fields in ten brings the whole mix to about 30/25/25/10/10. Features
+never stand on the deployment rows (`Field.deployment_rows`: each side's
+front and two ranks; SLOPE is ground and the one exception) or on the
+objective's `features`. `Field.open_ways` must hold after a draw: every row
+between the lines has two runs of two or more passable hexes, or one of
+four, and a breadth-first walk over "wide" hexes (passable with a passable
+neighbour in its row) joins the two front rows. A draw that fails is undone
+and made again from the next fork ("try:n"), up to `field_tries` (8); after
+that the template's features are cleared.
+
+*Objectives on features.* The ford (`Objective._place_ford`,
+`stream_crossings`) is a stream of WATER the whole width of the field on
+the second row before the defender's line (a row of dry bank between),
+crossed by one ford four hexes wide or two fords two wide, and two times in
+five a one-hex bridge on a flank: the four or five crossing hexes are the
+objective, so the fight for the ford is a fight for the crossing. (On the
+row just before his line, as the old ford patch was, the attacker could
+only come at the line through the crossing, unlocked and a man at a time,
+and took it in one fight in fifteen; one row out, the crossing is ground
+either side must come to.) The hall (`_place_hall`, `hall_shape`) is one or
+two hexes of floor four rows behind the defender's front (or on his edge
+row), ringed by BUILDING, with one or two DOOR hexes in the ring toward the
+fight: four to six walls, and the doors and floor are the objective. On the
+smallest field (12 rows) the ring's front reaches the defender's third rank
+row; it is drawn before deployment, so the men who would stand there stand
+elsewhere. The ships keep their strip; a meadow or wood edge sometimes puts
+a tree or fence post at its ends and a broken fence beyond it.
+
+*Band size.* `Scenario.build(name, seed, rules, vary, band := 12,
+template := "")`. `band_split(n)` arms the player's band:
+`band_shield_share` (2/3) shields, rounded, the rest spears then bows (12:
+8/2/2, 8: 5/2/1, 6: 4/1/1, 4: 3/1/0). The varied enemy draws shields from
+ours to a quarter more, spears and bows from one fewer than ours to ours;
+`objective_attacker_shields` scales by band/12. `field_size(n)` is
+`field_min_width` x `field_min_height` (14 x 12) up to `field_small_band`
+(6) men, `field_width` x `field_height` (22 x 16) at `field_band` (12),
+linear between and beyond, the height kept even. The dict carries `field`
+(null when flat), `field_name` ("flat" without `vary`), `band` and `size`.
+With `vary` false the field is exactly the old symmetric one.
+`tools/batch_player.gd` takes the band as the fifth argument;
+`tools/screenshot.gd` takes a template and a band after the seed.
+
+*The way round* (`LeaderAI.route_target`, `route`). When a hex within
+`ai_route_lookahead` (3) of the leader's wall step straight ahead is
+impassable, the AI leader takes the shortest walk over passable hexes from
+himself to a hex beside an enemy and wheels (one stance a round, through
+`_wheel_if_needed`, never while engaged) toward the first ford, bridge or
+door on it, else toward the walk's hex `ai_route_lookahead` steps on. The
+battle's own wall step is unchanged.
+
+*View.* `BattleView._draw_ground` (turf, mud, slope with a hatch, water,
+ford with ripples, bridge planks, timber with a roof ridge, a door's
+lighter notch) and `_draw_feature` (tree crowns with a trunk dot, rock
+lumps, fence rails and posts) draw under the tokens, which are child nodes.
+Colours in `Palette`. The HUD's opening line names the field ("River. you:
+Hold the ford until round 16").
 
 ## Module A — exchanges and fate (`attack.gd`, `fate.gd`)
 

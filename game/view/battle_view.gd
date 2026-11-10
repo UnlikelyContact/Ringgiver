@@ -569,15 +569,12 @@ func _draw() -> void:
 	var g := battle.grid
 	for row in g.height:
 		for col_i in g.width:
-			var c := BattleGrid.from_offset(col_i, row)
-			var col := Palette.GROUND
-			if g.terrain_at(c) == CombatTypes.Terrain.MUD:
-				col = Palette.MUD
-			elif (col_i + row) % 2 == 0:
-				col = Palette.GROUND.lightened(0.04)
-			var hexa := Iso.hexagon(c, 1.0)
-			draw_colored_polygon(hexa, col)
-			draw_polyline(hexa + PackedVector2Array([hexa[0]]), Palette.GROUND_LINE, 1.0)
+			_draw_ground(g, BattleGrid.from_offset(col_i, row), (col_i + row) % 2 == 0)
+	# Things standing on the ground second, top row first, so a tree's crown
+	# overlaps the hex behind it; the men (child tokens) draw above it all.
+	for row in g.height:
+		for col_i in g.width:
+			_draw_feature(g, BattleGrid.from_offset(col_i, row))
 	draw_objective()
 	_draw_wall_slots()
 	_draw_shield_locks()
@@ -629,6 +626,97 @@ func _draw() -> void:
 				var dot := at + Vector2(-Token.R - 6, -Token.R - 16)
 				draw_circle(dot, 4.5, Palette.OUTLINE)
 				draw_circle(dot, 3.5, Color(Palette.GOLD, alpha))
+
+
+## One hex's ground: turf (checkered faintly), mud, slope with a faint
+## hatch, water, the ford's paler water with ripples, a bridge's planks over
+## water, a hall's timber, a doorway.
+func _draw_ground(g: BattleGrid, c: Vector2i, light: bool) -> void:
+	var t := g.terrain_at(c)
+	var col := Palette.GROUND.lightened(0.04) if light else Palette.GROUND
+	match t:
+		CombatTypes.Terrain.MUD:
+			col = Palette.MUD
+		CombatTypes.Terrain.SLOPE:
+			col = Palette.SLOPE
+		CombatTypes.Terrain.WATER, CombatTypes.Terrain.BRIDGE:
+			col = Palette.WATER
+		CombatTypes.Terrain.FORD:
+			col = Palette.FORD
+		CombatTypes.Terrain.BUILDING:
+			col = Palette.TIMBER
+		CombatTypes.Terrain.DOOR:
+			col = Palette.TIMBER.lightened(0.15)
+	var hexa := Iso.hexagon(c, 1.0)
+	draw_colored_polygon(hexa, col)
+	draw_polyline(hexa + PackedVector2Array([hexa[0]]), Palette.GROUND_LINE, 1.0)
+	var p := Iso.to_screen(c)
+	var s := Iso.SIZE
+	match t:
+		CombatTypes.Terrain.SLOPE:
+			for i in range(-2, 3):
+				var o := Vector2(i * s * 0.32, 0)
+				draw_line(p + o + Vector2(-s * 0.12, s * 0.28), p + o + Vector2(s * 0.12, -s * 0.28), Palette.HATCH, 1.5)
+		CombatTypes.Terrain.FORD:
+			for i in 2:
+				var y := (i - 0.5) * s * 0.42
+				draw_arc(p + Vector2(-s * 0.25, y), s * 0.2, PI * 1.1, PI * 1.9, 6, Palette.RIPPLE, 1.5)
+				draw_arc(p + Vector2(s * 0.22, y + s * 0.1), s * 0.2, PI * 1.1, PI * 1.9, 6, Palette.RIPPLE, 1.5)
+		CombatTypes.Terrain.BRIDGE:
+			# Planks across the stream, between two rails.
+			var w := s * 0.62
+			draw_rect(Rect2(p + Vector2(-w, -s * 0.5), Vector2(2 * w, s)), Palette.PLANK)
+			for i in 5:
+				var x := -w + (i + 0.5) * (2 * w / 5.0)
+				draw_line(p + Vector2(x, -s * 0.5), p + Vector2(x, s * 0.5), Palette.OUTLINE, 1.0)
+			draw_line(p + Vector2(-w, -s * 0.5), p + Vector2(w, -s * 0.5), Palette.TRUNK, 3.0)
+			draw_line(p + Vector2(-w, s * 0.5), p + Vector2(w, s * 0.5), Palette.TRUNK, 3.0)
+		CombatTypes.Terrain.BUILDING:
+			# A roof ridge across the hall's hex, and its eaves.
+			draw_colored_polygon(Iso.hexagon(c, 6.0), Palette.TIMBER.lightened(0.08))
+			draw_line(p + Vector2(-s * 0.8, 0), p + Vector2(s * 0.8, 0), Palette.ROOF, 4.0)
+			draw_polyline(Iso.hexagon(c, 2.0) + PackedVector2Array([Iso.hexagon(c, 2.0)[0]]), Palette.OUTLINE, 2.0)
+		CombatTypes.Terrain.DOOR:
+			# The doorway: a lighter notch in the timber, posts either side.
+			draw_rect(Rect2(p + Vector2(-s * 0.3, -s * 0.42), Vector2(s * 0.6, s * 0.84)), Palette.DOOR)
+			draw_line(p + Vector2(-s * 0.36, -s * 0.46), p + Vector2(-s * 0.36, s * 0.46), Palette.OUTLINE, 3.0)
+			draw_line(p + Vector2(s * 0.36, -s * 0.46), p + Vector2(s * 0.36, s * 0.46), Palette.OUTLINE, 3.0)
+
+
+## What stands on a hex: a tree (dark crown, trunk dot), a rock (a grey
+## lump), a fence (a brown rail along the hex, with posts).
+func _draw_feature(g: BattleGrid, c: Vector2i) -> void:
+	var t := g.terrain_at(c)
+	var p := Iso.to_screen(c)
+	var s := Iso.SIZE
+	var h := (c.x * 73856093) ^ (c.y * 19349663)  # a fixed wobble per hex
+	match t:
+		CombatTypes.Terrain.TREE:
+			var o := Vector2(float(h % 5) - 2.0, float((h / 5) % 5) - 4.0)
+			draw_circle(p + o + Vector2(0, s * 0.25), s * 0.18, Color(Palette.OUTLINE, 0.35))  # its shadow
+			draw_circle(p + o, s * 0.62, Palette.OUTLINE)
+			draw_circle(p + o, s * 0.56, Palette.TREE)
+			draw_circle(p + o + Vector2(-s * 0.15, -s * 0.15), s * 0.28, Palette.TREE_LIGHT)
+			draw_circle(p + o + Vector2(0, s * 0.08), s * 0.09, Palette.TRUNK)
+		CombatTypes.Terrain.ROCK:
+			var pts := PackedVector2Array()
+			for i in 7:
+				var a := TAU * i / 7.0
+				var r := s * (0.58 + 0.12 * float((h >> i) & 1))
+				pts.append(p + Vector2(cos(a) * r, sin(a) * r * 0.72 - s * 0.08))
+			draw_colored_polygon(pts, Palette.ROCK)
+			draw_circle(p + Vector2(-s * 0.18, -s * 0.24), s * 0.18, Palette.ROCK.lightened(0.18))
+			draw_polyline(pts + PackedVector2Array([pts[0]]), Palette.OUTLINE, 2.5)
+			draw_line(p + Vector2(-s * 0.05, -s * 0.12), p + Vector2(s * 0.3, s * 0.12), Palette.ROCK_DARK, 2.5)
+		CombatTypes.Terrain.FENCE:
+			var a := p + Vector2(-s * 0.88, 0)
+			var b := p + Vector2(s * 0.88, 0)
+			draw_line(a + Vector2(0, -4), b + Vector2(0, -4), Palette.OUTLINE, 5.0)
+			draw_line(a + Vector2(0, -4), b + Vector2(0, -4), Palette.FENCE, 3.0)
+			draw_line(a + Vector2(0, 4), b + Vector2(0, 4), Palette.FENCE, 2.0)
+			for x in [-0.7, 0.0, 0.7]:
+				draw_line(p + Vector2(s * x, -10), p + Vector2(s * x, 8), Palette.OUTLINE, 4.0)
+				draw_line(p + Vector2(s * x, -10), p + Vector2(s * x, 8), Palette.FENCE.darkened(0.2), 2.0)
 
 
 ## The objective's ground, behind the tokens: each cell filled faintly and

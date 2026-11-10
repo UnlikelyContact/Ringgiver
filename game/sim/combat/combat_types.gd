@@ -33,7 +33,13 @@ enum ActionKind { BRACE, MOVE, ATTACK, SHOOT, FLEE, IDLE }
 ## shield but no flank bonus. RIGHT is the exposed flank. REAR is deadly.
 enum Arc { FRONT, FRONT_RIGHT, LEFT, RIGHT, REAR }
 
-enum Terrain { FLAT, MUD, WATER, SLOPE }
+## Ground under a cell (BattleGrid, Field). WATER, TREE, ROCK, FENCE and
+## BUILDING cannot be stood on (BattleGrid.blocks). FORD is shallow water:
+## passable, costs breath like MUD, and a man standing in it locks shields
+## with nobody. BRIDGE and DOOR are passable flat ground (a stream's
+## crossing, a hall's doorway). SLOPE is high ground: a line standing on it
+## pushes harder (Push.group_strength).
+enum Terrain { FLAT, MUD, WATER, SLOPE, TREE, ROCK, FENCE, BUILDING, FORD, BRIDGE, DOOR }
 
 ## Post-battle fate of a man who went Down.
 enum Fate { RECOVERED, MAIMED, DEAD }
@@ -43,3 +49,4 @@ const WOUND_NAMES := ["unhurt", "bruised", "wounded", "grievous", "down"]
 const SHOUT_NAMES := ["-", "shield wall", "hold", "push", "to me", "break them", "fall back", "svinfylking", "taunt"]
 const STAT_NAMES := ["might", "skill", "grit", "nerve", "wits"]
 const ROLE_NAMES := ["shield", "spear", "bow"]
+const TERRAIN_NAMES := ["flat", "mud", "water", "slope", "tree", "rock", "fence", "building", "ford", "bridge", "door"]

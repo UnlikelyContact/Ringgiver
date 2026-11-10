@@ -197,8 +197,11 @@ func _cunning_target(battle: Battle, side: int, leader: Warrior, moving: bool) -
 func _wheel_if_needed(battle: Battle, side: int, leader: Warrior, moving: bool) -> bool:
 	if _engaged(battle, battle.wall_members(side), side) or _engaged(battle, [leader] as Array[Warrior], side):
 		return false
-	var target := _cunning_target(battle, side, leader, moving)
+	# Ground in the way comes first: aim at the crossing.
+	var target := route_target(battle, side, leader)
 	var min_steps := 1
+	if target == Vector2.INF:
+		target = _cunning_target(battle, side, leader, moving)
 	if target == Vector2.INF:
 		target = threat_point(battle, side)
 		min_steps = battle.rules.ai_threat_wheel_min_steps
@@ -214,6 +217,75 @@ func _wheel_if_needed(battle: Battle, side: int, leader: Warrior, moving: bool) 
 	battle.log.append("%s wheels his line %s toward %s" % [leader.display_name, "right" if turn > 0 else "left",
 			BattleGrid.AXIS_NAMES[leader.wall_axis()]])
 	return true
+
+
+# --- Finding a way round -------------------------------------------------------
+
+## When the ground straight ahead of the leader (his wall's forward step,
+## taken `ai_route_lookahead` times) has a hex nobody can stand on (water,
+## trees, rocks, a fence, a wall), the point to wheel toward (cartesian):
+## on the shortest walk over passable ground from him to a hex beside an
+## enemy (`route`), the first ford, bridge or door it crosses, else the
+## hex `ai_route_lookahead` + 1 steps along it. Vector2.INF while the way
+## ahead is open, or when there is no way at all.
+func route_target(battle: Battle, side: int, leader: Warrior) -> Vector2:
+	var grid := battle.grid
+	var ax := leader.wall_axis()
+	var f := leader.wall_facing()
+	var p := leader.pos
+	var blocked := false
+	for i in battle.rules.ai_route_lookahead:
+		p = p + BattleGrid.forward(p, ax, f)
+		if not grid.in_bounds(p):
+			break
+		if not grid.is_passable(p):
+			blocked = true
+			break
+	if not blocked:
+		return Vector2.INF
+	var path := route(grid, leader.pos, standing(battle.active(1 - side)))
+	if path.is_empty():
+		return Vector2.INF
+	for c in path:
+		var t := grid.terrain_at(c)
+		if t == CombatTypes.Terrain.FORD or t == CombatTypes.Terrain.BRIDGE or t == CombatTypes.Terrain.DOOR:
+			return BattleGrid.to_cart(Vector2(c))
+	return BattleGrid.to_cart(Vector2(path[mini(path.size() - 1, battle.rules.ai_route_lookahead)]))
+
+
+## The shortest walk over passable hexes (men do not block it: they move)
+## from `from` to any passable hex beside one of `enemies`, without `from`
+## itself; empty if there is none or he is there already. Breadth-first in
+## BattleGrid.DIRS order, so the same field gives the same walk.
+static func route(grid: BattleGrid, from: Vector2i, enemies: Array[Warrior]) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var goal := {}
+	for e in enemies:
+		for n in grid.neighbors(e.pos):
+			if grid.is_passable(n):
+				goal[n] = true
+	if goal.is_empty() or goal.has(from):
+		return out
+	var came := {from: from}
+	var queue: Array[Vector2i] = [from]
+	var found := BattleGrid.NO_CELL
+	while not queue.is_empty() and found == BattleGrid.NO_CELL:
+		var c: Vector2i = queue.pop_front()
+		for n in grid.neighbors(c):
+			if came.has(n) or not grid.is_passable(n):
+				continue
+			came[n] = c
+			if goal.has(n):
+				found = n
+				break
+			queue.append(n)
+	if found == BattleGrid.NO_CELL:
+		return out
+	var c := found
+	while c != from:
+		out.push_front(c)
+		c = came[c]
+	return out
 
 
 # --- Refusing the flank --------------------------------------------------------

@@ -118,7 +118,7 @@ static func _advance(grid: BattleGrid, winners: Array[Warrior], losers: Array[Wa
 			side_step[w.side] = BattleGrid.forward(w.pos, wall_axis.get(w.side, BattleGrid.default_axis(f)), f)
 		var ahead: Vector2i = w.pos + side_step[w.side]
 		var occ := grid.occupant(ahead)
-		if not grid.in_bounds(ahead) or grid.terrain_at(ahead) == CombatTypes.Terrain.WATER \
+		if not grid.is_passable(ahead) \
 				or (occ != null and not winners.has(occ)):
 			return
 		steps[w] = ahead
@@ -145,14 +145,21 @@ static func in_contact(grid: BattleGrid, w: Warrior) -> bool:
 
 
 ## Σ Might × (1 + push_morale_weight × morale / 10), plus
-## push_second_rank_bonus per member with an active friend directly behind.
+## push_second_rank_bonus per member with an active friend directly behind,
+## plus `slope_push_bonus` times the share of the group standing on SLOPE:
+## the high ground, so a line pushing down from it pushes harder.
 static func group_strength(rules: CombatRules, grid: BattleGrid, group: Array[Warrior]) -> float:
 	var total := 0.0
+	var on_slope := 0
 	for w in group:
 		total += w.might * (1.0 + rules.push_morale_weight * w.morale / 10.0)
 		var back := grid.occupant(grid.behind(w))
 		if back != null and back.side == w.side and back.is_active():
 			total += rules.push_second_rank_bonus
+		if grid.terrain_at(w.pos) == CombatTypes.Terrain.SLOPE:
+			on_slope += 1
+	if not group.is_empty():
+		total += rules.slope_push_bonus * on_slope / group.size()
 	return total
 
 

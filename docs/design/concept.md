@@ -1112,6 +1112,42 @@ him with a gold dot before Next round. A grievously wounded man sags over
 his shadow, and a reckless one stands a hair forward of his line. Balance
 is unchanged within noise: pushing wins 51.5%, holding 35%, the steady AI
 48%; equal fights 49/51 and green against veteran 0/100.
+**Fields and terrain, and the band's size (10 Nov 2026):** the varied
+field now has ground (`sim/combat/field.gd`; sim-architecture.md, "Fields
+and terrain"). Five templates: a *meadow* (a few trees and rocks, maybe a
+fence), a *river* (a stream across the middle, crossed by fords and
+sometimes a bridge), a *farmstead* (a hall, a yard fence, a tree or two), a
+*wood edge* (trees thick along one flank) and a *hillside* (one side's
+lines on high ground), about 30/25/25/10/10. The objective picks its ground:
+the hall is a building with doors toward the fight, and you hold it by
+standing in its doors and on its floor; the ford is a stream across the
+whole field two rows before the defender's line, and the ford is its
+crossing hexes, so whoever wants it must come to the crossing. Trees,
+rocks, fences, the hall's walls and the water cannot be stood on; the ford
+costs breath like mud and nobody standing in it locks shields; the slope
+adds to the push of the side standing on it. Templates never touch the
+deployment rows and always leave two ways two hexes wide between the
+lines. The enemy leader, finding water or trees straight ahead, wheels
+toward the crossing on the shortest way round. One rule had to change for
+the ground: a wall man whose step is into a tree or the stream holds, but
+no longer holds his neighbours with him; before, one tree froze the whole
+wall. The first ford, on the defender's own bank, was a trap: the
+attacker came through the crossing a man at a time, unlocked, and took it
+once in fifteen fights; a row out, he takes it one time in three and the
+defender holds it a little over half the time. The band's size is now a
+parameter (twelve by default): two thirds shields, the rest spears and
+bows; the enemy is sized by the same ratios, the ships need a third of the
+band (at least two), and the field shrinks to 14 by 12 for six men or
+fewer. Measured over 200 varied fields, equal green: pushing wins 47.5% (34%
+attacking, 70% defending, 32% in the open), holding 35%, the steady AI on
+your side 52.5%. By band size, pushing / holding / the steady AI: four men
+56 / 23.5 / 50, six 47.5 / 32 / 47.5, eight 54.5 / 34 / 50.5, twelve
+47.5 / 35 / 52.5; holding loses to pushing at every size, and small bands
+are settled by the lines breaking more than by the objective. The
+symmetric batches are unchanged. Open: the AI defending a ford still never
+steps out to contest the crossing (the objective nudge keeps him home);
+the HUD does not yet show the band size; and a wall split by a tree takes
+a round to find itself again.
 
 ## Open questions
 

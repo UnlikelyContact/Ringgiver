@@ -165,6 +165,7 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	var faces := {}  # Warrior -> facing taken with the step
 	var claimed := {}  # cell -> true
 	var carried := {}  # a friend behind a falling-back man, stepping back with him
+	var ground_held := {}  # Warrior -> true: his step is into ground nobody can stand on
 	# Pass one: every man's straight step, square to his own facing, by the
 	# zigzag that keeps his column. All at once, so a line that marches
 	# together stays together. No hex step is square to a row, so when the
@@ -204,19 +205,25 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 				carried[occ] = his
 				claimed[his] = true
 				occ = null
-		if claimed.has(target) or not grid.in_bounds(target) or grid.terrain_at(target) == CombatTypes.Terrain.WATER \
+		if grid.in_bounds(target) and not grid.is_passable(target):
+			ground_held[w] = true
+			continue  # water, a tree, a wall in front of him: he holds and the line goes on
+		if claimed.has(target) or not grid.in_bounds(target) \
 				or (occ != null and not members.has(occ)):
 			continue  # he holds, for now
 		targets[w] = target
 		claimed[target] = true
 	if not back:
 		# Nobody lets go of a man beside him: a stepper who would lose a
-		# linked neighbour holds instead, until the line is consistent.
+		# linked neighbour holds instead, until the line is consistent. A man
+		# held by the ground is the exception: the line flows past him rather
+		# than stopping on every tree and stream in its way, and he finds his
+		# place in it again (Decision) once he is round.
 		var changed := true
 		while changed:
 			changed = false
 			for w in targets.keys():
-				if not _keeps_a_hand_on(targets[w], w.facing, w, members, targets, faces):
+				if not _keeps_a_hand_on(targets[w], w.facing, w, members, targets, faces, ground_held):
 					claimed.erase(targets[w])
 					targets.erase(w)
 					changed = true
@@ -330,15 +337,16 @@ func _nearest_enemy(from: Vector2i, theirs: Array[Warrior]) -> Warrior:
 
 ## Would a man stepping to `c` and facing `face` still be linked to every
 ## man now linked to him: each such member where he stays, or where he is
-## stepping to, with the facing he takes there.
+## stepping to, with the facing he takes there. Members in `ignore` (held by
+## ground nobody can stand on) do not count.
 func _keeps_a_hand_on(c: Vector2i, face: Vector2i, w: Warrior, members: Array[Warrior],
-		targets: Dictionary, faces: Dictionary) -> bool:
+		targets: Dictionary, faces: Dictionary, ignore: Dictionary = {}) -> bool:
 	# The wall is rooted on the leader's wall facing, whichever way he turns.
 	var leader := leader_of(w.side)
 	if w == leader:
 		face = w.wall_facing()
 	for m in members:
-		if m == w or BattleGrid.distance(w.pos, m.pos) != 1:
+		if m == w or BattleGrid.distance(w.pos, m.pos) != 1 or ignore.has(m):
 			continue
 		var at: Vector2i = targets[m] if targets.has(m) else m.pos
 		# A wall-mate at arm's length stays at arm's length, so nobody is
@@ -848,9 +856,12 @@ func _resolve_movement(mr: SimRng, actions: Dictionary) -> void:
 	for w in carried:
 		grid.remove(w)
 	for w in carried:
-		if not grid.place(w, w.wall_move):
+		var stepped_in := grid.place(w, w.wall_move)
+		if not stepped_in:
 			grid.place(w, w.pos)
 		w.spend_breath(rules.breath_cost_move)
+		if stepped_in:
+			_wade(w)
 		var ca: Action = actions[w]
 		if ca.new_facing != Vector2i.ZERO:
 			w.facing = ca.new_facing
@@ -869,10 +880,18 @@ func _resolve_movement(mr: SimRng, actions: Dictionary) -> void:
 		if grid.is_free(a.target_cell) and BattleGrid.chebyshev(w.pos, a.target_cell) == 1:
 			grid.place(w, a.target_cell)
 			w.spend_breath(rules.breath_cost_move)
-			if grid.terrain_at(a.target_cell) == CombatTypes.Terrain.MUD:
-				w.spend_breath(rules.breath_cost_move)
+			_wade(w)
 		if a.new_facing != Vector2i.ZERO:
 			w.facing = a.new_facing
+
+
+## Mud and the ford are heavy going: a man who ends a step in either
+## spends a step's breath again (`terrain_breath_extra`), whether he walked
+## there alone or stepped with the wall.
+func _wade(w: Warrior) -> void:
+	var t := grid.terrain_at(w.pos)
+	if t == CombatTypes.Terrain.MUD or t == CombatTypes.Terrain.FORD:
+		w.spend_breath(rules.breath_cost_move * rules.terrain_breath_extra)
 
 
 func _on_edge(c: Vector2i) -> bool:

@@ -258,6 +258,19 @@ var field_width := 22
 var field_height := 16
 ## The ships lie this many rows behind the defender's front line.
 var objective_ships_depth := 3
+## The field shrinks with the band (Scenario.field_size): `field_width` by
+## `field_height` is the field for a band of `field_band` men; a band of
+## `field_small_band` or fewer fights on `field_min_width` by
+## `field_min_height`, and the size runs straight between the two (and on
+## past the larger, for bigger bands).
+var field_band := 12
+var field_small_band := 6
+var field_min_width := 14
+var field_min_height := 12
+## How a band of n men is armed (Scenario.band_split): this share shields
+## (rounded), the rest split between spears and bows, spears taking the odd
+## man. Twelve men are eight, two and two; six are four, one and one.
+var band_shield_share := 2.0 / 3.0
 ## A side whose leader has called "fall back" and whose men are all at least
 ## this far from every enemy has left the field and loses.
 var withdraw_distance := 4
@@ -361,10 +374,38 @@ var objective_ford_rounds := 16
 ## strip along the defender's back edge before the end of this round.
 var objective_ships_rounds := 20
 var objective_ships_men := 4
+## On a field built for a band (Scenario.build), the ships need this share
+## of the player's band (rounded up), and never fewer than
+## `objective_ships_min_men`: four of twelve, two of four or six.
+var objective_ships_fraction := 1.0 / 3.0
+var objective_ships_min_men := 2
 ## The hall: the attacker must stand on at least half its cells for this many
 ## rounds running before the end of this round.
 var objective_hall_rounds := 18
 var objective_hall_streak := 2
+
+# --- Fields and terrain (field.gd, battle_grid.gd, push.gd, battle.gd) -----
+## A man who ends a step in MUD or a FORD spends this many steps' breath
+## (breath_cost_move each) on top of the step itself.
+var terrain_breath_extra := 1
+## Added to a pushing group's strength, times the share of its men standing
+## on SLOPE (the high ground): a line pushing downhill pushes harder.
+var slope_push_bonus := 3.0
+## The varied field's template in an open fight, by weight (Field.choose):
+## meadow, river, farmstead, wood edge, hillside. An objective decides the
+## rest: the hall is always fought on a farmstead, the ford on a river, the
+## ships on a meadow (three in four, `field_ships_wood` the rest a wood
+## edge). With objectives on seven fields in ten these weights bring the
+## whole mix to about 30/25/25/10/10.
+var field_weights := [40, 5, 5, 15, 35]
+var field_ships_wood := 0.25
+## Templates draw their features again from the next fork of the seed when a
+## draw would leave fewer than two two-wide ways between the lines; after
+## this many tries the field is cleared of the template's features.
+var field_tries := 8
+## The enemy leader looks this many steps along his wall's forward step for
+## ground he cannot cross before he picks a way round (LeaderAI.route_target).
+var ai_route_lookahead := 3
 
 # --- Post-battle (fate) ----------------------------------------------------
 ## Downed men roll 2d6 + grit against these: < fate_dead_below -> dead,
