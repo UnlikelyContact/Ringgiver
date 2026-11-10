@@ -509,9 +509,9 @@ func run_round() -> void:
 			_player_action.erase(w.side)
 			if a.kind == CombatTypes.ActionKind.ATTACK and (a.target == null or not a.target.is_active()
 					or BattleGrid.chebyshev(w.pos, a.target.pos) > 1):
-				a = Decision.choose(rr.fork("decide:%d" % w.id), rules, grid, w, leader, warriors)
+				a = Decision.choose(rr.fork("decide:%d" % w.id), rules, grid, w, leader, warriors, log, objective)
 		else:
-			a = Decision.choose(rr.fork("decide:%d" % w.id), rules, grid, w, leader, warriors)
+			a = Decision.choose(rr.fork("decide:%d" % w.id), rules, grid, w, leader, warriors, log, objective)
 		actions[w] = a
 		if a.kind == CombatTypes.ActionKind.ATTACK or a.kind == CombatTypes.ActionKind.SHOOT:
 			any_attacks = true
