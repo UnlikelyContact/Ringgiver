@@ -102,13 +102,19 @@ static func _weighted_trait(rng: SimRng, rules: CombatRules, have: Array[CombatT
 	return pool[pool.size() - 1]
 
 
+## A leader's name as `make_band` would give the first man at `name_offset`,
+## so a scout can name him before the band is made.
+static func leader_name(_rng: SimRng, name_offset := 0) -> String:
+	return NAMES[name_offset % NAMES.size()] + " the leader"
+
+
 ## A band of mixed arms: `shields` shield-bearers (the leader, banner and
 ## horn among them, each with a throwing spear), `spears` second-rank
 ## spearmen and `bows` archers, in that order of ids.
 static func make_mixed_band(rng: SimRng, side: int, shields: int, spears: int, bows: int,
 		tier: CombatTypes.Tier, rules: CombatRules, armor: CombatTypes.Armor = CombatTypes.Armor.NONE,
-		name_offset := 0, first_id := 1) -> Array[Warrior]:
-	var out := make_band(rng, side, shields + spears + bows, tier, armor, name_offset, first_id, -1, rules)
+		name_offset := 0, first_id := 1, stat_center := -1) -> Array[Warrior]:
+	var out := make_band(rng, side, shields + spears + bows, tier, armor, name_offset, first_id, stat_center, rules)
 	for i in out.size():
 		var w: Warrior = out[i]
 		if i < shields:

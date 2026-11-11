@@ -64,11 +64,26 @@ static func field_size(n: int, rules: CombatRules) -> Vector2i:
 ## its back, in range to throw at once. Their leader is struck dumb for
 ## `ambush_surprise_rounds` and his men have lost `ambush_morale` heart.
 ## No objective; the enemy is drawn as for any varied fight. `build_ambush`
-## does the placing.
-static func build(name: String, seed_in: int, rules: CombatRules, vary := true, band := 12, template := "") -> Dictionary:
-	if name == "ambush":
-		return build_ambush(seed_in, rules, band)
+## does the placing. "ambushed" is the same the other way about: your band
+## is the column. "hold" is the ground you chose to wait on: the river,
+## your line on the bank, and the enemy must come through the ford.
+##
+## `bands` ({ours, theirs}: Array[Warrior], already made, the campaign's
+## men) replaces the drawn bands; `band` is then yours. `pick` forces what
+## the seed would draw: `objective` (Objective.Kind, or -1 for none),
+## `attacker` (side), `doctrine` (LeaderAI.Doctrine).
+static func build(name: String, seed_in: int, rules: CombatRules, vary := true, band := 12, template := "",
+		bands := {}, pick := {}) -> Dictionary:
+	if name == "ambush" or name == "ambushed":
+		return build_ambush(seed_in, rules, band, bands, 1 if name == "ambush" else 0)
+	if name == "hold":
+		var p := pick.duplicate()
+		p.objective = Objective.Kind.HOLD_GROUND
+		p.attacker = 1
+		return build("equal_green", seed_in, rules, true, band, "river", bands, p)
 	var t: Array = TIERS.get(name, TIERS["equal_green"])
+	if bands.has("ours"):
+		band = (bands.ours as Array).size()
 	var size := field_size(band, rules)
 	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
 	# Rows and columns relative to the field: the enemy's front three rows
@@ -93,20 +108,31 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true, 
 		doctrine = LeaderAI.Doctrine.AGGRESSIVE if frng.randf() < 0.4 else LeaderAI.Doctrine.STEADY
 		if frng.randf() < 0.4:
 			doctrine = LeaderAI.Doctrine.CUNNING  # two fights in five: he reads your wall
+	if pick.has("doctrine"):
+		doctrine = pick.doctrine
 	var objective: Objective = null
 	if vary:
 		var orng := SimRng.new(seed_in).fork("objective")
-		if orng.randf() < rules.objective_chance:
-			var kind: Objective.Kind = orng.randi_range(0, Objective.Kind.size() - 1) as Objective.Kind
-			var attacker := 0 if orng.randf() < rules.objective_player_attacks else 1
-			objective = Objective.new(kind, attacker, seed_in, rules)
+		var kind := -1
+		var attacker := 0
+		if pick.has("objective"):
+			kind = pick.objective
+			attacker = pick.get("attacker", 1)
+			orng.randf()
+			orng.randi_range(0, 2)
+			orng.randf()
+		elif orng.randf() < rules.objective_chance:
+			kind = orng.randi_range(0, Objective.Kind.size() - 1)
+			attacker = 0 if orng.randf() < rules.objective_player_attacks else 1
+		if kind >= 0:
+			objective = Objective.new(kind as Objective.Kind, attacker, seed_in, rules)
 			objective.size_for_band(band, rules)
 			# Whoever comes on came for a reason and in strength: an attacking
 			# enemy brings more shields, a defending one fewer (two at twelve men).
 			var more := roundi(rules.objective_attacker_shields * band / float(rules.field_band))
 			their_shields = maxi(1, their_shields + more * (1 if attacker == 1 else -1))
-	var ours := BandFactory.make_mixed_band(brng.fork("a"), 0, split[0], split[1] if vary else 0, split[2] if vary else 0, t[0], rules, CombatTypes.Armor.NONE, 0, 1)
-	var theirs := BandFactory.make_mixed_band(brng.fork("b"), 1, their_shields, their_spears, their_bows, t[1], rules, CombatTypes.Armor.NONE, 16, 101)
+	var ours: Array[Warrior] = bands.get("ours", BandFactory.make_mixed_band(brng.fork("a"), 0, split[0], split[1] if vary else 0, split[2] if vary else 0, t[0], rules, CombatTypes.Armor.NONE, 0, 1))
+	var theirs: Array[Warrior] = bands.get("theirs", BandFactory.make_mixed_band(brng.fork("b"), 1, their_shields, their_spears, their_bows, t[1], rules, CombatTypes.Armor.NONE, 16, 101))
 	# A little mud so the ground has texture.
 	var mr := SimRng.new(seed_in).fork("mud")
 	for i in 6 + (size.x - 16) / 2:
@@ -133,15 +159,20 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true, 
 	battle.set_ai(1, LeaderAI.new(doctrine))
 	for side in 2:
 		battle.result.started[side] = battle.active(side).size()
-	ours[0].display_name = "You"
+	if not bands.has("ours"):
+		ours[0].display_name = "You"
 	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": offset,
 			"objective": objective, "field": field, "field_name": field.name if field != null else "flat",
 			"title": field.title() if field != null else "", "band": band, "size": size}
 
 
 ## The ambush: see `build`. Returns the same dictionary, `field_name`
-## "ambush", `title` "Ambush", `objective` null.
-static func build_ambush(seed_in: int, rules: CombatRules, band := 12) -> Dictionary:
+## "ambush", `title` "Ambush", `objective` null. `ambushed` is the side
+## caught on the march: 1 (theirs, the fight you chose) or 0 (yours: you
+## are the column, and your men are placed as theirs would be).
+static func build_ambush(seed_in: int, rules: CombatRules, band := 12, bands := {}, ambushed := 1) -> Dictionary:
+	if bands.has("ours"):
+		band = (bands.ours as Array).size()
 	var size := field_size(band, rules)
 	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
 	var centre := size.x / 2
@@ -154,8 +185,11 @@ static func build_ambush(seed_in: int, rules: CombatRules, band := 12) -> Dictio
 	# A leader caught on the march is careful afterwards: steady or cunning,
 	# never one who charges a formed wall with a column half turned about.
 	var doctrine := LeaderAI.Doctrine.CUNNING if frng.randf() < 0.4 else LeaderAI.Doctrine.STEADY
-	var ours := BandFactory.make_mixed_band(brng.fork("a"), 0, split[0], split[1], split[2], CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1)
-	var theirs := BandFactory.make_mixed_band(brng.fork("b"), 1, their_shields, split[1], split[2], CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 16, 101)
+	var ours: Array[Warrior] = bands.get("ours", BandFactory.make_mixed_band(brng.fork("a"), 0, split[0], split[1], split[2], CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1))
+	var theirs: Array[Warrior] = bands.get("theirs", BandFactory.make_mixed_band(brng.fork("b"), 1, their_shields, split[1], split[2], CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 16, 101))
+	# Who marches and who waits: the column's men and the ambushers'.
+	var column: Array[Warrior] = theirs if ambushed == 1 else ours
+	var hidden: Array[Warrior] = ours if ambushed == 1 else theirs
 	# The ground: the wood your men come out of, two rows behind your line
 	# and thicker further back, and a few trees and mud about the track.
 	var tr := SimRng.new(seed_in).fork("ambush-wood")
@@ -171,15 +205,15 @@ static func build_ambush(seed_in: int, rules: CombatRules, band := 12) -> Dictio
 	# out either side of him in march order, every `ambush_gap_every`th
 	# place empty, all facing the way they were going (east, along the row).
 	var east := Vector2i(1, 0)
-	var leader: Warrior = theirs[0]
-	for w in theirs:
+	var leader: Warrior = column[0]
+	for w in column:
 		w.reset_for_battle(rules)
 		w.facing = east
 	leader.line_facing = east
 	leader.formation = FormationTemplate.line()
 	battle.grid.place(leader, BattleGrid.from_offset(centre, track_row))
 	var rest: Array[Warrior] = []
-	for w in theirs:
+	for w in column:
 		if w != leader:
 			rest.append(w)
 	var place := 1
@@ -200,15 +234,18 @@ static func build_ambush(seed_in: int, rules: CombatRules, band := 12) -> Dictio
 		place += 1
 		if place > size.x:
 			break
-	# Yours: formed in ranks below the track, facing up at it, out of the trees.
-	BandFactory.deploy_formation(battle.grid, ours, BattleGrid.from_offset(centre, our_row), Vector2i(0, -1), rules, FormationTemplate.ranks())
+	# The ambushers: formed in ranks below the track, facing up at it, out
+	# of the trees.
+	BandFactory.deploy_formation(battle.grid, hidden, BattleGrid.from_offset(centre, our_row), Vector2i(0, -1), rules, FormationTemplate.ranks())
 	battle.add_band(ours)
 	battle.add_band(theirs)
-	battle.set_ai(1, LeaderAI.new(doctrine))
-	battle.surprise(1, rules.ambush_surprise_rounds, rules.ambush_morale)
+	battle.set_ai(1, LeaderAI.new(doctrine if ambushed == 1 else LeaderAI.Doctrine.AGGRESSIVE))
+	battle.surprise(ambushed, rules.ambush_surprise_rounds, rules.ambush_morale)
 	for side in 2:
 		battle.result.started[side] = battle.active(side).size()
-	ours[0].display_name = "You"
+	if not bands.has("ours"):
+		ours[0].display_name = "You"
+	var what := "ambush" if ambushed == 1 else "ambushed"
 	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": 0,
-			"objective": null, "field": null, "field_name": "ambush", "title": "Ambush",
+			"objective": null, "field": null, "field_name": what, "title": "Ambush" if ambushed == 1 else "Ambushed",
 			"band": band, "size": size}

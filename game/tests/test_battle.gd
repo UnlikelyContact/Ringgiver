@@ -229,3 +229,55 @@ func test_falling_back_keeps_heart_and_halts_at_the_edge() -> void:
 	for w in ours:
 		if w.is_active():
 			assert_true(b.grid.in_bounds(w.pos), "%s still stands on the field" % w.display_name)
+
+
+func test_the_outcome_ladder_and_an_ordered_withdrawal() -> void:
+	var rules := CombatRules.new()
+	var O := BattleResult.Outcome
+	# Nobody standing on one side is a rout.
+	var r := BattleResult.new()
+	r.winner = 0
+	r.how = BattleResult.End.ROUT
+	assert_eq(r.outcome(0), O.ROUTED_THEM)
+	assert_eq(r.outcome(1), O.ROUTED)
+	r.how = BattleResult.End.DRAW_OFF
+	assert_eq(r.outcome(0), O.DROVE_THEM_OFF)
+	assert_eq(r.outcome(1), O.DRIVEN_OFF)
+	r.how = BattleResult.End.WITHDRAWAL
+	assert_eq(r.outcome(0), O.DROVE_THEM_OFF)
+	assert_eq(r.outcome(1), O.WITHDREW, "the side that left withdrew")
+	assert_true(r.withdrew(1) and not r.won(1))
+	r.how = BattleResult.End.OBJECTIVE
+	assert_eq(r.outcome(0), O.WON_THE_FIELD)
+	assert_eq(r.outcome(1), O.LOST_THE_FIELD)
+	r.winner = -1
+	assert_eq(r.outcome(0), O.BOTH_DREW_OFF)
+	assert_eq(r.outcome_text(0), "both drew off")
+	# A leader may lead his men off the field only out of contact.
+	var f := Scenario.build("equal_green", 3, rules, false)
+	var b: Battle = f.battle
+	assert_true(b.can_withdraw(0), "five rows apart: out of contact")
+	b.set_shout(0, CombatTypes.Shout.PUSH)
+	b.set_shout(1, CombatTypes.Shout.PUSH)
+	while b.can_withdraw(0) and b.round < 12:
+		b.set_shout(0, CombatTypes.Shout.PUSH)
+		b.set_shout(1, CombatTypes.Shout.PUSH)
+		b.run_round()
+	assert_true(not b.can_withdraw(0), "engaged: he cannot")
+	assert_true(not b.withdraw(0), "and the call is refused")
+	assert_true(not b.is_over())
+	var g := Scenario.build("equal_green", 3, rules, false)
+	var b2: Battle = g.battle
+	b2.set_shout(0, CombatTypes.Shout.HOLD)
+	b2.run_round()
+	assert_true(b2.withdraw(0), "out of contact: he leads them off")
+	assert_true(b2.is_over())
+	assert_eq(b2.result.winner, 1)
+	assert_eq(b2.result.how, BattleResult.End.WITHDRAWAL)
+	assert_eq(b2.result.outcome(0), O.WITHDREW)
+	assert_eq(b2.result.fled[0], 0, "nobody is counted as fled")
+	var told := false
+	for line in b2.log:
+		if line.contains("leads his men off the field"):
+			told = true
+	assert_true(told)

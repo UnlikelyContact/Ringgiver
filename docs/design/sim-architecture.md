@@ -133,6 +133,63 @@ fight (field, objective, role, enemy, doctrine, outcome) and takes
 and to try tunables, and `log` for the whole log with the field drawn
 after every round.
 
+## The choice before the fight (`fight_offer.gd`, `scouting.gd`, 11 Nov 2026)
+
+`Campaign.fight(kind, tier, size, attacking, stat_center, at_sea,
+cornered)` is now `offer_fight` + `fight_policy.call(offer)` +
+`resolve_offer`. `FightOffer` carries the enemy as the world has them
+(size and tier from the caller; shields, spears and bows by
+`Scenario.band_split`, all shields at sea; a leader's name
+(`BandFactory.leader_name`) and doctrine from the offer's seed), the
+flags `attacking`, `at_sea`, `cornered`, `we_know_first`,
+`they_know_first`, `our_men`, `odds_max`, and the scout's `report`.
+`options()`: TAKE_THE_FIELD always; WAIT_FOR_THEM when not attacking and
+not at sea; LAY_AMBUSH when `we_know_first` and not at sea; FADE_AWAY
+unless cornered; none at all when `they_know_first`. `scenario_for`
+maps a choice to a Scenario name: "equal_green" (the open field, `pick`
+objective -1), "hold" (the river, HOLD_GROUND with the enemy attacking),
+"ambush", or "ambushed" when they saw you first.
+
+`Scouting.pick_scout` is the sharpest living man (seasoned before green
+at equal wits). `error(rules, wits, tier)` = `scout_error` (4) less
+`scout_error_per_wits` a point above one, less `scout_veteran_bonus`,
+floored at zero; `report` draws a shift in ±error and gives
+[truth+shift-error, truth+shift+error], the arms in kind, the leader's
+name from `scout_leader_wits` (3) and his manner (`LeaderAI.
+DOCTRINE_MANNER`) to a seasoned scout, "at sea" when there is no ground.
+`spots_first` = `scout_first_chance` (0.15) + `scout_first_per_wits`
+(0.05) a point + `scout_first_veteran` (0.1). In `offer_fight`, only when
+not attacking, not at sea and not cornered: `we_know_first` by that roll,
+else `they_know_first` by `caught_chance` (0.25).
+
+`resolve_offer`: FADE_AWAY tallies `faded`, logs it, and calls
+`Leader.on_battle(..., WITHDREW)` (honor −`honor_withdrew`, no luck);
+returns null, which every caller now guards. Otherwise the band's men
+(`Man.to_warrior`) and a mixed enemy (`make_mixed_band` with the
+`stat_center`) go to `Scenario.build(name, seed, rules, vary, band, "",
+{ours, theirs}, pick)`, which takes ready-made bands and forced picks
+(objective, attacker, doctrine); at sea the symmetric flat field. Our AI
+is AGGRESSIVE when attacking or ambushing, STEADY when waiting; theirs
+AGGRESSIVE when they come at the bank or caught us. The tally counts
+`faded`, `ambushes`, `waited`, `caught`. `Sandbox.choose_fight` is the
+policy: ambush if offered, else wait if offered, else fade when the
+scout's mid count exceeds `our_men * odds_max` (world `raid_odds_max`),
+else take the field. Call sites pass `at_sea` for sea fights, `cornered`
+for the hall and the Thing, and `attacking` false for a feud's blades.
+
+`BattleResult.how` (End: ROUT, DRAW_OFF, STALL, OBJECTIVE, TIMEOUT,
+WITHDRAWAL) is set by every `Battle._finish`; `outcome(side)` is the
+ladder (Outcome: ROUTED_THEM, DROVE_THEM_OFF, WON_THE_FIELD,
+BOTH_DREW_OFF, WITHDREW, DRIVEN_OFF, ROUTED, LOST_THE_FIELD), with
+`won`, `withdrew`, `outcome_text`. `Battle.withdraw(side)` ends the fight
+as a WITHDRAWAL when `can_withdraw` (no standing man of the side at arm's
+length of an enemy); nobody is counted as fled. `Leader.on_battle` takes
+the outcome: `fame_rout` on top of a rout, `honor_withdrew` for a
+withdrawal and no luck, nothing for both drawing off. The prototype's
+HUD shows the offer panel before round one on a fresh field
+(`_show_offer`: the scout is you, the rolls from the seed), a Withdraw
+button in the top bar, and the ladder's title on the result panel.
+
 ## The ambush (`Scenario.build_ambush`, 10 Nov 2026)
 
 `Scenario.build("ambush", seed, rules, _, band)` is the fight you chose

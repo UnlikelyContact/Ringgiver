@@ -237,6 +237,12 @@ var honor_oath_broken := 25
 var fame_feast := 3
 ## Fame from victories (a win against long odds gives fame_long_odds instead).
 var fame_win := 2
+## A rout is talked of more than a drive-off: this much fame on top.
+var fame_rout := 1
+## Withdrawing in order before the lines meet again is a choice, not a
+## defeat: it costs honor, not luck, and brings no fame. Both sides drawing
+## off is nobody's day and costs nothing.
+var honor_withdrew := 3
 var fame_long_odds := 5
 var omen_chance := 0.3
 ## Luck lost when an ignored omen comes true (rolled with omen_chance).
@@ -244,6 +250,25 @@ var luck_omen := 1
 var luck_high := 7
 var luck_low := 3
 var fame_per_recruit := 20
+
+# --- Scouting (scouting.gd, fight_offer.gd) ---------------------------------
+## The scout's count may be out by this either way at Wits 1, one less a
+## point of wits, `scout_veteran_bonus` less for a seasoned scout.
+var scout_error := 4
+var scout_error_per_wits := 1
+var scout_veteran_bonus := 1
+## The scout names the enemy's leader from this many wits.
+var scout_leader_wits := 3
+## The chance the scout sees them before they see him, which makes an
+## ambush possible: the base, plus this a point of wits above one, plus
+## this for a seasoned scout.
+var scout_first_chance := 0.15
+var scout_first_per_wits := 0.05
+var scout_first_veteran := 0.1
+## The chance an enemy who comes for you on land has seen you first, so
+## that you are the column: a feud's blades, a levy. Your scout's seeing
+## them first forestalls it.
+var caught_chance := 0.25
 var recruits_min := 1
 var birth_chance := 0.35
 var daughter_chance := 0.5

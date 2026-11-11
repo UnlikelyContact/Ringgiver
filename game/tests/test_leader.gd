@@ -31,6 +31,19 @@ func test_battle_luck_and_fame() -> void:
 	Leader.on_battle(r, b, true, false, 1.0, log)
 	assert_eq(b.luck, 5 + r.luck_win - r.luck_hung_back)
 	assert_eq(b.honor, 50 - r.honor_hung_back, "hanging back costs honor")
+	# The ladder: a rout is talked of more, a withdrawal costs honor and no
+	# luck, both drawing off costs nothing.
+	b = _band()
+	Leader.on_battle(r, b, true, true, 1.0, log, BattleResult.Outcome.ROUTED_THEM)
+	assert_eq(b.fame, 10 + r.fame_win + r.fame_rout, "a rout brings more fame")
+	b = _band()
+	Leader.on_battle(r, b, false, true, 1.0, log, BattleResult.Outcome.WITHDREW)
+	assert_eq(b.luck, 5, "a withdrawal is a choice: no luck lost")
+	assert_eq(b.honor, 50 - r.honor_withdrew, "but it costs honor")
+	b = _band()
+	Leader.on_battle(r, b, false, true, 1.0, log, BattleResult.Outcome.BOTH_DREW_OFF)
+	assert_eq(b.luck, 5, "both drawing off is nobody's day")
+	assert_eq(b.honor, 50)
 	assert_true(log.size() >= 5)
 
 

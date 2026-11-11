@@ -482,7 +482,7 @@ func run(max_rounds := -1) -> BattleResult:
 	while not _over and round < limit:
 		run_round()
 	if not _over:
-		_finish(-1, "the light fails; both sides draw off")
+		_finish(-1, "the light fails; both sides draw off", BattleResult.End.TIMEOUT)
 	return result
 
 
@@ -627,7 +627,7 @@ func run_round() -> void:
 		var taken := objective.check(self)
 		if taken >= 0:
 			result.by_objective = true
-			_finish(taken, objective.reason)
+			_finish(taken, objective.reason, BattleResult.End.OBJECTIVE)
 			return
 	for side in 2:
 		var standing := 0
@@ -635,7 +635,7 @@ func run_round() -> void:
 			if not w.broken:
 				standing += 1
 		if standing == 0:
-			_finish(1 - side, "side %d has no one left standing" % side)
+			_finish(1 - side, "side %d has no one left standing" % side, BattleResult.End.ROUT)
 			return
 	# An AI leader only calls "fall back" when he is beaten, so his falling
 	# back is his leaving. A player's "fall back" is a manoeuvre: pull back,
@@ -643,7 +643,7 @@ func run_round() -> void:
 	# (nobody standing, the field's edge, the objective's clock, the stall).
 	for side in 2:
 		if _ai.has(side) and last_shout(side) == CombatTypes.Shout.FALL_BACK and _withdrawn(side):
-			_finish(1 - side, "side %d draws off and leaves the field" % side)
+			_finish(1 - side, "side %d draws off and leaves the field" % side, BattleResult.End.DRAW_OFF)
 			return
 	if _rounds_without_blow >= rules.retreat_stall_rounds:
 		var retreating := []
@@ -651,10 +651,10 @@ func run_round() -> void:
 			if _ai.has(side) and standing_order(side) == CombatTypes.Shout.FALL_BACK:
 				retreating.append(side)
 		if retreating.size() == 1:
-			_finish(1 - retreating[0], "side %d keeps giving ground and quits the field" % retreating[0])
+			_finish(1 - retreating[0], "side %d keeps giving ground and quits the field" % retreating[0], BattleResult.End.DRAW_OFF)
 			return
 		if retreating.size() == 2:
-			_finish(-1, "both sides draw off")
+			_finish(-1, "both sides draw off", BattleResult.End.STALL)
 			return
 	# Nobody has struck a blow for a while after the lines met: the fight is
 	# over. The side with clearly fewer men standing has had enough and quits;
@@ -667,14 +667,14 @@ func run_round() -> void:
 					standing[side] += 1
 		for side in 2:
 			if float(standing[side]) < float(standing[1 - side]) * rules.stall_quit_fraction:
-				_finish(1 - side, "side %d has had enough and quits the field" % side)
+				_finish(1 - side, "side %d has had enough and quits the field" % side, BattleResult.End.DRAW_OFF)
 				return
 		if objective != null:
 			# Nobody will close again: the attacker has given up his task.
 			result.by_objective = true
-			_finish(objective.defender(), objective.time_up_reason())
+			_finish(objective.defender(), objective.time_up_reason(), BattleResult.End.OBJECTIVE)
 			return
-		_finish(-1, "neither side will close again; both draw off")
+		_finish(-1, "neither side will close again; both draw off", BattleResult.End.STALL)
 		return
 
 
@@ -694,6 +694,33 @@ func _face_about(side: int, leader: Warrior) -> void:
 	leader.line_facing = s[1]
 	leader.facing = s[1]
 	log.append("%s turns his men to face the ambush" % leader.display_name)
+
+
+## Whether a side can withdraw: none of its standing men has an enemy at
+## arm's length. Engaged, it must break contact first (fall back).
+func can_withdraw(side: int) -> bool:
+	for w in active(side):
+		if w.broken:
+			continue
+		for c in grid.neighbors(w.pos):
+			var e := grid.occupant(c)
+			if e != null and e.side != side and e.is_active() and not e.broken:
+				return false
+	return true
+
+
+## A leader's choice to leave the field in order, out of contact: the fight
+## ends, the other side has the field, and nobody is counted as fled. The
+## campaign reads it as a withdrawal (BattleResult.Outcome.WITHDREW), which
+## costs standing, not the battle. False when the side is engaged.
+func withdraw(side: int) -> bool:
+	if _over or not can_withdraw(side):
+		return false
+	var leader := leader_of(side)
+	var who := leader.display_name if leader != null else "side %d" % side
+	log.append("%s leads his men off the field" % who)
+	_finish(1 - side, "side %d withdraws from the field" % side, BattleResult.End.WITHDRAWAL)
+	return true
 
 
 ## Takes a side by surprise: its leader gives no order for `rounds` rounds
@@ -1066,9 +1093,10 @@ func _after_exchange(r: ExchangeResult) -> void:
 		Morale.on_down(rules, grid, r.loser, warriors, log)
 
 
-func _finish(winner: int, why: String) -> void:
+func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.STALL) -> void:
 	_over = true
 	result.winner = winner
+	result.how = how
 	result.rounds = round
 	log.append("=== %s ===" % why)
 	var fr := rng.fork("fate")

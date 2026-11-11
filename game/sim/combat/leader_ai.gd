@@ -14,6 +14,8 @@ extends RefCounted
 ## where it is going. See docs/design/sim-architecture.md, "Enemy doctrine".
 
 enum Doctrine { STEADY, AGGRESSIVE, RECKLESS, CUNNING }
+## How a scout would put each doctrine: "a steady man", and so on.
+const DOCTRINE_MANNER := ["a steady man", "a hot-headed man", "a reckless man", "a cunning man"]
 
 const NO_POS := Vector2i(-9999, -9999)
 

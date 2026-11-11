@@ -18,6 +18,9 @@ var template := ""
 ## The field's template name as built ("meadow", ...), for the HUD.
 var field_name := ""
 var field_title := ""
+## The enemy band and their leader's doctrine, for the scout's report.
+var theirs: Array = []
+var doctrine := 0
 
 
 func _ready() -> void:
@@ -90,6 +93,8 @@ func start(p_scenario: String, p_seed: int) -> void:
 	battle = field.battle
 	field_name = field.field_name
 	field_title = field.title
+	theirs = field.theirs
+	doctrine = field.doctrine
 	var ours: Array[Warrior] = field.ours
 	player = ours[0]
 

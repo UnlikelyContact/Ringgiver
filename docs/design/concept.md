@@ -1205,8 +1205,33 @@ and the field at random. What the main game needs, in order:
   now; in the campaign they should be the player's doing, which also
   makes the small early band's fights about picking the right ones.
 
-The first of these is in the prototype: "Lay an ambush" on the result
-panel (and `Scenario.build("ambush")`). The enemy band, at full strength
+The first four are in (11 Nov 2026), in the campaign and the prototype
+both. Every fight is offered before it is fought (`FightOffer`): the
+scout's report, and the choices it leaves. The scout is the sharpest man
+in the band; his count is a range as wide as his dullness (four men out
+either way at Wits 1, one less a point, one less again for a seasoned
+man), he names their leader from Wits 3 and reads his manner only when
+seasoned. The choices: take the field; wait for them on ground of your
+choosing (the river, your line on the bank, they must come through the
+ford: only when they come to you); lay an ambush (only when your scout
+saw them first, one time in six for a dull green scout and better with
+wits and seasoning); fade away (no fight; it costs honor, never luck, and
+not when you are cornered: your hall burning, a brawl at the Thing). And
+when they come to you on land and your scout did not see them first, one
+time in four they have seen you, and you are the column: no choice. The
+outcome of a fight is a ladder now, not a win or a loss: routed them,
+drove them off, won the field, both drew off, withdrew, driven off,
+routed, lost the field; a rout is talked of more, a withdrawal (fading
+away, or leading your men off the field out of contact, the new Withdraw
+button) costs standing and no luck, both drawing off is nobody's day. In
+the prototype the choice is a panel before round one, the scout is you,
+and "Fight again" deals a fresh field. In the sandbox a careful leader's
+policy answers the offer: an ambush when he can, his own ground when
+they come to him, the field when the scout's count is within the odds he
+will take, else he fades. Twenty sandbox years: seven fights a year
+offered, about two faded, one or two ambushes laid. The ambush itself was
+first, with "Lay an ambush" on the result panel (and
+`Scenario.build("ambush")`). The enemy band, at full strength
 and half again your shields, is on the march along a track across the
 field, strung out in a column every third place empty, facing the way it
 was going; your band stands formed two rows off with the wood at its

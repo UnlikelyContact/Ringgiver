@@ -22,9 +22,18 @@ var battle_logs: Array[PackedStringArray] = []
 var tally := {
 	"battles": 0, "wins": 0, "deaths": 0, "maimed": 0, "departures": 0,
 	"recruits": 0, "successions": 0, "coal_biters": 0, "hall_fights": 0,
+	# The choices before fights (FightOffer): fights declined, ambushes
+	# laid, grounds chosen, times caught on the march.
+	"faded": 0, "ambushes": 0, "waited": 0, "caught": 0,
 }
 var _pending_vow := ""
 var _summer_wins := 0
+## How the band answers a fight offer (FightOffer.Choice) when nobody is
+## at the helm: a Callable taking the offer and returning a choice. The
+## default takes the field; the sandbox sets its own (Sandbox.choose_fight).
+var fight_policy: Callable = func(_offer: FightOffer) -> int: return FightOffer.Choice.TAKE_THE_FIELD
+## The last offer made, for tools and tests.
+var last_offer: FightOffer = null
 
 const MAX_FIGHTERS := 12
 const ENEMY_FIRST_ID := 1001
@@ -128,34 +137,127 @@ func _enemy_tier(r: SimRng) -> CombatTypes.Tier:
 	return clampi(base + shift, CombatTypes.Tier.GREEN, CombatTypes.Tier.CHAMPION) as CombatTypes.Tier
 
 
-## Fights one battle with the band's men as side 0. `attacking` sets who
-## has the aggressive leader. Applies growth, bonds, luck, plunder and
-## deaths, and handles the leader's death.
-func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attacking: bool, stat_center := -1) -> BattleResult:
+## Fights one battle with the band's men as side 0, as `fight_policy`
+## answers the offer: the offer first (`offer_fight`), then the choice, then
+## `resolve_offer`. `attacking` is whether the fight is the band's doing.
+## Returns null when the band faded away.
+func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attacking: bool, stat_center := -1,
+		at_sea := false, cornered := false) -> BattleResult:
+	var offer := offer_fight(kind, enemy_tier, enemy_size, attacking, stat_center, at_sea, cornered)
+	var choice: int = fight_policy.call(offer)
+	return resolve_offer(offer, choice)
+
+
+## The fight before it is fought: the enemy as the world has them (their
+## arms drawn from the seed, their leader named), the scout's report, and
+## whether either side saw the other first. On land, when they come for
+## you, your scout seeing them first makes an ambush yours; failing that,
+## `caught_chance` makes it theirs.
+func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attacking: bool, stat_center := -1,
+		at_sea := false, cornered := false) -> FightOffer:
 	tally.battles += 1
-	var seed_in := rng.fork("battle:%d:%d" % [cal.year, tally.battles]).seed_value
-	var battle := Battle.new(combat_rules, seed_in)
+	var o := FightOffer.new()
+	o.kind = kind
+	o.enemy_size = maxi(1, enemy_size)
+	o.enemy_tier = enemy_tier
+	o.attacking = attacking
+	o.at_sea = at_sea
+	o.cornered = cornered
+	o.stat_center = stat_center
+	o.our_men = mini(band.fighters().size(), MAX_FIGHTERS)
+	if world_rules != null:
+		o.odds_max = world_rules.raid_odds_max
+	o.seed_value = rng.fork("battle:%d:%d" % [cal.year, tally.battles]).seed_value
+	var er := SimRng.new(o.seed_value).fork("enemy-arms")
+	var split := Scenario.band_split(o.enemy_size, combat_rules)
+	o.enemy_shields = split[0]
+	o.enemy_spears = split[1]
+	o.enemy_bows = split[2]
+	if at_sea:
+		o.enemy_shields = o.enemy_size
+		o.enemy_spears = 0
+		o.enemy_bows = 0
+	o.enemy_leader = BandFactory.leader_name(er.fork("name"), 8)
+	o.doctrine = LeaderAI.Doctrine.AGGRESSIVE if er.randf() < 0.4 else LeaderAI.Doctrine.STEADY
+	if er.randf() < 0.4:
+		o.doctrine = LeaderAI.Doctrine.CUNNING
+	var scout := Scouting.pick_scout(band.fighters())
+	var wits := scout.stat(CombatTypes.Stat.WITS) if scout != null else 1
+	var tier := scout.tier if scout != null else CombatTypes.Tier.GREEN
+	var sr := SimRng.new(o.seed_value).fork("scout")
+	# Only a band that comes to you can be caught on the march, by you or
+	# the other way about; your own raid is your own doing.
+	if not at_sea and not cornered and not attacking:
+		o.we_know_first = Scouting.spots_first(sr.fork("first"), rules, wits, tier)
+		if not o.we_know_first:
+			o.they_know_first = sr.fork("caught").randf() < rules.caught_chance
+	o.report = Scouting.report(sr.fork("report"), rules, wits, tier, o)
+	last_offer = o
+	return o
+
+
+## Answers the offer. FADE_AWAY: no fight; the band withdrew (Leader
+## bookkeeping, no luck lost, honor lost) and null comes back. Otherwise
+## the fight is built from the choice (Scenario: the open field, the river
+## bank, an ambush either way) with the band's men as side 0, fought by the
+## leader AIs, and its consequences applied: growth, wounds, deaths, bonds,
+## luck, fame, plunder, succession.
+func resolve_offer(offer: FightOffer, choice: int) -> BattleResult:
+	if offer.they_know_first:
+		choice = FightOffer.Choice.TAKE_THE_FIELD
+	elif not offer.allows(choice):
+		choice = FightOffer.Choice.TAKE_THE_FIELD
 	var fighters := band.fighters()
 	if fighters.size() > MAX_FIGHTERS:
 		fighters = fighters.slice(0, MAX_FIGHTERS)
+	var odds := float(offer.enemy_size) / maxf(1.0, fighters.size())
+	if choice == FightOffer.Choice.FADE_AWAY:
+		tally.faded += 1
+		log.append("%s: %s, %s: the band fades away" % [cal.describe(), offer.kind, offer.brief()])
+		Leader.on_battle(rules, band, false, true, odds, log, BattleResult.Outcome.WITHDREW)
+		return null
+	if offer.they_know_first:
+		tally.caught += 1
+	elif choice == FightOffer.Choice.LAY_AMBUSH:
+		tally.ambushes += 1
+	elif choice == FightOffer.Choice.WAIT_FOR_THEM:
+		tally.waited += 1
+	var seed_in := offer.seed_value
 	var ours: Array[Warrior] = []
 	for m in fighters:
 		ours.append(m.to_warrior(0))
-	var enemy := BandFactory.make_band(SimRng.new(seed_in).fork("enemy"), 1, enemy_size, enemy_tier,
-			CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID, stat_center if stat_center > 0 else _mean_stat(fighters))
-	BandFactory.deploy_line(battle.grid, ours, BattleGrid.from_offset(8, 8), Vector2i(0, -1), combat_rules)
-	BandFactory.deploy_line(battle.grid, enemy, BattleGrid.from_offset(8, 3), Vector2i(0, 1), combat_rules)
-	battle.add_band(ours)
-	battle.add_band(enemy)
-	battle.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE if attacking else LeaderAI.Doctrine.STEADY))
-	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.STEADY if attacking else LeaderAI.Doctrine.AGGRESSIVE))
+	var center := offer.stat_center if offer.stat_center > 0 else _mean_stat(fighters)
+	var enemy := BandFactory.make_mixed_band(SimRng.new(seed_in).fork("enemy"), 1, offer.enemy_shields,
+			offer.enemy_spears, offer.enemy_bows, offer.enemy_tier, combat_rules, CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID, center)
+	if enemy[0].display_name != offer.enemy_leader:
+		enemy[0].display_name = offer.enemy_leader
+	var name := offer.scenario_for(choice)
+	var pick := {"doctrine": offer.doctrine}
+	var built: Dictionary
+	if offer.at_sea:
+		# A deck is flat and narrow: the symmetric field, no ground.
+		built = Scenario.build("equal_green", seed_in, combat_rules, false, fighters.size(), "", {"ours": ours, "theirs": enemy}, pick)
+	else:
+		if name == "equal_green":
+			pick.objective = -1  # the open field: nothing to take or hold
+		built = Scenario.build(name, seed_in, combat_rules, true, fighters.size(), "", {"ours": ours, "theirs": enemy}, pick)
+	var battle: Battle = built.battle
+	var ours_aggressive := offer.attacking or choice == FightOffer.Choice.LAY_AMBUSH
+	if choice == FightOffer.Choice.WAIT_FOR_THEM:
+		ours_aggressive = false
+	battle.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE if ours_aggressive else LeaderAI.Doctrine.STEADY))
+	if offer.they_know_first or choice == FightOffer.Choice.WAIT_FOR_THEM:
+		battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
 	var result := battle.run()
 	if debug_battles:
 		battle_logs.append(battle.log.duplicate())
 	var won := result.winner == 0
-	var odds := float(enemy_size) / maxf(1.0, fighters.size())
-	log.append("%s: %s against %d %s men: %s" % [cal.describe(), kind, enemy_size,
-			CombatTypes.TIER_NAMES[enemy_tier], result.summary()])
+	var outcome := result.outcome(0)
+	var kind := offer.kind
+	var enemy_size := offer.enemy_size
+	var enemy_tier := offer.enemy_tier
+	log.append("%s: %s (%s) against %d %s men: %s (%s)" % [cal.describe(), kind, FightOffer.CHOICE_NAMES[choice] if not offer.they_know_first else "caught on the march",
+			enemy_size, CombatTypes.TIER_NAMES[enemy_tier], result.summary(), result.outcome_text(0)])
 
 	# Growth, wounds, deaths.
 	BattleBridge.after_battle(rules, band, ours, result, log)
@@ -183,7 +285,7 @@ func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attackin
 			band.remove_man(m)
 
 	# Luck, reputation, plunder.
-	Leader.on_battle(rules, band, won, true, odds, log)
+	Leader.on_battle(rules, band, won, true, odds, log, outcome)
 	if won:
 		_summer_wins += 1
 		tally.wins += 1
@@ -224,7 +326,7 @@ func winter() -> void:
 		if not report.battle_required.is_empty():
 			tally.hall_fights += 1
 			var br: Dictionary = report.battle_required
-			fight(br.kind, br.tier, br.attackers, false)
+			fight(br.kind, br.tier, br.attackers, false, -1, false, true)  # at your own hall: cornered
 			if over:
 				return
 		if cal.winter_turn == CampaignTypes.WinterTurn.THAW:

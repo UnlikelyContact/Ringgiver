@@ -15,6 +15,7 @@ static func setup(c: Campaign, wr: WorldRules, home_id: String) -> World:
 	Faction.load_all(world)
 	c.world = world
 	c.world_rules = wr
+	c.fight_policy = Callable(Sandbox, "choose_fight")
 	c.band.ship = Ship.make(WorldTypes.ShipKind.KARVE)
 	c.band.home = home_id
 	c.band.location = home_id
@@ -123,7 +124,7 @@ static func _sail(c: Campaign, rng: SimRng, to: String, log: PackedStringArray) 
 			if ev.has("battle_required"):
 				var br: Dictionary = ev.battle_required
 				var stat := c.world_rules.levy_stat if br.get("kind", "") == "levy" else c.world_rules.sea_fight_stat
-				c.fight(br.get("kind", "sea fight"), br.tier, _forced(c, br.attackers), true, stat)
+				c.fight(br.get("kind", "sea fight"), br.tier, _forced(c, br.attackers), true, stat, true)
 				if c.over:
 					return false
 		if vr.arrived:
@@ -176,7 +177,7 @@ static func _do_raid(c: Campaign, rng: SimRng, target: Place, log: PackedStringA
 	var result := c.fight("raid on %s" % target.display_name, req.tier, req.defenders, true, clampi(center, 1, 10))
 	if c.over:
 		return true
-	var won := result.winner == 0
+	var won := result != null and result.winner == 0
 	var take := Raiding.after_raid(rng.fork("after"), c.world_rules, c.world, c.band, target, won, log)
 	if won:
 		c.band.silver += take.get("silver", 0)
@@ -219,7 +220,7 @@ static func _do_contract(c: Campaign, rng: SimRng, o: Dictionary, log: PackedStr
 		var br: Dictionary = r.battle_required
 		var res := c.fight(br.get("kind", o.kind), br.tier, _forced(c, br.attackers), true,
 				c.world_rules.levy_stat if o.kind == "levy" else c.world_rules.sea_fight_stat)
-		success = not c.over and res.winner == 0
+		success = not c.over and res != null and res.winner == 0
 	if c.over:
 		return true
 	Contracts.complete(c.world_rules, c.world, c.band, o, success, log)
@@ -271,7 +272,7 @@ static func _spine(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
 			var res := c.fight(br.get("kind", ev.id), br.tier, _forced(c, br.attackers), br.get("side", "") != "against", c.world_rules.spine_stat)
 			if c.over:
 				return
-			Timeline.resolve(c.world_rules, c.world, c.band, ev, choice, res.winner == 0, log)
+			Timeline.resolve(c.world_rules, c.world, c.band, ev, choice, res != null and res.winner == 0, log)
 		c.tally.spine = c.tally.get("spine", 0) + 1
 
 
@@ -295,7 +296,9 @@ static func _feuds(c: Campaign, rng: SimRng, log: PackedStringArray) -> void:
 			var br: Dictionary = ev.battle_required
 			var f := Feud.find(c.band, ev.get("family", ""))
 			var level: int = f.get("level", 1) if f != null and f is Dictionary else 1
-			c.fight(br.get("kind", "ambush"), br.tier, _forced(c, br.attackers), true, c.world_rules.feud_stat_base + level - 1)
+			# They come for you: the scout may see them first (your ambush), or
+			# they may have you on the march (theirs).
+			c.fight(br.get("kind", "ambush"), br.tier, _forced(c, br.attackers), false, c.world_rules.feud_stat_base + level - 1)
 		elif ev.get("kind", "") == "demand":
 			var family: String = ev.family
 			var ask := Feud.offer_settlement(c.world_rules, c.band, family)
@@ -348,7 +351,7 @@ static func go_to_thing(c: Campaign, rng: SimRng, family: String, kind: WorldTyp
 	var verdict := Thing.run(rng.fork("case"), wr, c.world, c.band, tc, spend, log)
 	if not tc.battle_required.is_empty():
 		var br: Dictionary = tc.battle_required
-		c.fight(br.get("kind", "thing brawl"), br.tier, _forced(c, br.attackers), false, wr.sea_fight_stat)
+		c.fight(br.get("kind", "thing brawl"), br.tier, _forced(c, br.attackers), false, wr.sea_fight_stat, false, true)  # cornered
 		if c.over:
 			return true
 	c.cal.advance_days(wr.thing_days)
@@ -450,3 +453,21 @@ static func year_end(c: Campaign, log: PackedStringArray) -> void:
 	if Outlawry.is_outlawed(c.band, c.cal) and c.band.outlawry == WorldTypes.Outlawry.LESSER \
 			and c.cal.year >= c.band.outlaw_until:
 		Outlawry.lift(c.band, log)
+
+
+## How the sandbox answers a fight offer (Campaign.fight_policy), the way a
+## careful leader would (concept.md, "Picking your fights"): an ambush when
+## the scout saw them first; the ground of his choosing when they come to
+## him; the field when the scout's count (the middle of his range) is
+## within `raid_odds_max` (the offer's `odds_max`) of his own men; else he
+## fades away, if he can.
+static func choose_fight(offer: FightOffer) -> int:
+	var C := FightOffer.Choice
+	if offer.allows(C.LAY_AMBUSH):
+		return C.LAY_AMBUSH
+	if offer.allows(C.WAIT_FOR_THEM):
+		return C.WAIT_FOR_THEM
+	var count: float = (float(offer.report.get("men_low", offer.enemy_size)) + float(offer.report.get("men_high", offer.enemy_size))) / 2.0
+	if count > offer.our_men * offer.odds_max and offer.allows(C.FADE_AWAY):
+		return C.FADE_AWAY
+	return C.TAKE_THE_FIELD

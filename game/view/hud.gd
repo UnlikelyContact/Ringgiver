@@ -10,8 +10,10 @@ var form_btn: Button
 var you_label: Label
 var next_btn: Button
 var follow_btn: Button
+var withdraw_btn: Button
 var shout_buttons := {}
 var result_panel: PanelContainer
+var offer_panel: PanelContainer
 var pulse_slider: HSlider
 var pulse_label: Label
 var _last_logged_shout := {}
@@ -78,6 +80,12 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	wheel_r.custom_minimum_size = Vector2(84, 40)
 	wheel_r.pressed.connect(func() -> void: view.wheel(1))
 	top.add_child(wheel_r)
+	withdraw_btn = Button.new()
+	withdraw_btn.text = "Withdraw"
+	withdraw_btn.tooltip_text = "Lead your men off the field, out of contact: a choice, not a rout"
+	withdraw_btn.custom_minimum_size = Vector2(92, 40)
+	withdraw_btn.pressed.connect(_on_withdraw)
+	top.add_child(withdraw_btn)
 	follow_btn = Button.new()
 	follow_btn.text = "Follow"
 	follow_btn.toggle_mode = true
@@ -154,6 +162,14 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	result_panel.anchor_bottom = 0.8
 	result_panel.visible = false
 	root.add_child(result_panel)
+	offer_panel = PanelContainer.new()
+	offer_panel.anchor_left = 0.12
+	offer_panel.anchor_right = 0.88
+	offer_panel.anchor_top = 0.16
+	offer_panel.anchor_bottom = 0.84
+	offer_panel.visible = false
+	root.add_child(offer_panel)
+	_show_offer()
 
 	view.round_played.connect(_on_round)
 	view.battle_finished.connect(_on_finished)
@@ -258,6 +274,28 @@ func _result_text(r: BattleResult) -> String:
 		r.downed[1], r.started[1], r.broken[1], r.fled[1], r.dead[1]]
 
 
+## Leaving the field in order. Only out of contact: engaged, fall back first.
+func _on_withdraw() -> void:
+	var b := view.battle
+	if b.is_over() or not b.can_withdraw(0):
+		return
+	if b.withdraw(0):
+		_on_finished(b.result)
+
+
+## The result panel's title, from the outcome ladder.
+const OUTCOME_TITLES := {
+	BattleResult.Outcome.ROUTED_THEM: "Victory: they are routed",
+	BattleResult.Outcome.DROVE_THEM_OFF: "Victory: they draw off",
+	BattleResult.Outcome.WON_THE_FIELD: "Victory",
+	BattleResult.Outcome.BOTH_DREW_OFF: "Both sides draw off",
+	BattleResult.Outcome.WITHDREW: "You withdrew",
+	BattleResult.Outcome.DRIVEN_OFF: "Defeat: driven off",
+	BattleResult.Outcome.ROUTED: "Defeat: a rout",
+	BattleResult.Outcome.LOST_THE_FIELD: "Defeat",
+}
+
+
 func _on_finished(result: BattleResult) -> void:
 	result_panel.visible = true
 	for c in result_panel.get_children():
@@ -265,29 +303,101 @@ func _on_finished(result: BattleResult) -> void:
 	var box := VBoxContainer.new()
 	result_panel.add_child(box)
 	var title := Label.new()
-	title.text = "Victory" if result.winner == 0 else ("Defeat" if result.winner == 1 else "Both sides draw off")
+	title.text = OUTCOME_TITLES[result.outcome(0)]
 	title.add_theme_font_size_override("font_size", 28)
 	box.add_child(title)
 	var body := Label.new()
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.text = _result_text(result)
 	box.add_child(body)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	box.add_child(row)
 	var again := Button.new()
 	again.text = "Fight again"
 	again.custom_minimum_size = Vector2(160, 44)
-	again.pressed.connect(func() -> void: main.start(main.scenario, main.seed_in + 1))
-	row.add_child(again)
-	# The other kind of fight: an ambush you laid, or back to the open field.
-	var other := Button.new()
-	var ambush: bool = main.scenario == "ambush"
-	other.text = "Take the field" if ambush else "Lay an ambush"
-	other.custom_minimum_size = Vector2(160, 44)
-	other.pressed.connect(func() -> void: main.start("equal_green" if ambush else "ambush", main.seed_in + 1))
-	row.add_child(other)
+	again.pressed.connect(func() -> void: main.start("equal_green", main.seed_in + 1))
+	box.add_child(again)
 	_refresh()
+
+
+## The choice before the fight (concept.md, "Picking your fights"): the
+## scout's report on the band the field dealt you, and what you may do
+## about it. Only on a fresh field; a fight you already chose (the river
+## bank, an ambush) starts at once. The prototype has no campaign, so the
+## scout is you, and whether anyone saw the other first comes from the seed.
+func _show_offer() -> void:
+	var b := view.battle
+	if main.scenario != "equal_green" or b.round > 0:
+		return
+	var rules := CampaignRules.new()
+	var o := FightOffer.new()
+	var theirs: Array = main.get("theirs") if main.get("theirs") != null else []
+	for w in theirs:
+		match (w as Warrior).role:
+			CombatTypes.Role.SHIELD:
+				o.enemy_shields += 1
+			CombatTypes.Role.SPEAR:
+				o.enemy_spears += 1
+			_:
+				o.enemy_bows += 1
+	o.enemy_size = theirs.size()
+	o.enemy_leader = (theirs[0] as Warrior).display_name if not theirs.is_empty() else ""
+	o.doctrine = main.get("doctrine") if main.get("doctrine") != null else LeaderAI.Doctrine.STEADY
+	o.attacking = b.objective != null and b.objective.attacker == 0
+	var sr := SimRng.new(main.seed_in).fork("prototype-scout")
+	var wits: int = view.player.wits
+	o.we_know_first = Scouting.spots_first(sr.fork("first"), rules, wits, view.player.tier)
+	if not o.we_know_first and not o.attacking:
+		o.they_know_first = sr.fork("caught").randf() < rules.caught_chance
+	o.report = Scouting.report(sr.fork("report"), rules, wits, view.player.tier, o)
+	offer_panel.visible = true
+	for c in offer_panel.get_children():
+		c.queue_free()
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	offer_panel.add_child(box)
+	var title := Label.new()
+	title.text = "Before the fight"
+	title.add_theme_font_size_override("font_size", 24)
+	box.add_child(title)
+	var body := Label.new()
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var ground: String = main.get("field_title") if main.get("field_title") != null else ""
+	var task := ""
+	if b.objective != null:
+		task = " " + b.objective.brief(0) + "."
+	body.text = "%s%s %s%s" % [(ground + ". ") if ground != "" else "", o.brief(), "You have %d men." % b.active(0).size(), task]
+	box.add_child(body)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	box.add_child(row)
+	if o.they_know_first:
+		var caught := Button.new()
+		caught.text = "Fight"
+		caught.custom_minimum_size = Vector2(150, 44)
+		caught.pressed.connect(func() -> void: main.start("ambushed", main.seed_in))
+		row.add_child(caught)
+	for choice in o.options():
+		var btn := Button.new()
+		btn.text = FightOffer.CHOICE_TITLES[choice]
+		btn.custom_minimum_size = Vector2(150, 44)
+		match choice:
+			FightOffer.Choice.TAKE_THE_FIELD:
+				btn.tooltip_text = "Fight as the field is dealt"
+				btn.pressed.connect(func() -> void:
+					offer_panel.visible = false
+					_refresh())
+			FightOffer.Choice.WAIT_FOR_THEM:
+				btn.tooltip_text = "Fall back to the river and hold the bank: they must come through the ford"
+				btn.pressed.connect(func() -> void: main.start("hold", main.seed_in))
+			FightOffer.Choice.LAY_AMBUSH:
+				btn.tooltip_text = "Your scout saw them first: catch them on the march"
+				btn.pressed.connect(func() -> void: main.start("ambush", main.seed_in))
+			FightOffer.Choice.FADE_AWAY:
+				btn.tooltip_text = "No fight today: it costs standing, not blood"
+				btn.pressed.connect(func() -> void:
+					offer_panel.visible = false
+					if b.withdraw(0):
+						_on_finished(b.result))
+		row.add_child(btn)
 
 
 ## The short commit the web build was made from (scripts/export-web.sh
@@ -330,6 +440,9 @@ func _refresh() -> void:
 		round_text = "Round %d  %s  %s" % [b.round, b.objective.progress(b), b.objective.clock_text(b)]
 	status.text = "%s  wall %d/%d%s (%s)  theirs %d/%d%s" % [round_text, mine[0], mine[1], arms_text, stance, theirs[0], theirs[1], calls]
 	form_btn.text = "Form: " + view.formation_name()
+	withdraw_btn.disabled = b.is_over() or not b.can_withdraw(0)
+	withdraw_btn.tooltip_text = "Break contact first: fall back, then withdraw" if not b.can_withdraw(0) \
+			else "Lead your men off the field, out of contact: a choice, not a rout"
 	var warn := ""
 	if view.player.is_active() and b.round > 0 and view.wall_count(0)[0] < 2:
 		warn = "   (nobody stands with you)"

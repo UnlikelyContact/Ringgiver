@@ -13,15 +13,25 @@ const REP_MAX := 100
 ## After a fight. `odds` is our strength over theirs (1.0 = even); a win at
 ## odds below long_odds is a win against the odds and is worth more luck and
 ## fame than an ordinary win. Hanging back costs luck and honor either way.
+## `outcome` (BattleResult.Outcome, or -1 for the plain won/lost of old
+## callers) is the ladder: a rout brings `fame_rout` on top; a withdrawal
+## costs `honor_withdrew` and no luck; both drawing off costs nothing.
 static func on_battle(rules: CampaignRules, band: Band, won: bool, led_from_front: bool,
-		odds: float, log: PackedStringArray) -> void:
+		odds: float, log: PackedStringArray, outcome := -1) -> void:
 	var who := _name(band)
-	if won and odds < rules.long_odds:
+	var O := BattleResult.Outcome
+	if outcome == O.WITHDREW:
+		_add(band, 0, 0, -rules.honor_withdrew)
+		log.append("%s did not care to fight that day, and led his men off" % who)
+	elif outcome == O.BOTH_DREW_OFF:
+		log.append("%s and his enemy drew off, and neither had the better of it" % who)
+	elif won and odds < rules.long_odds:
 		_add(band, rules.luck_long_odds, rules.fame_long_odds, 0)
 		log.append("%s won against the odds: his luck is talked of" % who)
 	elif won:
-		_add(band, rules.luck_win, rules.fame_win, 0)
-		log.append("%s won the day" % who)
+		var extra := rules.fame_rout if outcome == O.ROUTED_THEM else 0
+		_add(band, rules.luck_win, rules.fame_win + extra, 0)
+		log.append("%s won the day" % who if extra == 0 else "%s routed them, and the rout is talked of" % who)
 	else:
 		_add(band, -rules.luck_loss, 0, 0)
 		log.append("%s lost the fight, and some say his luck is waning" % who)
