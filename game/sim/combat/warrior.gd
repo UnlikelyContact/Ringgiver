@@ -70,6 +70,16 @@ var last_reason := ""
 var looted := false
 ## Men he put down this battle.
 var kills := 0
+## Drill points by learned shape name (Man.drill): how well he knows it.
+var drill := {}
+
+
+## How well he knows a shape, 0 to 1: full for a shape every leader knows,
+## his drill points over `full` for a learned one.
+func familiar(t: FormationTemplate, full: int) -> float:
+	if t == null or not t.learned:
+		return 1.0
+	return clampf(float(drill.get(t.name, 0)) / maxf(1.0, float(full)), 0.0, 1.0)
 ## Effort gained this battle, by CombatTypes.Stat -> int.
 var effort := {}
 var fate: CombatTypes.Fate = CombatTypes.Fate.RECOVERED

@@ -4,6 +4,7 @@ extends RefCounted
 
 var tasks := {}  # man id -> CampaignTypes.Task
 var drill_stat := {}  # man id -> CombatTypes.Stat (for DRILL)
+var drill_shape := ""  # the learned shape the drilling men practise ("" none)
 var feast := false  # Yule only
 var vow := ""  # Yule only, "" for none
 var gifts := {}  # man id -> ounces (Yule)

@@ -822,6 +822,11 @@ static func _form(m: Mind, wedge: bool) -> Action:
 			if o != null and not band.has(o):
 				plan.erase(x)
 	if plan.has(w) and plan[w] != w.pos:
+		# A shape he has not drilled: he fumbles for his place some rounds.
+		if template != null and template.learned \
+				and m.blur.randf() < (1.0 - w.familiar(template, m.rules.drill_points_full)) * m.rules.drill_fumble_chance:
+			w.last_reason = "%s looks for his place in the %s" % [w.display_name, template.name]
+			return Action.brace(leader.wall_facing())
 		var step := _step_toward(grid, w, plan[w], leader.wall_facing())
 		if step != null:
 			return step

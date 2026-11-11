@@ -30,6 +30,18 @@ var deeds: PackedStringArray = []
 ## His place in the line (CombatTypes.Role): a shield-bearer, a spearman
 ## of the second rank, or a bowman.
 var role: CombatTypes.Role = CombatTypes.Role.SHIELD
+## Drill points by learned shape name: how well he knows it (concept.md,
+## "Drill, custom formations and custom shouts"), and the last year he
+## drilled, for the thaw's decay.
+var drill := {}
+var drilled_year := 0
+
+
+## A point of drill in a shape, to `full`.
+func learn(shape: String, full: int, year := 0) -> void:
+	drill[shape] = mini(full, int(drill.get(shape, 0)) + 1)
+	if year > 0:
+		drilled_year = year
 
 var ambition: CampaignTypes.Ambition = CampaignTypes.Ambition.SILVER
 var ambition_progress := 0
@@ -112,6 +124,7 @@ func to_warrior(side: int, rules: CampaignRules = null, javelins := 1) -> Warrio
 	w.is_leader = is_leader
 	w.is_banner = is_banner
 	w.is_horn = is_horn
+	w.drill = drill.duplicate()
 	if rules != null:
 		w.wound = current_wound(rules)
 	return w

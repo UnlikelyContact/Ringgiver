@@ -271,6 +271,14 @@ var luck_high := 7
 var luck_low := 3
 var fame_per_recruit := 20
 
+# --- Drill (winter.gd, bridge.gd) ------------------------------------------
+## Drill points at which a man knows a learned shape fully (the same as
+## CombatRules.drill_points_full). A winter turn of DRILL in the band's
+## chosen shape gives a point; standing in a shape through a fight gives
+## one; a man who did not drill all winter loses `drill_decay` at the thaw.
+var drill_points_full := 3
+var drill_decay := 1
+
 # --- Scouting (scouting.gd, fight_offer.gd) ---------------------------------
 ## The scout's count may be out by this either way at Wits 1, one less a
 ## point of wits, `scout_veteran_bonus` less for a seasoned scout.

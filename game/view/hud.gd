@@ -12,6 +12,8 @@ var next_btn: Button
 var follow_btn: Button
 var withdraw_btn: Button
 var shout_buttons := {}
+var custom_buttons: Array[Button] = []
+var drill_panel: PanelContainer
 var result_panel: PanelContainer
 var offer_panel: PanelContainer
 var pulse_slider: HSlider
@@ -130,14 +132,27 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	bottom.offset_bottom = -6
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(bottom)
+	var customs: Array = main.get("custom_shouts") if main != null and main.get("custom_shouts") != null else []
+	var wide := 100 if customs.is_empty() else 88
 	for s in SHOUTS:
 		var b := Button.new()
 		b.text = CombatTypes.SHOUT_NAMES[s].capitalize() + "!"
-		b.custom_minimum_size = Vector2(100, 52)
+		b.custom_minimum_size = Vector2(wide, 52)
 		b.toggle_mode = true
 		b.pressed.connect(_on_shout.bind(s))
 		bottom.add_child(b)
 		shout_buttons[s] = b
+	# The band's own shouts, sworn in the drill yard: a shape and an order.
+	for c in customs:
+		var cs: CustomShout = c
+		var cb := Button.new()
+		cb.text = cs.name + "!"
+		cb.tooltip_text = cs.describe()
+		cb.custom_minimum_size = Vector2(wide, 52)
+		cb.toggle_mode = true
+		cb.pressed.connect(_on_custom.bind(cs, cb))
+		bottom.add_child(cb)
+		custom_buttons.append(cb)
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(16, 0)
 	bottom.add_child(gap)
@@ -189,8 +204,24 @@ func _on_next() -> void:
 
 func _on_shout(s: CombatTypes.Shout) -> void:
 	view.pending_shout = CombatTypes.Shout.NONE if view.pending_shout == s else s
+	view.pending_custom = null
 	for k in shout_buttons:
 		(shout_buttons[k] as Button).button_pressed = (k == view.pending_shout)
+	for cb in custom_buttons:
+		cb.button_pressed = false
+	_refresh()
+	view.queue_redraw()
+
+
+## A shout of the band's own: its shape this round, its order the next.
+func _on_custom(cs: CustomShout, btn: Button) -> void:
+	var on := view.pending_custom != cs
+	view.pending_custom = cs if on else null
+	view.pending_shout = CombatTypes.Shout.SHIELD_WALL if on else CombatTypes.Shout.NONE
+	for k in shout_buttons:
+		(shout_buttons[k] as Button).button_pressed = false
+	for cb in custom_buttons:
+		cb.button_pressed = (cb == btn and on)
 	_refresh()
 	view.queue_redraw()
 
@@ -320,12 +351,112 @@ func _on_finished(result: BattleResult) -> void:
 			after_label.add_theme_color_override("font_color", Palette.DIM)
 			after_label.text = " ".join(after)
 			box.add_child(after_label)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
 	var again := Button.new()
 	again.text = "Fight again" if not main.get("saga_over") else "A new band"
 	again.custom_minimum_size = Vector2(160, 44)
 	again.pressed.connect(func() -> void: main.next_fight())
-	box.add_child(again)
+	row.add_child(again)
+	if main.has_method("drill") and not main.get("saga_over"):
+		var yard := Button.new()
+		yard.text = "Drill yard"
+		yard.tooltip_text = "Drill a shape, or swear a shout of your own"
+		yard.custom_minimum_size = Vector2(160, 44)
+		yard.pressed.connect(_show_drill_yard)
+		row.add_child(yard)
 	_refresh()
+
+
+## The drill yard (concept.md, "Drill, custom formations and custom
+## shouts"): the learned shapes and how well the band knows them, a turn
+## of drill in one, and a shout of the band's own: a name, a shape, an
+## order. Between fights; the winter is where it happens in the campaign.
+func _show_drill_yard() -> void:
+	result_panel.visible = false
+	if drill_panel == null:
+		drill_panel = PanelContainer.new()
+		drill_panel.anchor_left = 0.12
+		drill_panel.anchor_right = 0.88
+		drill_panel.anchor_top = 0.1
+		drill_panel.anchor_bottom = 0.9
+		result_panel.get_parent().add_child(drill_panel)
+	drill_panel.visible = true
+	for c in drill_panel.get_children():
+		c.queue_free()
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	drill_panel.add_child(box)
+	var title := Label.new()
+	title.text = "The drill yard"
+	title.add_theme_font_size_override("font_size", 24)
+	box.add_child(title)
+	var rules: CampaignRules = main.campaign_rules
+	for t in FormationTemplate.presets():
+		if not t.learned:
+			continue
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation", 10)
+		box.add_child(line)
+		var lab := Label.new()
+		var fam: float = main.roster.familiarity(t.name, rules)
+		lab.text = "%s: the band knows it %d%%" % [t.name.capitalize(), int(round(fam * 100.0))]
+		lab.custom_minimum_size = Vector2(320, 0)
+		line.add_child(lab)
+		var drill := Button.new()
+		drill.text = "Drill it"
+		drill.tooltip_text = "A turn in the yard: every man gains a point, to %d" % rules.drill_points_full
+		drill.custom_minimum_size = Vector2(110, 36)
+		drill.pressed.connect(func() -> void:
+			main.drill(t.name)
+			_show_drill_yard())
+		line.add_child(drill)
+	var swear_title := Label.new()
+	swear_title.text = "Swear a shout of your own: a name, a shape, and the order it gives"
+	box.add_child(swear_title)
+	var swear := HBoxContainer.new()
+	swear.add_theme_constant_override("separation", 10)
+	box.add_child(swear)
+	var name_edit := LineEdit.new()
+	name_edit.placeholder_text = "Hedgehog"
+	name_edit.max_length = 12
+	name_edit.custom_minimum_size = Vector2(150, 36)
+	var customs: Array = main.custom_shouts
+	if not customs.is_empty():
+		name_edit.text = (customs[0] as CustomShout).name
+	swear.add_child(name_edit)
+	var shape_pick := OptionButton.new()
+	for t in FormationTemplate.presets():
+		shape_pick.add_item(t.name)
+	shape_pick.custom_minimum_size = Vector2(150, 36)
+	swear.add_child(shape_pick)
+	var order_pick := OptionButton.new()
+	var orders := [CombatTypes.Shout.HOLD, CombatTypes.Shout.PUSH, CombatTypes.Shout.BREAK_THEM, CombatTypes.Shout.FALL_BACK]
+	for o in orders:
+		order_pick.add_item("then " + CombatTypes.SHOUT_NAMES[o])
+	order_pick.custom_minimum_size = Vector2(150, 36)
+	swear.add_child(order_pick)
+	var swear_btn := Button.new()
+	swear_btn.text = "Swear it"
+	swear_btn.custom_minimum_size = Vector2(110, 36)
+	swear_btn.pressed.connect(func() -> void:
+		var nm := name_edit.text.strip_edges()
+		if nm == "":
+			nm = "Hedgehog"
+		var t := FormationTemplate.presets()[shape_pick.selected]
+		main.swear_shout(CustomShout.make(nm, t, orders[order_pick.selected]))
+		_show_drill_yard())
+	swear.add_child(swear_btn)
+	var have := Label.new()
+	have.add_theme_color_override("font_color", Palette.DIM)
+	have.text = "Your shouts: " + (", ".join(customs.map(func(c: CustomShout) -> String: return c.describe())) if not customs.is_empty() else "none yet")
+	box.add_child(have)
+	var done := Button.new()
+	done.text = "Fight again"
+	done.custom_minimum_size = Vector2(160, 44)
+	done.pressed.connect(func() -> void: main.next_fight())
+	box.add_child(done)
 
 
 ## The choice before the fight (concept.md, "Picking your fights"): the
@@ -449,7 +580,10 @@ func _refresh() -> void:
 	if b.objective != null:
 		round_text = "Round %d  %s  %s" % [b.round, b.objective.progress(b), b.objective.clock_text(b)]
 	status.text = "%s  wall %d/%d%s (%s)  theirs %d/%d%s" % [round_text, mine[0], mine[1], arms_text, stance, theirs[0], theirs[1], calls]
-	form_btn.text = "Form: " + view.formation_name()
+	var known := ""
+	if view.player != null and view.player.formation != null and view.player.formation.learned:
+		known = " %d%%" % int(round(b.familiarity(0) * 100.0))  # how well the band knows a learned shape
+	form_btn.text = "Form: " + view.formation_name() + known
 	if b.round > 0 and offer_panel.visible:
 		offer_panel.visible = false  # the fight is on: the choice was made
 	withdraw_btn.disabled = b.is_over() or not b.can_withdraw(0)

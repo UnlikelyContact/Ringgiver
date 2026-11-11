@@ -382,6 +382,11 @@ func _thaw() -> void:
 		Growth.winter_age(rng.fork("age:%d:%d" % [cal.year, m.id]), rules, m, log)
 		Growth.apply_growth(rules, m, log)
 	Bonds.winter_drift(rng.fork("bonds:%d" % cal.year), rules, band, log)
+	# A shape not drilled all winter fades a point in every man who sat it out.
+	for m in band.fighters():
+		if m.drilled_year != cal.year and not m.drill.is_empty():
+			for shape in m.drill.keys():
+				m.drill[shape] = maxi(0, int(m.drill[shape]) - rules.drill_decay)
 	var leavers := Loyalty.departures(rng.fork("leave:%d" % cal.year), rules, band, log)
 	for m in leavers:
 		band.remove_man(m)

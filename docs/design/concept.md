@@ -1271,6 +1271,29 @@ campaign screen; the campaign has had the rest (growth, maims, bonds,
 luck, fame, plunder, succession) since milestone 2 and now shares this
 with it (`Aftermath`).
 
+**Drill, custom formations and custom shouts, built (11 Nov 2026).** As
+decided on 8 Nov, and now in. Shapes are templates; the boar's snout and
+the new refused flanks (the hedgehog: the row with its two end men a hex
+back) are *learned*, ranks, line and bows behind are not. Every man has
+drill points in each learned shape (three is full); the band's
+familiarity with a shape is the mean, and the wall's one test to move as
+one is scaled by it (two fifths at none, straight up to one), and a man
+who has not drilled a shape fumbles for his place some rounds when it is
+called. A custom shout is a name, a shape and an order: calling it forms
+the shape this round and gives the order the next, unless the leader's
+next word comes first; it carries like any shout, and a man who has
+never drilled the shape hears a word he does not know and does what the
+men beside him do. In winter the band drills one shape (the plan's
+`drill_shape`, the band's `drilling`), a point a turn to the men on
+DRILL; a man who sat the winter out loses a point at the thaw; and
+standing in a learned shape through a fight teaches it. The prototype's
+drill yard, from the result panel, shows how well the band knows each
+learned shape, drills one for a turn, and swears one shout of the band's
+own, which then stands in the shout row under its name and shows the
+band's familiarity beside the Form button. Measured: forming the boar's
+snout over thirty fights, undrilled men hesitated 84 times, drilled men
+28.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art

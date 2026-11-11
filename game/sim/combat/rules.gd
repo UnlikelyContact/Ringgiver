@@ -373,6 +373,19 @@ var objective_attacker_shields := 2
 ## the patch than the defender at the end of this round; otherwise the
 ## defender has held it.
 var objective_ford_rounds := 16
+# --- Drill (formation_template.gd, custom_shout.gd) -------------------------
+## Drill points at which a man knows a learned shape fully (Warrior.drill,
+## from Man.drill; CampaignRules.drill_points_full is the same number on
+## the campaign side).
+var drill_points_full := 3
+## The wall's one test is scaled by this at no familiarity with a learned
+## shape, straight up to 1 at full: a green band forms a shape it has never
+## drilled slowly and raggedly.
+var drill_unfamiliar_factor := 0.4
+## A man forming a learned shape fumbles for his place (braces instead of
+## stepping to his slot) with this chance times his unfamiliarity.
+var drill_fumble_chance := 0.5
+
 # --- The ambush (scenario.gd "ambush") -------------------------------------
 ## The ambushed leader gives no order for this many rounds: his men stand
 ## where the surprise finds them, strung out along the track, and only the

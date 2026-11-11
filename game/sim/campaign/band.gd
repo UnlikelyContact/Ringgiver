@@ -43,6 +43,10 @@ var rank_progress := 0
 var outlawry: WorldTypes.Outlawry = WorldTypes.Outlawry.NONE
 var outlaw_until := 0
 
+## The band's own shouts (CustomShout) and the learned shape it drills in
+## winter ("" for none; Winter.default_plan reads it).
+var custom_shouts: Array[CustomShout] = []
+var drilling := ""
 var _bonds := {}  # "lo:hi" -> int
 var _bond_kinds := {}  # "lo:hi" -> CampaignTypes.BondKind
 var _next_id := 1
@@ -86,10 +90,12 @@ func living_men() -> Array[Man]:
 
 ## Everyone who fights: the leader first, then living men.
 ## The men who can stand in a line: the leader and the living, less any
-## too hurt to fight (`rules`, when given: Man.too_hurt_to_fight).
+## too hurt to fight (`rules`, when given: Man.too_hurt_to_fight). The
+## leader goes however hurt he is: a band without him is no band, and he
+## fights hurt (the wound goes with him).
 func fighters(rules: CampaignRules = null) -> Array[Man]:
 	var out: Array[Man] = []
-	if leader != null and leader.alive and (rules == null or not leader.too_hurt_to_fight(rules)):
+	if leader != null and leader.alive:
 		out.append(leader)
 	for m in living_men():
 		if rules == null or not m.too_hurt_to_fight(rules):
@@ -97,15 +103,25 @@ func fighters(rules: CampaignRules = null) -> Array[Man]:
 	return out
 
 
-## The living men left at the ship, too hurt to fight.
+## The living men left at the ship, too hurt to fight (never the leader).
 func hurt(rules: CampaignRules) -> Array[Man]:
 	var out: Array[Man] = []
-	if leader != null and leader.alive and leader.too_hurt_to_fight(rules):
-		out.append(leader)
 	for m in living_men():
 		if m.too_hurt_to_fight(rules):
 			out.append(m)
 	return out
+
+
+## How well the band knows a learned shape, 0 to 1: the mean of its
+## fighting men's drill over `rules.drill_points_full`.
+func familiarity(shape: String, rules: CampaignRules) -> float:
+	var men := fighters()
+	if men.is_empty():
+		return 0.0
+	var sum := 0.0
+	for m in men:
+		sum += clampf(float(m.drill.get(shape, 0)) / maxf(1.0, float(rules.drill_points_full)), 0.0, 1.0)
+	return sum / men.size()
 
 
 ## Everyone mends `turns` of healing: the days between fights, a winter turn.

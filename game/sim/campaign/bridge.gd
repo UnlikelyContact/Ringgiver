@@ -13,6 +13,11 @@ extends RefCounted
 static func after_battle(rules: CampaignRules, band: Band, warriors: Array[Warrior], result: BattleResult, log: PackedStringArray) -> Dictionary:
 	var told := {"dead": [], "maimed": [], "wounded": [], "grievous": [], "fled": [], "broke": [], "deeds": [], "tiers": []}
 	var stood: Array[Man] = []  # alive afterwards and did not flee
+	# The shape the band fought in: standing in a learned one teaches it.
+	var fought: FormationTemplate = null
+	for w in warriors:
+		if w.is_leader and w.formation != null and w.formation.learned:
+			fought = w.formation
 	for w in warriors:
 		var m := band.man_by_id(w.id)
 		if m == null or not m.alive:
@@ -68,6 +73,9 @@ static func after_battle(rules: CampaignRules, band: Band, warriors: Array[Warri
 	for i in stood.size():
 		for j in range(i + 1, stood.size()):
 			band.set_bond(stood[i], stood[j], band.bond(stood[i], stood[j]) + rules.bond_fought_together)
+	if fought != null:
+		for m in stood:
+			m.learn(fought.name, rules.drill_points_full)
 	return told
 
 

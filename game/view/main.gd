@@ -29,6 +29,9 @@ var campaign_rules := CampaignRules.new()
 var saga: PackedStringArray = []
 var after_lines: PackedStringArray = []
 var saga_over := false
+## The band's own shouts (CustomShout), sworn in the drill yard; carried
+## with the roster.
+var custom_shouts: Array = []
 
 
 func _ready() -> void:
@@ -125,6 +128,7 @@ func start(p_scenario: String, p_seed: int) -> void:
 	var rules := CombatRules.new()
 	if roster == null or saga_over:
 		roster = make_roster(p_seed)
+		custom_shouts = []
 		saga.clear()
 		saga_over = false
 	var fighters := roster.fighters(campaign_rules)
@@ -182,3 +186,21 @@ func next_fight() -> void:
 	if roster != null and not saga_over:
 		roster.mend(campaign_rules.mend_between_fights)
 	start("equal_green", seed_in + 1)
+
+
+## A turn in the drill yard: every man gains a point in `shape`, to full.
+func drill(shape: String) -> void:
+	if roster == null:
+		return
+	for m in roster.fighters():
+		m.learn(shape, campaign_rules.drill_points_full)
+	saga.append("The band drills the %s." % shape)
+
+
+## Swears a shout of the band's own; one at a time in the prototype (the
+## shout row has room for one), so it replaces the last.
+func swear_shout(shout: CustomShout) -> void:
+	custom_shouts = [shout]
+	if roster != null:
+		roster.custom_shouts.assign([shout])
+	saga.append("The band swears a shout: %s." % shout.describe())

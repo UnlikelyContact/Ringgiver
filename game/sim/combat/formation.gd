@@ -141,7 +141,15 @@ static func template_slots(grid: BattleGrid, leader: Warrior, band: Array[Warrio
 	front = front + spill
 	if front.size() > line.size():
 		line = line_slots(grid, leader, front.size())
-	out.merge(assign(line.slice(0, front.size()) if line.size() >= front.size() else line, front))
+	var front_slots: Array[Vector2i] = line.slice(0, front.size()) if line.size() >= front.size() else line
+	if template != null and template.shape == FormationTemplate.Shape.REFUSED and front_slots.size() >= 4:
+		# The two end men stand a hex back: the refused flanks.
+		for k in [front_slots.size() - 1, front_slots.size() - 2]:
+			var c: Vector2i = front_slots[k]
+			var b: Vector2i = c + BattleGrid.forward(c, ax, back_facing)
+			if _usable(grid, leader, b) and not behind.slice(0, second.size()).has(b):
+				front_slots[k] = b  # unless a second-rank man has that cell
+	out.merge(assign(front_slots, front))
 	out.merge(assign(behind.slice(0, second.size()), second))
 	out.merge(assign(far.slice(0, third.size()), third))
 	return out

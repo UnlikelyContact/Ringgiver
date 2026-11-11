@@ -8,12 +8,21 @@ extends RefCounted
 ## shape. Custom templates (the main game's drill yard) are the same thing
 ## with the player's own name and ranks.
 
-enum Shape { LINE, WEDGE }
+## LINE: the row through the leader. WEDGE: the boar's snout, the leader
+## at its tip. REFUSED: the row with its two end men a hex back, so a wall
+## coming round an end meets a refused flank (the hedgehog).
+enum Shape { LINE, WEDGE, REFUSED }
 
 var name := "line"
 var shape: Shape = Shape.LINE
 ## CombatTypes.Role -> rank (1, 2 or 3).
 var rank_of := {CombatTypes.Role.SHIELD: 1, CombatTypes.Role.SPEAR: 1, CombatTypes.Role.MISSILE: 1}
+## A learned shape is one the band must drill (concept.md, "Drill, custom
+## formations and custom shouts"): its familiarity (Warrior.familiar, from
+## Man.drill) is what the wall's one test rolls against, and a man who has
+## never drilled it fumbles for his place. The plain shapes every leader
+## knows are not learned.
+var learned := false
 
 
 static func line() -> FormationTemplate:
@@ -40,12 +49,43 @@ static func wedge() -> FormationTemplate:
 	var t := FormationTemplate.new()
 	t.name = "boar's snout"
 	t.shape = Shape.WEDGE
+	t.learned = true
 	return t
 
 
-## The shapes a leader can call without drill, in the order the HUD cycles them.
+## Shields in the line with its ends drawn back, spears behind, bows two
+## behind: the hedgehog, a learned shape.
+static func refused() -> FormationTemplate:
+	var t := ranks()
+	t.name = "refused flanks"
+	t.shape = Shape.REFUSED
+	t.learned = true
+	return t
+
+
+## A shape of the band's own: a name, a shape and the rank each role
+## stands in. Always learned.
+static func custom(p_name: String, p_shape: Shape, p_rank_of: Dictionary) -> FormationTemplate:
+	var t := FormationTemplate.new()
+	t.name = p_name
+	t.shape = p_shape
+	t.rank_of = p_rank_of.duplicate()
+	t.learned = true
+	return t
+
+
+## The shapes a leader can call, in the order the HUD cycles them: the
+## three every leader knows, then the learned ones.
 static func presets() -> Array[FormationTemplate]:
-	return [ranks(), line(), bows_behind(), wedge()]
+	return [ranks(), line(), bows_behind(), wedge(), refused()]
+
+
+## The preset of this name, or null.
+static func named(p_name: String) -> FormationTemplate:
+	for t in presets():
+		if t.name == p_name:
+			return t
+	return null
 
 
 func rank(role: CombatTypes.Role) -> int:

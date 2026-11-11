@@ -34,6 +34,9 @@ static func run_turn(rng: SimRng, rules: CampaignRules, band: Band, cal: Calenda
 			CampaignTypes.Task.DRILL:
 				var s: CombatTypes.Stat = plan.drill_stat.get(m.id, lowest_stat(m))
 				rep.drilled[m.id] = s
+				if plan.drill_shape != "":
+					m.learn(plan.drill_shape, rules.drill_points_full, cal.year)
+					rep.drilled_shape = plan.drill_shape
 			CampaignTypes.Task.REPAIR:
 				rep.shields_mended = true
 				var amount := 2 if hall.has(CampaignTypes.Building.SMITHY) else 1
@@ -172,6 +175,7 @@ static func default_plan(rules: CampaignRules, band: Band, cal: Calendar) -> Win
 	for m in free:
 		plan.tasks[m.id] = CampaignTypes.Task.DRILL
 		plan.drill_stat[m.id] = lowest_stat(m)
+	plan.drill_shape = band.drilling
 
 	if cal.winter_turn == CampaignTypes.WinterTurn.YULE:
 		var eaters := men.size() + (1 if band.leader != null and band.leader.alive else 0)

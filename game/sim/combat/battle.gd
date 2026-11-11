@@ -24,6 +24,8 @@ var _contact_logged := {}  # side -> bool, so "in contact" is logged once per sp
 var _wall_step := {}  # side -> true when the leader asks his wall to step forward this round
 var _volleyed := {}  # side -> true once the wall has paused to throw its spears
 var _routing_logged := {}  # side -> true while its wall is making for a way round
+var _custom_called := {}  # side -> CustomShout given this round
+var _follow_up := {}  # side -> the order a custom shout gives next round
 ## The side taken by surprise (an ambush), or -1, and the last round its
 ## leader is struck dumb: no order comes from him until then.
 var ambushed_side := -1
@@ -63,6 +65,35 @@ func set_ai(side: int, ai: LeaderAI) -> void:
 ## External (player) shout for the coming round.
 func set_shout(side: int, shout: CombatTypes.Shout) -> void:
 	_pending_shout[side] = shout
+
+
+## A shout of the band's own (CustomShout): the leader's wall forms the
+## shout's template this round (Shield wall!) and takes its order the
+## next, unless another shout is given first. The men who have never
+## drilled the shape do not know the word.
+func call_custom(side: int, custom: CustomShout) -> void:
+	var leader := leader_of(side)
+	if leader == null or custom == null:
+		return
+	leader.formation = custom.template
+	_pending_shout[side] = CombatTypes.Shout.SHIELD_WALL
+	_custom_called[side] = custom
+	_follow_up[side] = custom.order
+
+
+## The wall's familiarity with the shape its leader has called, 0 to 1:
+## the mean over its members (Warrior.familiar).
+func familiarity(side: int) -> float:
+	var leader := leader_of(side)
+	if leader == null:
+		return 1.0
+	var members := grid.chain(leader)
+	if members.is_empty():
+		return 1.0
+	var sum := 0.0
+	for w in members:
+		sum += w.familiar(leader.formation, rules.drill_points_full)
+	return sum / members.size()
 
 
 ## The player's own man acts on this instead of Decision next round.
@@ -319,6 +350,9 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 		tier_sum += int(w.tier)
 	var tier_avg := int(round(float(tier_sum) / members.size()))
 	var chance: float = chance_sum / members.size() * rules.wall_test_tier_factor[clampi(tier_avg, 0, 3)]
+	# A learned shape the band has not drilled: the test is harder in
+	# proportion (drill_unfamiliar_factor at none, 1 at full).
+	chance *= lerpf(rules.drill_unfamiliar_factor, 1.0, familiarity(side))
 	if wr.randf() > chance:
 		log.append("%s's line hesitates (%d%% to move as one)" % [leader.display_name, int(round(chance * 100))])
 		_hold_wall(members)
@@ -504,6 +538,12 @@ func run_round() -> void:
 		_dress_line(side, leader)
 		_relieve_shieldless(side, leader)
 		var shout: CombatTypes.Shout = CombatTypes.Shout.NONE
+		if not _custom_called.has(side) and _follow_up.has(side):
+			# The custom shout's order, the round after its shape was called,
+			# unless another shout came first.
+			if not _pending_shout.has(side):
+				_pending_shout[side] = _follow_up[side]
+			_follow_up.erase(side)
 		if _pending_shout.has(side):
 			shout = _pending_shout[side]
 			_pending_shout.erase(side)
@@ -524,8 +564,23 @@ func run_round() -> void:
 		if shout != CombatTypes.Shout.NONE:
 			_standing[side] = shout
 		if leader != null and shout != CombatTypes.Shout.NONE:
-			log.append("%s shouts: %s!" % [leader.display_name, CombatTypes.SHOUT_NAMES[shout]])
+			var custom: CustomShout = _custom_called.get(side, null)
+			if custom != null:
+				log.append("%s shouts: %s! (%s)" % [leader.display_name, custom.name, custom.template.name if custom.template != null else "line"])
+			else:
+				log.append("%s shouts: %s!" % [leader.display_name, CombatTypes.SHOUT_NAMES[shout]])
 			Shouts.propagate(rr.fork("shout:%d" % side), rules, grid, leader, shout, active(side), fog, log)
+			if custom != null:
+				# A word a man has never drilled means nothing to him: he does
+				# what the men beside him do.
+				var blank := 0
+				for w in active(side):
+					if w != leader and w.heard_order == shout and w.familiar(custom.template, rules.drill_points_full) <= 0.0:
+						w.heard_order = CombatTypes.Shout.NONE
+						blank += 1
+				if blank > 0:
+					log.append("%d of %s's men do not know the word" % [blank, leader.display_name])
+				_custom_called.erase(side)
 			if shout == CombatTypes.Shout.TO_ME:
 				Morale.rally(rules, grid, leader, warriors, log)
 

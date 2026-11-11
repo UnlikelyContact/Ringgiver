@@ -133,6 +133,38 @@ fight (field, objective, role, enemy, doctrine, outcome) and takes
 and to try tunables, and `log` for the whole log with the field drawn
 after every round.
 
+## Drill and custom shouts (`formation_template.gd`, `custom_shout.gd`, 11 Nov 2026)
+
+`FormationTemplate.learned` marks a shape the band must drill: `wedge()`
+and the new `refused()` (Shape.REFUSED: `Formation.template_slots` moves
+the two outermost front slots a hex straight back, unless a second-rank
+man has the cell), and any `custom(name, shape, rank_of)`. `presets()`
+now ends with the learned two; `named(name)` finds one. `Warrior.drill`
+(name -> points, copied from `Man.drill` by `to_warrior`) and
+`familiar(template, full)` (1 for a shape every leader knows, points over
+`drill_points_full` (3) for a learned one). `Battle.familiarity(side)` is
+the mean over the leader's chain; `_plan_wall` scales the wall's test by
+`lerp(drill_unfamiliar_factor (0.4), 1, familiarity)`; `Decision._form`
+braces instead of stepping to the slot with chance `(1 - familiar) *
+drill_fumble_chance` (0.5), with a reason.
+
+`CustomShout` (name, template, order). `Battle.call_custom(side, shout)`
+sets the leader's formation, a pending SHIELD_WALL, and `_follow_up`;
+the shout is logged under its name, men whose familiarity is 0 have
+their heard order cleared ("N of X's men do not know the word"), and the
+round after, the order is given unless another shout was set first. On
+the campaign side: `Man.learn(shape, full, year)`, `Band.custom_shouts`,
+`Band.drilling`, `Band.familiarity(shape, rules)`; `WinterPlan.
+drill_shape` (the default plan takes `band.drilling`), a point a DRILL
+turn (`Winter.run_turn`, `WinterReport.drilled_shape`); `Campaign._thaw`
+takes `drill_decay` (1) from every man whose `drilled_year` is not this
+year; `BattleBridge.after_battle` gives every man who stood a point in
+the learned shape the leader fought in. The prototype: `BattleView.
+pending_custom`, the HUD's custom shout button (one, the row narrowed),
+the familiarity after the Form button's name, and `_show_drill_yard`
+(drill a learned shape, swear a shout: `main.drill`, `main.swear_shout`).
+Six tests in `test_drill.gd`.
+
 ## The choice before the fight (`fight_offer.gd`, `scouting.gd`, 11 Nov 2026)
 
 `Campaign.fight(kind, tier, size, attacking, stat_center, at_sea,

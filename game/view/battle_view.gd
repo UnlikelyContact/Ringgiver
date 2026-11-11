@@ -21,6 +21,8 @@ var paused := true
 var auto_pause := true
 var follow := true
 var pending_shout: CombatTypes.Shout = CombatTypes.Shout.NONE
+## A shout of the band's own to give this round (CustomShout), or null.
+var pending_custom: CustomShout = null
 var pending_action: Action = null
 var pending_advance := false  # the wall steps forward as one next round
 var clock := 0.0
@@ -123,7 +125,10 @@ func step() -> void:
 	var before := {}
 	for w in battle.warriors:
 		before[w] = w.pos
-	if pending_shout != CombatTypes.Shout.NONE:
+	if pending_custom != null:
+		battle.call_custom(player.side, pending_custom)
+		pending_custom = null
+	elif pending_shout != CombatTypes.Shout.NONE:
 		battle.set_shout(player.side, pending_shout)
 	if pending_action != null:
 		battle.set_player_action(player.side, pending_action)
