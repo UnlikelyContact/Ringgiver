@@ -164,7 +164,7 @@ func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, at
 	o.at_sea = at_sea
 	o.cornered = cornered
 	o.stat_center = stat_center
-	o.our_men = mini(band.fighters().size(), MAX_FIGHTERS)
+	o.our_men = mini(band.fighters(rules).size(), MAX_FIGHTERS)
 	if world_rules != null:
 		o.odds_max = world_rules.raid_odds_max
 	o.seed_value = rng.fork("battle:%d:%d" % [cal.year, tally.battles]).seed_value
@@ -181,7 +181,7 @@ func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, at
 	o.doctrine = LeaderAI.Doctrine.AGGRESSIVE if er.randf() < 0.4 else LeaderAI.Doctrine.STEADY
 	if er.randf() < 0.4:
 		o.doctrine = LeaderAI.Doctrine.CUNNING
-	var scout := Scouting.pick_scout(band.fighters())
+	var scout := Scouting.pick_scout(band.fighters(rules))
 	var wits := scout.stat(CombatTypes.Stat.WITS) if scout != null else 1
 	var tier := scout.tier if scout != null else CombatTypes.Tier.GREEN
 	var sr := SimRng.new(o.seed_value).fork("scout")
@@ -207,7 +207,9 @@ func resolve_offer(offer: FightOffer, choice: int) -> BattleResult:
 		choice = FightOffer.Choice.TAKE_THE_FIELD
 	elif not offer.allows(choice):
 		choice = FightOffer.Choice.TAKE_THE_FIELD
-	var fighters := band.fighters()
+	# The days between fights mend a turn; then the men who can stand.
+	band.mend(rules.mend_between_fights)
+	var fighters := band.fighters(rules)
 	if fighters.size() > MAX_FIGHTERS:
 		fighters = fighters.slice(0, MAX_FIGHTERS)
 	var odds := float(offer.enemy_size) / maxf(1.0, fighters.size())
@@ -225,7 +227,7 @@ func resolve_offer(offer: FightOffer, choice: int) -> BattleResult:
 	var seed_in := offer.seed_value
 	var ours: Array[Warrior] = []
 	for m in fighters:
-		ours.append(m.to_warrior(0))
+		ours.append(m.to_warrior(0, rules, combat_rules.javelins_per_man))
 	var center := offer.stat_center if offer.stat_center > 0 else _mean_stat(fighters)
 	var enemy := BandFactory.make_mixed_band(SimRng.new(seed_in).fork("enemy"), 1, offer.enemy_shields,
 			offer.enemy_spears, offer.enemy_bows, offer.enemy_tier, combat_rules, CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID, center)
@@ -259,8 +261,9 @@ func resolve_offer(offer: FightOffer, choice: int) -> BattleResult:
 	log.append("%s: %s (%s) against %d %s men: %s (%s)" % [cal.describe(), kind, FightOffer.CHOICE_NAMES[choice] if not offer.they_know_first else "caught on the march",
 			enemy_size, CombatTypes.TIER_NAMES[enemy_tier], result.summary(), result.outcome_text(0)])
 
-	# Growth, wounds, deaths.
-	BattleBridge.after_battle(rules, band, ours, result, log)
+	# Growth, wounds, deaths, loot, a man who asks to join.
+	var told := Aftermath.apply(rules, band, ours, result, SimRng.new(seed_in).fork("aftermath"), not offer.at_sea, log)
+	tally.recruits += told.joined.size()
 	var survivors: Array[Man] = []
 	var fallen: Array[Man] = []
 	for m in fighters:

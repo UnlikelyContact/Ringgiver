@@ -1090,6 +1090,8 @@ func _after_exchange(r: ExchangeResult) -> void:
 	if r.went_down and r.loser != null:
 		grid.remove(r.loser)
 		result.downed[r.loser.side] += 1
+		if r.winner != null:
+			r.winner.kills += 1
 		Morale.on_down(rules, grid, r.loser, warriors, log)
 
 

@@ -22,6 +22,14 @@ var personality: Array[CombatTypes.Personality] = []
 var traits: PackedStringArray = []
 var maims: Array[CampaignTypes.Maim] = []
 var healing_turns := 0
+## What a fight leaves on him (Aftermath): men he has put down, times he
+## broke and ran, and deeds told of him.
+var kills := 0
+var broke_count := 0
+var deeds: PackedStringArray = []
+## His place in the line (CombatTypes.Role): a shield-bearer, a spearman
+## of the second rank, or a bowman.
+var role: CombatTypes.Role = CombatTypes.Role.SHIELD
 
 var ambition: CampaignTypes.Ambition = CampaignTypes.Ambition.SILVER
 var ambition_progress := 0
@@ -64,20 +72,48 @@ func has_maim(m: CampaignTypes.Maim) -> bool:
 	return maims.has(m)
 
 
+## The wound he carries now, from the healing he has left (CampaignRules.
+## wound_turns): unhurt, bruised, wounded, or grievous.
+func current_wound(rules: CampaignRules) -> CombatTypes.Wound:
+	if healing_turns <= 0:
+		return CombatTypes.Wound.UNHURT
+	if healing_turns >= rules.grievous_turns:
+		return CombatTypes.Wound.GRIEVOUS
+	if healing_turns >= rules.wound_turns[CombatTypes.Wound.WOUNDED]:
+		return CombatTypes.Wound.WOUNDED
+	return CombatTypes.Wound.BRUISED
+
+
+## Too hurt to stand in a line: left at the ship.
+func too_hurt_to_fight(rules: CampaignRules) -> bool:
+	return healing_turns >= rules.grievous_turns
+
+
 ## Builds the battle-side view. Ids are preserved so BattleBridge can map
-## warriors back to men. A lost hand means no shield.
-func to_warrior(side: int) -> Warrior:
+## warriors back to men. A lost hand means no shield; a bowman has none;
+## a shield-bearer carries `javelins` throwing spears. `rules` (campaign)
+## puts the wound he carries on him; null sends him unhurt.
+func to_warrior(side: int, rules: CampaignRules = null, javelins := 1) -> Warrior:
 	var w := Warrior.make(display_name, side, stats.duplicate(), tier)
 	w.id = id
 	w.personality = personality.duplicate()
+	w.role = role
 	w.weapon = weapon
-	w.has_shield = has_shield and not has_maim(CampaignTypes.Maim.LOST_HAND) \
-			and weapon != CombatTypes.Weapon.LONG_AXE and weapon != CombatTypes.Weapon.BOW
+	if role == CombatTypes.Role.MISSILE:
+		w.weapon = CombatTypes.Weapon.BOW
+	elif role == CombatTypes.Role.SPEAR:
+		w.weapon = CombatTypes.Weapon.SPEAR
+	w.has_shield = has_shield and role != CombatTypes.Role.MISSILE and not has_maim(CampaignTypes.Maim.LOST_HAND) \
+			and w.weapon != CombatTypes.Weapon.LONG_AXE and w.weapon != CombatTypes.Weapon.BOW
+	if role == CombatTypes.Role.SHIELD:
+		w.javelins = javelins
 	w.armor = armor
 	w.helmet = helmet
 	w.is_leader = is_leader
 	w.is_banner = is_banner
 	w.is_horn = is_horn
+	if rules != null:
+		w.wound = current_wound(rules)
 	return w
 
 

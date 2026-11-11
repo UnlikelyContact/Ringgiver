@@ -85,12 +85,33 @@ func living_men() -> Array[Man]:
 
 
 ## Everyone who fights: the leader first, then living men.
-func fighters() -> Array[Man]:
+## The men who can stand in a line: the leader and the living, less any
+## too hurt to fight (`rules`, when given: Man.too_hurt_to_fight).
+func fighters(rules: CampaignRules = null) -> Array[Man]:
 	var out: Array[Man] = []
-	if leader != null and leader.alive:
+	if leader != null and leader.alive and (rules == null or not leader.too_hurt_to_fight(rules)):
 		out.append(leader)
-	out.append_array(living_men())
+	for m in living_men():
+		if rules == null or not m.too_hurt_to_fight(rules):
+			out.append(m)
 	return out
+
+
+## The living men left at the ship, too hurt to fight.
+func hurt(rules: CampaignRules) -> Array[Man]:
+	var out: Array[Man] = []
+	if leader != null and leader.alive and leader.too_hurt_to_fight(rules):
+		out.append(leader)
+	for m in living_men():
+		if m.too_hurt_to_fight(rules):
+			out.append(m)
+	return out
+
+
+## Everyone mends `turns` of healing: the days between fights, a winter turn.
+func mend(turns: int) -> void:
+	for m in fighters():
+		m.healing_turns = maxi(0, m.healing_turns - turns)
 
 
 static func _key(a: Man, b: Man) -> String:

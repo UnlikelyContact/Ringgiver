@@ -1250,6 +1250,27 @@ counts for less than a rout), so that waiting costs something; and the
 behind him (a file on the march, a second rank), which the symmetric
 batches did not move.
 
+**What a fight leaves behind (11 Nov 2026).** Fights cost something
+now, in the campaign and in the prototype both, which has a roster: you
+and eleven sworn men drawn from the campaign's recruit tables, carried
+from one "Fight again" to the next. A man leaves a fight with the wound
+he ends it with (a bruise mends in a turn, a wound in two, a man carried
+off the field in four); the days between fights mend one turn, so a
+wounded man fights the next one hurt, and a man too hurt is left at the
+ship and does not stand in the line. A man who broke is remembered: his
+loyalty drops and "broke and ran once" is on him. Men who put down two
+or more in one fight have the deed told of them. The greedy strip silver
+from a fallen leader. After a fight won on land a man who saw it may ask
+to join: one time in three after a rout, one in seven after a plainer
+win. The result panel reads it out ("Grim is dead. Ketil lived, but with
+a lost eye. Olvir is wounded and will fight hurt. Unn broke and ran, and
+came back shamed. Hrut saw the fight and asks to join. Your band: 10 men
+fit to fight, 1 too hurt.") and your death ends the saga: the next fight
+is another man's. The roster is the prototype's first step toward the
+campaign screen; the campaign has had the rest (growth, maims, bonds,
+luck, fame, plunder, succession) since milestone 2 and now shares this
+with it (`Aftermath`).
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art

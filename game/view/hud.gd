@@ -297,6 +297,7 @@ const OUTCOME_TITLES := {
 
 
 func _on_finished(result: BattleResult) -> void:
+	offer_panel.visible = false
 	result_panel.visible = true
 	for c in result_panel.get_children():
 		c.queue_free()
@@ -310,10 +311,19 @@ func _on_finished(result: BattleResult) -> void:
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.text = _result_text(result)
 	box.add_child(body)
+	# After the fight: what it left on the band, carried to the next one.
+	if main.has_method("after_fight"):
+		var after: PackedStringArray = main.after_fight(result)
+		if not after.is_empty():
+			var after_label := Label.new()
+			after_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			after_label.add_theme_color_override("font_color", Palette.DIM)
+			after_label.text = " ".join(after)
+			box.add_child(after_label)
 	var again := Button.new()
-	again.text = "Fight again"
+	again.text = "Fight again" if not main.get("saga_over") else "A new band"
 	again.custom_minimum_size = Vector2(160, 44)
-	again.pressed.connect(func() -> void: main.start("equal_green", main.seed_in + 1))
+	again.pressed.connect(func() -> void: main.next_fight())
 	box.add_child(again)
 	_refresh()
 
@@ -440,6 +450,8 @@ func _refresh() -> void:
 		round_text = "Round %d  %s  %s" % [b.round, b.objective.progress(b), b.objective.clock_text(b)]
 	status.text = "%s  wall %d/%d%s (%s)  theirs %d/%d%s" % [round_text, mine[0], mine[1], arms_text, stance, theirs[0], theirs[1], calls]
 	form_btn.text = "Form: " + view.formation_name()
+	if b.round > 0 and offer_panel.visible:
+		offer_panel.visible = false  # the fight is on: the choice was made
 	withdraw_btn.disabled = b.is_over() or not b.can_withdraw(0)
 	withdraw_btn.tooltip_text = "Break contact first: fall back, then withdraw" if not b.can_withdraw(0) \
 			else "Lead your men off the field, out of contact: a choice, not a rout"

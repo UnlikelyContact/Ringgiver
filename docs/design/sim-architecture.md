@@ -190,6 +190,40 @@ HUD shows the offer panel before round one on a fresh field
 (`_show_offer`: the scout is you, the rolls from the seed), a Withdraw
 button in the top bar, and the ladder's title on the result panel.
 
+## What a fight leaves behind (`aftermath.gd`, `bridge.gd`, 11 Nov 2026)
+
+`Aftermath.apply(rules, band, warriors, result, rng, on_land, log)` is
+what both the campaign (`resolve_offer`) and the prototype's roster
+(`main.after_fight`) call after a fight. It runs `BattleBridge.
+after_battle`, which now returns what it did by name ({dead, maimed,
+wounded, grievous, fled, broke, deeds, tiers}) and also: puts
+`Warrior.kills` (counted in `Battle._after_exchange`) on `Man.kills`,
+with a deed (`Man.deeds`) at `deed_kills` (2) in one fight; sets
+`Man.healing_turns` from the wound the man ends with (`wound_turns` by
+CombatTypes.Wound: 0, 1, 2, 4, 4 for a man carried off and recovered),
+never lowering it; and for a man who broke but did not get away,
+`broke_count` += 1, loyalty −`loyalty_broke_penalty` (3), and the trait
+"broke and ran once" the first time. Then loot (`loot_per_man` 8 oz per
+`Warrior.looted`, on a win) into `band.silver`, and on a win on land a
+recruit (`Recruits.random`) by `recruit_after_rout_chance` (0.35) after a
+rout or `recruit_after_win_chance` (0.15), from the battle's rng fork so
+it replays. `Aftermath.lines(told)` reads it out in plain words.
+
+The wound carried: `Man.current_wound(rules)` derives it from
+`healing_turns` (≥ `grievous_turns` 4: grievous; ≥ 2: wounded; ≥ 1:
+bruised), `too_hurt_to_fight` is grievous, `Band.fighters(rules)` leaves
+such men out and `Band.hurt(rules)` lists them, `Band.mend(turns)` heals
+everyone a turn (the campaign calls it with `mend_between_fights` (1)
+before every fight; winter turns did already). `Man.to_warrior(side,
+rules, javelins)` now sets the role (`Man.role`: SHIELD, SPEAR or
+MISSILE; a bowman has no shield, a shield-bearer carries the javelins)
+and the wound. The prototype's `main.make_roster` draws you and eleven
+men (`Recruits`, roles by `Scenario.band_split`), `start` builds the
+fight from `roster.fighters(rules)` with the Scenario builders' `bands`,
+`after_fight` applies the aftermath and writes `after_lines` for the
+result panel, `next_fight` mends a turn; your death sets `saga_over`
+and the next fight gathers a new band.
+
 ## The ambush (`Scenario.build_ambush`, 10 Nov 2026)
 
 `Scenario.build("ambush", seed, rules, _, band)` is the fight you chose

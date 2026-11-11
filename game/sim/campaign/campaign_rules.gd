@@ -181,6 +181,26 @@ var events_per_turn := 1
 var feud_attack_chance := 0.25
 var sickness_men := 2
 var sickness_turns := 2
+## Healing a battle leaves to do, by the wound a man ends it with
+## (CombatTypes.Wound: unhurt, bruised, wounded, grievous, down and
+## recovered). A man mends a turn between summer fights
+## (`mend_between_fights`) and every winter turn; with
+## `grievous_turns` or more left he is left at the ship and does not
+## fight (Band.fighters); fewer, he fights hurt (Man.current_wound).
+var wound_turns := [0, 1, 2, 4, 4]
+var grievous_turns := 4
+var mend_between_fights := 1
+## A man who breaks and runs loses this loyalty and it is remembered
+## (Man.broke_count, a trait the first time).
+var loyalty_broke_penalty := 3
+## Silver a man strips from a fallen enemy leader or banner-bearer.
+var loot_per_man := 8
+## After a fight won on land a man may ask to join: the chance after a
+## rout, and after a plainer win.
+var recruit_after_rout_chance := 0.35
+var recruit_after_win_chance := 0.15
+## A man who puts down this many in one fight has a deed told of him.
+var deed_kills := 2
 var building_costs := {
 	CampaignTypes.Building.BENCHES: 20,
 	CampaignTypes.Building.STOREHOUSE: 30,

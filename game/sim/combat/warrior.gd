@@ -68,6 +68,8 @@ var last_option := ""
 var last_reason := ""
 ## A greedy man has stripped a fallen leader or banner man this battle.
 var looted := false
+## Men he put down this battle.
+var kills := 0
 ## Effort gained this battle, by CombatTypes.Stat -> int.
 var effort := {}
 var fate: CombatTypes.Fate = CombatTypes.Fate.RECOVERED
