@@ -35,6 +35,10 @@ func _init() -> void:
 		if i == 1:
 			view.pending_shout = CombatTypes.Shout.PUSH
 	view.set_paused(paused)
+	# An eighth argument "yard" opens the drill yard over a finished fight,
+	# "offer" leaves the choice panel as it is.
+	if args.size() > 7 and args[7] == "yard" and scene.hud != null:
+		scene.hud._show_drill_yard()
 	view.queue_redraw()
 	await process_frame
 	await process_frame
