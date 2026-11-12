@@ -830,6 +830,42 @@ func foster_for(rules: WorldRules, band: Band, name: String, log: PackedStringAr
 	band.alliances.append("%s, whose son is fostered with you" % name)
 
 
+## The band's own son goes to be fostered in a house's hall: the house and
+## the band are tied by fostering (generations: Family.answer_card).
+func foster_son_with(rules: WorldRules, band: Band, name: String) -> void:
+	if house(name) == null:
+		return
+	_band_tie(band, name, "foster")
+	shift(rules, band, name, rules.standing_foster)
+
+
+## A daughter of the band's leader marries into a house: the same tie and
+## standing as the leader's own marriage (`marry_into`).
+func marry_daughter(rules: WorldRules, band: Band, name: String, daughter: String, log: PackedStringArray) -> void:
+	if house(name) == null:
+		return
+	_band_tie(band, name, "marriage")
+	shift(rules, band, name, rules.standing_marriage)
+	log.append("%s is married into %s; their house and yours are one by marriage now." % [daughter, name])
+
+
+## What a new leader keeps of the old one's standing with the houses: each
+## standing scaled toward nothing by `share` (feuds are held by `sync`), the
+## marriage ties his mother's kin to a son (`son`), or end for a man of
+## another blood.
+func inherit(band: Band, share: float, son: bool) -> void:
+	for k in band.standing.keys():
+		band.standing[k] = roundi(int(band.standing[k]) * share)
+	for k in band.house_ties.keys():
+		var ties: Array = band.house_ties[k]
+		if ties.has("marriage"):
+			ties.erase("marriage")
+			if son and not ties.has("kin"):
+				ties.append("kin")
+		if ties.is_empty():
+			band.house_ties.erase(k)
+
+
 static func _band_tie(band: Band, name: String, kind: String) -> void:
 	var ties: Array = band.house_ties.get(name, [])
 	if not ties.has(kind):

@@ -328,6 +328,72 @@ var death_lines := {
 ## Death causes that cost the heir luck_shameful_death.
 var shameful_deaths := ["outlaw", "oathbreaker"]
 
+# --- Generations (years.gd, family.gd, succession.gd: the played saga) ------
+## Letting the years pass ("Then nothing is told of him for three winters"):
+## the most years at once, and what a year at home costs and brings. A man
+## at home costs his ale, his share and the small gifts that keep him
+## (`years_upkeep_per_man` oz a year, on top of the winter's food); he
+## brings in `years_food_per_man` rations from the hay, the nets and the
+## hunt over the summer. A man who wants silver or fame sits ill at home
+## (`years_idle_loyalty` a summer; the others `years_idle_loyalty_other`),
+## and fame fades when nothing is told (`years_fame_fade` a year). A house
+## at feud with the band comes against the hall in `years_attack_chance`
+## of years for each level of the feud, and that stops the years.
+var years_max := 10
+var years_upkeep_per_man := 3
+var years_food_per_man := 4
+var years_idle_loyalty := 6
+var years_idle_loyalty_other := 2
+var years_fame_fade := 2
+var years_attack_chance := 0.2
+## The household: a son may be fostered out from `foster_min_age` to
+## `foster_max_age` (he comes home at `foster_returns_at_age` with
+## `foster_craft_bonus` in his foster-father's craft, the stat his house's
+## temper favours); at `son_join_age` he joins the band, is named heir, or
+## is left to the farm, and joins with `son_join_loyalty` and a bond of
+## `son_join_bond` with his father. A daughter is of an age to marry at
+## `daughter_marry_age`.
+var foster_min_age := 12
+var foster_max_age := 14
+var foster_craft_bonus := 1
+var son_join_age := 16
+var son_join_loyalty := 80
+var son_join_bond := 30
+var daughter_marry_age := 15
+## The craft a foster-father's house teaches, by its temper (CombatTypes.Stat).
+var foster_crafts := {"proud": CombatTypes.Stat.NERVE, "grasping": CombatTypes.Stat.WITS,
+	"peaceable": CombatTypes.Stat.WITS, "steadfast": CombatTypes.Stat.GRIT}
+## Old age: from `step_down_age` a leader with a son of age may step down
+## at the spring and sit by the fire as the old man of the hall, who dies
+## in his bed in `old_man_death_chance` of winters.
+var step_down_age := 48
+var old_man_death_chance := 0.2
+## The grave-ale, played: an open-handed feast is `grave_ale_open_per_man`
+## oz a man (at least `grave_ale_open_min`) and is talked of
+## (`grave_ale_open_fame`); a plain one is `grave_ale_ounces`; a mean one
+## costs nothing and every man `grave_ale_mean_loyalty`, the heir
+## `grave_ale_mean_honor` honor.
+var grave_ale_open_per_man := 3
+var grave_ale_open_min := 30
+var grave_ale_open_fame := 3
+var grave_ale_mean_loyalty := 6
+var grave_ale_mean_honor := 3
+## What a son brings to the high seat beyond what any heir carries: the
+## family's luck (`heir_son_luck`), and the houses' regard for his father
+## (the standing kept: `standing_inherit_son`, a second `standing_inherit_second`).
+var heir_son_luck := 1
+var standing_inherit_son := 0.75
+var standing_inherit_second := 0.5
+## A strong second disputes the high seat with an heir weaker than he is
+## (by `challenge_stat_margin` stat points, or a better tier) when his bond
+## with the heir is under `challenge_bond`; buying him off costs
+## `challenge_buyoff_ounces`; winning the holmgang is worth
+## `challenge_won_fame` fame.
+var challenge_stat_margin := 2
+var challenge_bond := 10
+var challenge_buyoff_ounces := 30
+var challenge_won_fame := 5
+
 # --- Campaign loop (Module I) -----------------------------------------------
 var battles_per_summer := 3
 var enemy_band_size := 8  # unused by the loop now; sizes track the band

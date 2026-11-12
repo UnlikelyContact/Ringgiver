@@ -34,6 +34,13 @@ var _summer_wins := 0
 var fight_policy: Callable = func(_offer: FightOffer) -> int: return FightOffer.Choice.TAKE_THE_FIELD
 ## The last offer made, for tools and tests.
 var last_offer: FightOffer = null
+## The grave-ale is the player's (Journey.played_succession): a leader's
+## death waits in `pending_death` ({cause, year, name, age, killer}) for
+## the death card and the grave-ale instead of passing the high seat at
+## once. Off for the sandbox AI and the old callers.
+var played_succession := false
+var pending_death := {}
+var _killer := ""
 
 const MAX_FIGHTERS := 12
 const ENEMY_FIRST_ID := 1001
@@ -424,6 +431,7 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 	var killer := enemy[0].display_name
 	for m in fallen:
 		Bonds.on_death(rules, band, m, killer, log)
+		Chronicle.fell(band, m, cal.year)
 		if m != band.leader:
 			band.remove_man(m)
 
@@ -445,6 +453,7 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 			if m.ambition == CampaignTypes.Ambition.SILVER or m.ambition == CampaignTypes.Ambition.FAME:
 				Loyalty.ambition_progress(rules, band, m, rules.ambition_per_win, log)
 	if band.leader != null and not band.leader.alive:
+		_killer = killer
 		succession("battle")
 	return told
 
@@ -587,6 +596,7 @@ func _thaw(opts := {}) -> void:
 		Sandbox.year_end(self, log)
 	# Births, aging and growth, bonds drifting, then who stays.
 	Family.winter_births(rng.fork("births:%d" % cal.year), rules, band, cal, log)
+	Family.old_folk_year(rng.fork("old_folk:%d" % cal.year), rules, band, cal, log)
 	for m in band.fighters():
 		Growth.winter_age(rng.fork("age:%d:%d" % [cal.year, m.id]), rules, m, log)
 		Growth.apply_growth(rules, m, log)
@@ -659,6 +669,15 @@ func _name_second_if_needed() -> void:
 
 func succession(death_cause: String) -> void:
 	var old := band.leader
+	if played_succession:
+		# The player holds the grave-ale (Journey: the death card, then the
+		# heir, the feast and the vow): the death waits for it.
+		if pending_death.is_empty() and old != null:
+			pending_death = {"cause": death_cause, "year": cal.year, "name": old.display_name, "age": old.age,
+					"killer": _killer if death_cause == "battle" else "", "winter": cal.is_winter()}
+			log.append("%s is dead" % old.display_name)
+		_killer = ""
+		return
 	var h := Succession.heir(rules, band, cal)
 	var heir_man: Man = null
 	match h.kind:
