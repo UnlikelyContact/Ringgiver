@@ -26,10 +26,10 @@ const PLACES := [
 	{"id": "hardanger", "name": "the Hardanger farms", "region": R.HORDALAND, "kind": K.FARMSTEAD, "pos": Vector2(30, 54), "wealth": 30, "defenses": 1, "faction": "hordaland", "family": "Hardanger-Atli's kin"},
 	# Sogn
 	{"id": "sogn_hall", "name": "Sogndal", "region": R.SOGN, "kind": K.HALL, "pos": Vector2(30, 44), "wealth": 45, "defenses": 4, "faction": "sogn", "family": "the Sygna kings"},
-	{"id": "sogn_farms", "name": "the Sogn farms", "region": R.SOGN, "kind": K.FARMSTEAD, "pos": Vector2(27, 42), "wealth": 25, "defenses": 1, "faction": "sogn", "family": "the Sygna kings"},
+	{"id": "sogn_farms", "name": "the Sogn farms", "region": R.SOGN, "kind": K.FARMSTEAD, "pos": Vector2(27, 42), "wealth": 25, "defenses": 1, "faction": "sogn", "family": "Ulfar's kin"},
 	# Møre
 	{"id": "giske", "name": "Giske", "region": R.MORE, "kind": K.HALL, "pos": Vector2(30, 32), "wealth": 50, "defenses": 5, "faction": "more", "family": "Rognvald's kin"},
-	{"id": "more_farms", "name": "the Møre farms", "region": R.MORE, "kind": K.FARMSTEAD, "pos": Vector2(34, 30), "wealth": 30, "defenses": 1, "faction": "more", "family": "Rognvald's kin"},
+	{"id": "more_farms", "name": "the Møre farms", "region": R.MORE, "kind": K.FARMSTEAD, "pos": Vector2(34, 30), "wealth": 30, "defenses": 1, "faction": "more", "family": "Hrafn's kin"},
 	# Trøndelag
 	{"id": "lade", "name": "Lade", "region": R.TRONDELAG, "kind": K.HALL, "pos": Vector2(46, 22), "wealth": 65, "defenses": 6, "faction": "lade", "family": "the Lade jarls", "market": true},
 	{"id": "frostathing", "name": "the Frostathing", "region": R.TRONDELAG, "kind": K.THING_SITE, "pos": Vector2(48, 20), "wealth": 10, "defenses": 2, "faction": "lade", "family": "the Lade jarls"},
@@ -49,7 +49,7 @@ const PLACES := [
 	# The raider's prey: rich, and no king's levy near.
 	{"id": "iona", "name": "the monastery on Iona", "region": R.WEST, "kind": K.FARMSTEAD, "pos": Vector2(-16, 62), "wealth": 75, "defenses": 0, "faction": "", "family": "the monks of Iona"},
 	{"id": "northumbria", "name": "the Northumbrian coast", "region": R.WEST, "kind": K.FARMSTEAD, "pos": Vector2(8, 74), "wealth": 60, "defenses": 1, "faction": "", "family": "the Northumbrians"},
-	{"id": "iceland", "name": "the Iceland land-take", "region": R.ICELAND, "kind": K.FARMSTEAD, "pos": Vector2(-40, 10), "wealth": 10, "defenses": 0, "faction": "", "family": "", "open_year": 874},
+	{"id": "iceland", "name": "the Iceland land-take", "region": R.ICELAND, "kind": K.FARMSTEAD, "pos": Vector2(-40, 10), "wealth": 10, "defenses": 0, "faction": "", "family": "Ingolf's kin", "open_year": 874},
 ]
 
 ## Rough shores, in the map's leagues (x east, y south): what is land. The
@@ -122,3 +122,64 @@ const FACTIONS := [
 	{"id": "dublin_norse", "name": "the Norse of Dublin", "leader": "Ivar's sons", "kind": WorldTypes.FactionKind.KING,
 		"holdings": ["dublin"], "strength": 120, "ambition": "trade", "relations": {"orkney": 10}},
 ]
+
+## The houses the western sagas are about (Families), by the name the
+## places carry. `heir` is the son who follows the head; `strength` the men
+## the house can put in the field; `creditor` a house the others owe. Every
+## other place's family is made a house too, its head and temper drawn
+## from the seed (Families.build).
+const HOUSES := [
+	{"name": "Augvald's kin", "seat": "avaldsnes", "head": "Augvald", "heir": "Ragnvald", "age": 52, "strength": 24, "wealth": 60,
+		"temper": "proud", "honor": 60},
+	{"name": "Thorir Long-chin's kin", "seat": "jaeren", "head": "Thorir Long-chin", "heir": "Ozur", "age": 44, "strength": 12, "wealth": 35,
+		"temper": "grasping", "honor": 40},
+	{"name": "Eirik of Hordaland's kin", "seat": "hafrsfjord", "head": "Eirik", "heir": "Thorgils", "age": 48, "strength": 10, "wealth": 30,
+		"temper": "steadfast", "honor": 55},
+	{"name": "Horda-Kari's kin", "seat": "fitjar", "head": "Horda-Kari", "heir": "Thorleif the Wise", "age": 61, "strength": 20, "wealth": 70,
+		"temper": "steadfast", "honor": 70, "creditor": true},
+	{"name": "Hardanger-Atli's kin", "seat": "hardanger", "head": "Atli", "heir": "Grjotgard", "age": 50, "strength": 14, "wealth": 40,
+		"temper": "grasping", "honor": 35},
+	{"name": "the Sygna kings", "seat": "sogn_hall", "head": "Atli the Slender", "heir": "Hallvard", "age": 46, "strength": 18, "wealth": 45,
+		"temper": "proud", "honor": 55},
+	{"name": "Ulfar's kin", "seat": "sogn_farms", "head": "Ulfar", "heir": "Kolbein", "age": 58, "strength": 8, "wealth": 25,
+		"temper": "steadfast", "honor": 60},
+	{"name": "Rognvald's kin", "seat": "giske", "head": "Rognvald", "heir": "Thorir the Silent", "age": 40, "strength": 22, "wealth": 50,
+		"temper": "proud", "honor": 60},
+	{"name": "Hrafn's kin", "seat": "more_farms", "head": "Hrafn", "heir": "Onund", "age": 55, "strength": 7, "wealth": 30,
+		"temper": "peaceable", "honor": 65},
+]
+
+## The web the sagas begin in: [a, b, kind] with kind kin, marriage,
+## foster, friend (sworn friendship), debt (a owes b), grudge or feud. A
+## feud carries its ledger: killings by each side and the step it has
+## reached (WorldRules.house_feud_steps). Hardanger-Atli's kin, who burned
+## the hall of the burned-hall origin and hold for Harald, have Møre and
+## Jæren with them; Ulfar's kin in Sogn, who shelter the burned man, have a
+## grudge against them that is older than the burning. Hrafn's kin of the
+## Møre farms stand alone.
+const HOUSE_TIES := [
+	["Augvald's kin", "Rognvald's kin", "feud", {"kills_a": 2, "kills_b": 1, "step": 2, "since": 858}],
+	["Thorir Long-chin's kin", "Eirik of Hordaland's kin", "feud", {"kills_a": 1, "kills_b": 0, "step": 1, "since": 863}],
+	["Ulfar's kin", "Hardanger-Atli's kin", "grudge", {}],
+	["Horda-Kari's kin", "Hardanger-Atli's kin", "grudge", {}],
+	["Hardanger-Atli's kin", "Rognvald's kin", "marriage", {}],
+	["Augvald's kin", "the Sygna kings", "marriage", {}],
+	["Horda-Kari's kin", "Eirik of Hordaland's kin", "marriage", {}],
+	["Augvald's kin", "Eirik of Hordaland's kin", "kin", {}],
+	["Ulfar's kin", "the Sygna kings", "kin", {}],
+	["the Sygna kings", "Horda-Kari's kin", "foster", {}],
+	["Hardanger-Atli's kin", "Thorir Long-chin's kin", "friend", {}],
+	["Rognvald's kin", "the Orkney jarls", "kin", {}],
+	["Rognvald's kin", "the Lade jarls", "friend", {}],
+	["the Ynglings", "the Lade jarls", "friend", {}],
+	["Thorir Long-chin's kin", "Horda-Kari's kin", "debt", {}],
+	["the Sygna kings", "Horda-Kari's kin", "debt", {}],
+	["Hardanger-Atli's kin", "Horda-Kari's kin", "debt", {}],
+	["Ulfar's kin", "Horda-Kari's kin", "debt", {}],
+]
+
+## Names for the heads and heirs of houses the data does not name, and for
+## the daughters offered in marriage.
+const HOUSE_MEN := ["Bard", "Eyvind", "Thorstein", "Hauk", "Gudbrand", "Skeggi", "Arnfinn", "Vemund", "Ketil", "Ottar",
+	"Sigurd", "Hogni", "Brand", "Einar", "Grim", "Thorkel", "Hallstein", "Asbjorn", "Bersi", "Ozur"]
+const HOUSE_WOMEN := ["Thora", "Gunnhild", "Ragnhild", "Asa", "Bergljot", "Thorgerd", "Ingibjorg", "Hallgerd", "Gudrun", "Sigrid"]

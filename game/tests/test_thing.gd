@@ -103,10 +103,14 @@ func test_support_counts_fame_silver_brothers_factions() -> void:
 	var c := Thing.open_case(r, b, WorldTypes.CaseKind.RAID, FAMILY, 30, true)
 	var n := Thing.gather_support(SimRng.new(1), r, w, b, c, 40, PackedStringArray())
 	# 45/15 = 3 fame, 25 oz (all the band has) / 10 = 2, 2 pairs, friend 65/30 = 2;
-	# Hordaland rules the family's farms and lends nothing.
-	assert_eq(n, 3 + 2 + 2 + 2)
+	# Hordaland rules the family's farms and lends nothing. The houses stand
+	# where their ties put them (Families.thing_backing): the family's
+	# enemies with the band, its allies with it.
+	var houses := w.families.thing_backing(r, b, FAMILY)
+	assert_true(int(houses.ours) > 0 and int(houses.theirs) > 0)
+	assert_eq(n, 3 + 2 + 2 + 2 + int(houses.ours))
 	assert_eq(b.silver, 0)
-	var base: int = r.their_supporters_base + 30 / r.family_standing
+	var base: int = r.their_supporters_base + 30 / r.family_standing + int(houses.theirs)
 	assert_between(c.their_supporters, base - r.their_supporters_spread, base + r.their_supporters_spread)
 
 

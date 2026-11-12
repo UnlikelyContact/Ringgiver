@@ -67,10 +67,16 @@ static func begin(seed_in: int, origin_key: String, leader_name: String) -> Jour
 	if str(d.feud_with) != "":
 		var theirs: Place = j.c.world.place(str(d.feud_with))
 		band.add_feud(theirs.family, "the burning of your father's hall", theirs.id)
+		Feud.find(band, theirs.family)["rank"] = WorldTypes.Rank.HERSIR  # your father held a hall
 		band.vengeance = theirs.family
 		band.known_places[theirs.id] = true
 		if theirs.faction_id != "":
 			FactionAI.shift(j.c.world, theirs.faction_id, FactionAI.BAND, -20)
+	# The houses he is born among: kin, the burners (Families).
+	if j.c.world.families != null:
+		j.c.world.families.start_origin(wr, j.c.world, band, origin_key)
+		for id in wr.origin_standing.get(origin_key, {}):
+			band.known_places[str(id)] = true
 	j.begin_summer()
 	return j
 
@@ -107,7 +113,7 @@ func begin_summer() -> void:
 			var f := Feud.find(c.band, ev.get("family", ""))
 			var level: int = f.get("level", 1) if not f.is_empty() else 1
 			_offer_fight(br.get("kind", "feud_ambush"), br.tier, Sandbox._forced(c, br.attackers), false,
-					c.world_rules.feud_stat_base + level - 1, false, false, {"kind": "feud"}, str(br.text), false)
+					c.world_rules.feud_stat_base + level - 1, false, false, {"kind": "feud", "family": str(ev.get("family", ""))}, str(br.text), false)
 		elif ev.get("kind", "") == "demand":
 			var family: String = ev.family
 			var ask := Feud.offer_settlement(c.world_rules, c.band, family)
@@ -117,6 +123,7 @@ func begin_summer() -> void:
 						{"id": "pay", "label": "Pay %d oz" % ask, "enabled": c.band.silver >= ask},
 						{"id": "thing", "label": "Answer at the Thing"},
 						{"id": "refuse", "label": "Refuse"}]})
+	_houses_spring()
 	_settle()
 
 
@@ -191,6 +198,8 @@ func answer(id: String) -> void:
 							{"kind": "rob", "req": req, "party": d.get("party", null)}, str(req.text), true)
 				_:
 					_say("The knarr goes on its way.")
+		"house":
+			_answer_house(d, id)
 		"fight":
 			_answer_fight(d, int(id))
 			return  # _answer_fight settles when the fight is over
@@ -288,6 +297,7 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 		"contract":
 			var o: Dictionary = ctx.contract
 			Contracts.complete(wr, c.world, c.band, o, won, said)
+			_work_standing(o, won)
 			if won:
 				Way.add_deed(c.band, Way.Id.KINGS_MAN, wr.deed_contract)
 				Sandbox._promote(c, said)
@@ -303,6 +313,9 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 			var came := -1 if result == null or result.winner < 0 else (1 if won else 0)
 			Callings.after_champion(wr, c.world, c.band, ctx.place, came, said)
 			_pass(float(wr.holmgang_days))
+		"house_fight", "blood", "reckoning":
+			_after_house_fight(ctx, result)
+	_killed_their_men(ctx, result)
 	# The party it was fought with: beaten, it is gone; otherwise it keeps
 	# its distance for a while.
 	var party: Roam.Party = ctx.get("party", null)
@@ -438,6 +451,7 @@ func advance(dt: float) -> bool:
 		_look_about()
 		if roam.afloat() and roam.aboard:
 			_weather(used)
+		_moods()
 		var met := roam.step_parties(used, _fork("parties"), c.world_rules, c.world, c.band.fighters(c.rules).size(), c.band.location)
 		if met != null:
 			_meet(met)
@@ -567,6 +581,10 @@ func _meet(p: Roam.Party) -> void:
 			var text2 := "The levy ships have found the outlaw, and come on."
 			_offer_fight("levy", p.tier, Sandbox._forced(c, p.men), false, wr.levy_stat, at_sea, false,
 					{"kind": "sea", "req": {"kind": "levy"}, "party": p}, text2, true)
+		"avengers":
+			var text4 := "Men of %s come on, %d of them: they have been looking for you." % [p.family, p.men]
+			_offer_fight("avengers", p.tier, Sandbox._forced(c, p.men), false, wr.feud_stat_base + 1, at_sea, false,
+					{"kind": "sea", "req": {"kind": "avengers"}, "party": p, "family": p.family}, text4, true)
 		"outlaws":
 			var text3 := "Outlaws come out of the trees, %d of them, and want what you carry." % p.men
 			var bounty := wr.outlaw_bounty if c.band.outlawry == WorldTypes.Outlawry.NONE else 0
@@ -653,11 +671,19 @@ func actions() -> Array[Dictionary]:
 		out.append({"id": "mend", "label": "Mend the ship", "hint": "%d days on the beach for each of her %d hurts%s." % [
 				wr.ship_mend_days, band.ship.damage, "" if band.ship.can_sail(wr) else ". She only limps as she is"]})
 	out.append({"id": "listen", "label": "Wait and listen", "hint": "%d days. At a hall or a market there is talk of places you do not know." % wr.listen_days})
+	out.append_array(_house_actions(p))
 	if SETTLED.has(p.kind):
 		var guest := not at_home
 		var cost := wr.guest_winter_per_man * band.fighters().size() if guest else 0
-		out.append({"id": "winter", "label": "Winter here", "enabled": band.silver >= cost or not guest,
-				"hint": ("End the summer as a guest here: %d oz for the lodging." % cost) if guest else "End the summer: the hall, the men, the long dark."})
+		var door := Families.shelter(wr, band, p) if guest else "paid"
+		if door == "free":
+			cost = 0
+		var hint := ("End the summer as a guest here: %d oz for the lodging." % cost) if guest else "End the summer: the hall, the men, the long dark."
+		if door == "free":
+			hint = "End the summer as the guest of %s, your friends: they will take nothing for it." % p.family
+		elif door == "shut":
+			hint = "The door of %s is shut to you." % p.family
+		out.append({"id": "winter", "label": "Winter here", "enabled": door != "shut" and (band.silver >= cost or not guest), "hint": hint})
 	return out
 
 
@@ -733,6 +759,7 @@ func act(id: String) -> void:
 		pass
 	elif id == "raid":
 		band.raided[p.id] = c.cal.year
+		_shift(p.family, wr.standing_raid)
 		var req := Raiding.raid(_fork("raid"), wr, c.world, band, p, said)
 		if not req.is_empty():
 			var center := int(wr.defender_stat_by_kind[p.kind] + p.defenses * wr.defender_stat_per_defense)
@@ -740,6 +767,7 @@ func act(id: String) -> void:
 					{"kind": "raid", "place": p}, "", true)
 	elif id == "strandhogg":
 		Raiding.strandhogg(_fork("strand"), wr, c.world, band, p, said)
+		_shift(p.family, wr.standing_strandhogg)
 		Way.add_deed(band, Way.Id.VIKING, wr.deed_strandhogg)
 		_pass(1.0)
 	elif id.begins_with("work:"):
@@ -778,6 +806,8 @@ func act(id: String) -> void:
 		_pass(float(wr.listen_days))
 	elif id == "winter":
 		wintering = true
+	elif _act_house(id, p):
+		pass
 	_vengeance()
 	_settle()
 
@@ -833,6 +863,8 @@ func invest(way: int) -> bool:
 
 func _work_here() -> Array:
 	var p := here()
+	if Families.is_foe(c.world_rules, c.band, p.family):
+		return []
 	if not _offers.has(p.id):
 		_offers[p.id] = Contracts.offers(_fork("work"), c.world_rules, c.world, c.band, p.id)
 	return _offers[p.id]
@@ -856,6 +888,7 @@ func _take_work(o: Dictionary) -> void:
 func _finish_work(o: Dictionary, success: bool) -> void:
 	var wr := c.world_rules
 	Contracts.complete(wr, c.world, c.band, o, success, said)
+	_work_standing(o, success)
 	if success:
 		Way.add_deed(c.band, Way.Id.KINGS_MAN, wr.deed_contract)
 		Sandbox._promote(c, said)
@@ -913,7 +946,345 @@ func _plead(family: String) -> void:
 	if not tc.battle_required.is_empty():
 		var br: Dictionary = tc.battle_required
 		_offer_fight(br.get("kind", "thing brawl"), br.tier, Sandbox._forced(c, br.attackers), false, wr.sea_fight_stat,
-				false, true, {"kind": "thing"}, str(br.text), true)
+				false, true, {"kind": "thing", "family": family}, str(br.text), true)
+
+
+# --- The houses ----------------------------------------------------------------------
+
+## Moves the band's standing with a house (and its ties, Families.shift);
+## nothing for a name that is no house.
+func _shift(family: String, delta: int) -> void:
+	if c.world.families != null and family != "":
+		c.world.families.shift(c.world_rules, c.band, family, delta)
+
+
+## The spring among the houses: men sent after the band by a house at feud
+## with it, and what the houses ask of it this year.
+func _houses_spring() -> void:
+	var fs := c.world.families
+	if fs == null:
+		return
+	var wr := c.world_rules
+	var band := c.band
+	var sent := 0
+	var r := _fork("avengers")
+	for f in band.unsettled_feuds():
+		var fam := str(f.get("family", f.get("against", "")))
+		var h := fs.house(fam)
+		if h == null or sent >= wr.avengers_max or r.randf() >= wr.avenger_chance:
+			continue
+		var a := roam.add_avengers(wr, c.world, fam, h.seat, mini(wr.avenger_men, h.strength), band.ship != null)
+		if a != null:
+			sent += 1
+			_say("Word comes that %s have sent men out to look for you." % fam)
+	for d in fs.asks(_fork("asks"), wr, c.world, band, c.cal.year):
+		# A house that has sent word asking silver of the band this spring
+		# does not also offer it silver.
+		var asking := false
+		for e in decisions:
+			if e.kind == "demand" and str(e.family) == str(d.house):
+				asking = true
+		if d.ask == "compensation" and asking:
+			continue
+		decisions.append(d)
+	_moods()
+
+
+## Every house's men abroad read the band as their house does: they leave a
+## well-wisher alone and hunt a blood-enemy (Families.party_mood). Men sent
+## after the band go home once the feud is ended.
+func _moods() -> void:
+	var wr := c.world_rules
+	for p in roam.parties.duplicate():
+		if p.family == "":
+			continue
+		if p.kind == "avengers" and Feud.find(c.band, p.family).is_empty():
+			roam.parties.erase(p)
+			continue
+		p.mood = Families.party_mood(wr, c.band, p.family)
+		if p.kind == "avengers":
+			p.mood = mini(p.mood, 0)
+
+
+func _answer_house(d: Dictionary, id: String) -> void:
+	var fs := c.world.families
+	var wr := c.world_rules
+	var band := c.band
+	var name := str(d.house)
+	var h := fs.house(name)
+	var who := band.leader.display_name
+	match str(d.ask):
+		"help":
+			var against := str(d.against)
+			var foe := fs.house(against)
+			match id:
+				"stand":
+					var men := Sandbox._forced(c, mini(wr.house_fight_men, foe.strength))
+					_offer_fight("men of %s" % against, wr.house_fight_tier, men, true, wr.house_fight_stat, false, false,
+							{"kind": "house_fight", "client": name, "family": against},
+							"%s goes with the men of %s against %s." % [who, name, against], true)
+				"speak":
+					band.pledges[name] = {"against": against, "year": c.cal.year}
+					_say("%s gives his word to speak for %s against %s at the Thing this summer." % [who, name, against])
+				"carry":
+					var roll := band.leader.stat(CombatTypes.Stat.WITS) + _fork("peace").roll_2d6() + int(band.gift("law", 0))
+					if roll >= wr.peace_difficulty:
+						fs.settle_between(name, against)
+						_shift(name, wr.standing_help_won / 2)
+						_shift(against, wr.standing_help_won / 2)
+						band.honor = clampi(band.honor + wr.peace_honor, 0, 100)
+						Way.add_deed(band, Way.Id.LAWMAN, wr.deed_counsel)
+						_say("%s carries an offer of settlement between %s and %s, and both take it (%d against %d)." % [
+								who, name, against, roll, wr.peace_difficulty])
+					else:
+						_shift(name, wr.standing_refused)
+						_say("%s carries an offer of settlement to %s, but they will not hear of it (%d against %d)." % [
+								who, against, roll, wr.peace_difficulty])
+					_pass(float(wr.counsel_days))
+				_:
+					_shift(name, wr.standing_refused)
+					_say("%s keeps out of the quarrel between %s and %s; %s think the less of him for it." % [who, name, against, name])
+		"marry":
+			if id == "accept" and band.wife == "":
+				fs.marry_into(wr, c.rules, _fork("marry"), band, name, str(d.bride), said)
+				_say("%s's house and yours are one by marriage now." % h.head)
+			else:
+				_shift(name, wr.standing_refused)
+				_say("%s declines the match with thanks; %s are not pleased." % [who, name])
+		"foster":
+			if id == "accept":
+				fs.foster_for(wr, band, name, said)
+			else:
+				_shift(name, wr.standing_refused)
+				_say("%s will not foster the boy; %s remember it." % [who, name])
+		"compensation":
+			var f := Feud.find(band, name)
+			if f.is_empty():
+				return
+			if id == "take":
+				band.silver += int(d.ounces)
+				f["settled"] = true
+				f["verdict"] = "wergild taken"
+				band.fame = clampi(band.fame + wr.compensation_fame, 0, 100)
+				band.log("%s took wergild from %s and the feud was ended" % [who, name])
+				_say("%s takes %d oz of wergild from %s, and the feud is ended." % [who, int(d.ounces), name])
+			else:
+				var men2 := Sandbox._forced(c, mini(wr.avenger_men, h.strength))
+				_offer_fight("men of %s" % name, wr.house_fight_tier, men2, true, wr.feud_stat_base + 1, false, false,
+						{"kind": "blood", "family": name}, "%s will have blood, not silver, from %s." % [who, name], true)
+
+
+## What a fight among the houses came to: standing with them for help
+## given, the feud ended by blood, the reckoning.
+func _after_house_fight(ctx: Dictionary, result: BattleResult) -> void:
+	var wr := c.world_rules
+	var fs := c.world.families
+	var band := c.band
+	var won := result != null and result.winner == 0
+	var fam := str(ctx.get("family", ""))
+	match str(ctx.kind):
+		"house_fight":
+			var client := str(ctx.client)
+			if result == null:
+				_shift(client, wr.standing_refused)
+			elif won:
+				_shift(client, wr.standing_help_won)
+				_shift(fam, wr.standing_help_against)
+				var pr := fs.pair(client, fam)
+				if not pr.is_empty():
+					pr.ledger.kills[client] = int(pr.ledger.kills.get(client, 0)) + 1
+				_say("%s and the men of %s have the better of %s, and %s will not forget who stood with them." % [
+						band.leader.display_name, client, fam, client])
+			else:
+				_shift(client, wr.standing_refused)
+				_shift(fam, wr.standing_help_against / 2)
+		"blood", "reckoning":
+			var f := Feud.find(band, fam)
+			if won and not f.is_empty():
+				f["settled"] = true
+				f["verdict"] = "blood"
+				f["mended"] = true  # ended by the sword: no warmth comes of it
+				var fame := wr.blood_fame if ctx.kind == "blood" else wr.reckoning_fame
+				band.fame = clampi(band.fame + fame, 0, 100)
+				band.log("%s ended the feud with %s by the sword" % [band.leader.display_name, fam])
+				_say("The feud with %s is ended by the sword." % fam)
+				if ctx.kind == "reckoning":
+					var h := fs.house(fam)
+					_say("%s falls in the fight; %s his son holds the house now, and wants no more of you." % [h.head, h.heir])
+					fs._succeed(_fork("reckoned"), h)
+					h.strength = maxi(3, roundi(h.strength * (1.0 - wr.burning_strength_loss)))
+					for friend in ctx.get("friends", []):
+						_shift(str(friend), wr.standing_reckoning_won)
+			elif ctx.kind == "reckoning":
+				for friend in ctx.get("friends", []):
+					_shift(str(friend), wr.standing_reckoning_lost)
+			elif result != null and not won and not f.is_empty():
+				Feud.escalate(wr, band, fam, said)
+
+
+## A house whose men the band has killed thinks the worse of it for each,
+## and may take up a feud (the band's own fights with it aside).
+func _killed_their_men(ctx: Dictionary, result: BattleResult) -> void:
+	var fs := c.world.families
+	if fs == null or result == null:
+		return
+	var fam := str(ctx.get("family", ""))
+	if fam == "" and ctx.get("place", null) is Place:
+		fam = (ctx.place as Place).family
+	var party: Roam.Party = ctx.get("party", null)
+	if fam == "" and party != null:
+		fam = party.family
+	if fam == "" or not fs.houses.has(fam) or result.dead.size() < 2:
+		return
+	var dead: int = result.dead[1]
+	if dead <= 0:
+		return
+	var wr := c.world_rules
+	_shift(fam, wr.standing_per_kill * dead)
+	if Feud.find(c.band, fam).is_empty() and str(ctx.get("kind", "")) != "blood" and str(ctx.get("kind", "")) != "reckoning" \
+			and _fork("kill_feud").randf() < wr.kill_feud_chance:
+		Feud.start(wr, c.band, fam, "the killing of their men", fs.house(fam).seat, said)
+
+
+## What a lord's work did to the houses: the house of the place it was
+## given at is the warmer for it done; the house it was taken from (a debt
+## collected, tribute gathered) the colder.
+func _work_standing(o: Dictionary, success: bool) -> void:
+	var wr := c.world_rules
+	var giver: Place = c.world.place(str(o.get("at", "")))
+	if giver != null:
+		_shift(giver.family, wr.standing_contract if success else wr.standing_refused)
+	if success and (o.kind == "debt" or o.kind == "tribute"):
+		var from: Place = c.world.place(str(o.get("to_place", "")))
+		if from != null:
+			_shift(from.family, wr.standing_contract_against)
+
+
+## The deeds among the houses at a place: a gift, rest for the hurt, men
+## lent, wergild offered, the reckoning, and at a Thing speaking for a
+## house the band has promised.
+func _house_actions(p: Place) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var fs := c.world.families
+	if fs == null:
+		return out
+	var wr := c.world_rules
+	var band := c.band
+	var year := c.cal.year
+	if p.kind == WorldTypes.PlaceKind.THING_SITE and not Outlawry.is_outlawed(band, c.cal):
+		for client in band.pledges:
+			var pl: Dictionary = band.pledges[client]
+			out.append({"id": "speak:" + str(client), "label": "Speak for %s against %s" % [client, pl.against],
+					"hint": "As you promised. A verdict for them settles their feud and makes them your friends; %s will resent it. %d days." % [
+							pl.against, wr.thing_days]})
+	var h := fs.house(p.family)
+	if h == null or h.seat != p.id:
+		return out
+	var step := Families.step_of(wr, band, h.name)
+	out.append({"id": "gift", "label": "Give %s a gift (%d oz)" % [h.head, wr.gift_ounces], "enabled": band.silver >= wr.gift_ounces,
+			"hint": "%s think of you as %s. A gift would bring them nearer by about %d." % [Journey._cap(h.name),
+					Families.step_phrase(step), Families.gift_worth(wr, band, h.name, year)]})
+	var favour: Dictionary = band.favours.get(h.name, {})
+	if Families.standing(band, h.name) >= wr.standing_well_wisher and not band.hurt(c.rules).is_empty() \
+			and int(favour.get("heal", -1)) != year:
+		out.append({"id": "heal", "label": "Rest your hurt men with %s" % h.name,
+				"hint": "%d days in their hall: the hurt mend %d turns." % [wr.heal_days, wr.heal_turns]})
+	var lend := int(wr.men_lent.get(Families.support_step(wr, band, h.name), 0))
+	if lend > 0 and int(favour.get("men", -1)) != year and band.living_men().size() < c.rules.recruit_cap:
+		out.append({"id": "men", "label": "Ask %s for men" % h.head, "hint": "Your friends will lend you %d of their men for the summer and after." % lend})
+	var f := Feud.find(band, h.name)
+	if not f.is_empty():
+		var ask := Feud.offer_settlement(wr, band, h.name)
+		out.append({"id": "wergild", "label": "Offer %s wergild (%d oz)" % [h.name, ask], "enabled": band.silver >= ask,
+				"hint": "Silver for the feud over %s: it ends it, and they think the better of you for it." % str(f.get("cause", "an old wrong"))})
+		var t := fs.reckoning_terms(wr, band, h.name)
+		var friends: Array = t.friends
+		out.append({"id": "reckoning", "label": "Bring your friends against %s" % h.name, "enabled": int(favour.get("reckoning", -1)) != year,
+				"hint": "They have %d men. %s Against you: about %d." % [int(t.house_men),
+						("%s send %d men with you." % [", ".join(PackedStringArray(friends)), int(t.sent)]) if not friends.is_empty() \
+								else "None of their enemies is your friend yet, and you would go alone.", int(t.men)]})
+	return out
+
+
+## Does one of `_house_actions`. False when the id is not one.
+func _act_house(id: String, p: Place) -> bool:
+	var fs := c.world.families
+	if fs == null:
+		return false
+	var wr := c.world_rules
+	var band := c.band
+	var year := c.cal.year
+	if id.begins_with("speak:"):
+		_speak(id.trim_prefix("speak:"))
+		return true
+	var h := fs.house(p.family)
+	if h == null:
+		return false
+	var favour: Dictionary = band.favours.get(h.name, {})
+	match id:
+		"gift":
+			fs.give_gift(wr, c.world, band, h.name, said)
+			_pass(float(wr.gift_days))
+		"heal":
+			favour["heal"] = year
+			band.favours[h.name] = favour
+			band.mend(wr.heal_turns)
+			_say("%s's men rest %d days in the hall of %s, and the hurt mend." % [band.leader.display_name, wr.heal_days, h.name])
+			_pass(float(wr.heal_days))
+		"men":
+			favour["men"] = year
+			band.favours[h.name] = favour
+			var lend := int(wr.men_lent.get(Families.support_step(wr, band, h.name), 0))
+			for i in lend:
+				var m := Recruits.random(_fork("lent"), c.rules, band.next_id())
+				band.add_man(m)
+				_say("%s, one of %s's men, comes to %s's band." % [m.display_name, h.head, band.leader.display_name])
+			c._arm_new_men()
+			_pass(float(wr.gift_days))
+		"wergild":
+			var ask := Feud.offer_settlement(wr, band, h.name)
+			if Feud.settle(wr, band, h.name, ask, said):
+				Way.add_deed(band, Way.Id.LAWMAN, wr.deed_settle)
+			_pass(float(wr.gift_days))
+		"reckoning":
+			# Once a summer: the friends' men do not come twice.
+			if int(favour.get("reckoning", -1)) == year:
+				return true
+			favour["reckoning"] = year
+			band.favours[h.name] = favour
+			var t := fs.reckoning_terms(wr, band, h.name)
+			var friends: Array = t.friends
+			if not friends.is_empty():
+				_say("%s send men: %d of them stand with you against %s." % [", ".join(PackedStringArray(friends)), int(t.sent), h.name])
+			var center := int(wr.defender_stat_by_kind[p.kind] + p.defenses * wr.defender_stat_per_defense)
+			_offer_fight("the reckoning with %s" % h.name, wr.house_fight_tier, int(t.men), true, clampi(center, 1, 10), false, false,
+					{"kind": "reckoning", "family": h.name, "friends": friends}, "%s comes to %s for the reckoning." % [band.leader.display_name, p.display_name], true)
+		_:
+			return false
+	return true
+
+
+## Speaks for a house the band has promised at the Thing it is at: a case
+## of the client's against the other side (Thing, with `client` set).
+func _speak(client: String) -> void:
+	var wr := c.world_rules
+	var band := c.band
+	if not band.pledges.has(client):
+		return
+	var against := str(band.pledges[client].against)
+	band.pledges.erase(client)
+	var tc := Thing.open_case(wr, band, WorldTypes.CaseKind.KILLING, against, Feud.wergild(wr, WorldTypes.Rank.KARL), true)
+	tc.client = client
+	_say("%s speaks for %s against %s at the Thing." % [band.leader.display_name, client, against])
+	var verdict := Thing.run(_fork("speak"), wr, c.world, band, tc, 0, said)
+	_pass(float(wr.thing_days))
+	c.tally.thing_cases = c.tally.get("thing_cases", 0) + 1
+	if verdict != WorldTypes.Verdict.FAILED:
+		Way.add_deed(band, Way.Id.LAWMAN, wr.deed_case)
+	if not tc.battle_required.is_empty():
+		var br: Dictionary = tc.battle_required
+		_offer_fight(br.get("kind", "thing brawl"), br.tier, Sandbox._forced(c, br.attackers), false, wr.sea_fight_stat,
+				false, true, {"kind": "thing", "family": against}, str(br.text), true)
 
 
 # --- The market -----------------------------------------------------------------
@@ -954,6 +1325,11 @@ func _market_days() -> void:
 	if _traded_at != c.band.location:
 		_traded_at = c.band.location
 		_pass(float(c.world_rules.market_days))
+		# Custom at a house's market makes a well-wisher of it, no more.
+		var p := here()
+		var wr := c.world_rules
+		if p != null and Families.standing(c.band, p.family) < wr.standing_trade_cap:
+			_shift(p.family, wr.standing_trade)
 
 
 # --- Settling up ------------------------------------------------------------------
@@ -969,6 +1345,8 @@ func _settle() -> void:
 			fight = {}
 			roam.stop()
 			return
+		if c.world.families != null:
+			c.world.families.sync(c.world_rules, c.band)
 		if not decisions.is_empty() or not fight.is_empty():
 			return
 		c.band.location = roam.grid.place_at(roam.pos)
@@ -1011,9 +1389,20 @@ func _winter() -> void:
 			_say("The snow catches the band abroad: it makes for %s." % p.display_name)
 	if p != null and p.id != band.home:
 		var cost := mini(band.silver, wr.guest_winter_per_man * band.fighters().size())
+		if Families.shelter(wr, band, p) == "free":
+			cost = 0
 		band.silver -= cost
 		band.home = p.id
-		_say("%s winters at %s as a guest (%d oz for the lodging)." % [band.leader.display_name, p.display_name, cost])
+		if cost == 0:
+			_say("%s winters at %s as the guest of %s, who will take nothing for it." % [band.leader.display_name, p.display_name, p.family])
+		else:
+			_say("%s winters at %s as a guest (%d oz for the lodging)." % [band.leader.display_name, p.display_name, cost])
+	# A promise to speak for a house at the Thing that was not kept.
+	for client in band.pledges.keys():
+		if int(band.pledges[client].get("year", -1)) <= c.cal.year:
+			_say("%s did not come to the Thing for %s as he said he would, and they say so." % [band.leader.display_name, client])
+			_shift(str(client), wr.standing_pledge_broken)
+			band.pledges.erase(client)
 	# A feud he said he would answer at the Thing and did not goes on.
 	for f in band.unsettled_feuds():
 		if int(f.get("at_thing", -1)) == c.cal.year:
@@ -1033,6 +1422,12 @@ func _winter() -> void:
 		if line.contains(" effort in ") or line.contains(" drills "):
 			continue  # the drill yard's bookkeeping is not the winter's story
 		winter_report.append(line)
+	if c.world.families != null:
+		var told := c.world.families.tidings_of(c.cal.year)
+		if not told.is_empty():
+			winter_report.append("Tidings of the houses this year:")
+			for line in told:
+				winter_report.append("  " + line)
 	_say("Winter of %d passes." % c.cal.year)
 	if c.over:
 		_say("The saga of %s ends here: %s." % [Way.title(band), c.over_reason])

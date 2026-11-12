@@ -54,9 +54,28 @@ var deeds := {}
 ## vengeance to take on ("" for none or done).
 var origin := ""
 var vengeance := ""
-## Families who owe the leader friendship for his counsel (family -> year):
-## they stand with him at the Thing.
-var friends := {}
+## The band's standing with each house (house name -> -100..100), read in
+## steps by Families (blood-enemy to sworn friend); the band's own ties to
+## houses (name -> ["kin", "marriage", "foster"]); the gifts given this
+## year (name -> {year, n}); and the houses it has promised to speak for at
+## the Thing (name -> {against, year}).
+var standing := {}
+var house_ties := {}
+var gifts_given := {}
+var pledges := {}
+## House name -> {heal: year, men: year}: what a house has done for the
+## band this year (once a year each).
+var favours := {}
+## The houses the band is friends with (standing 50 or more): what
+## `friends` meant before the houses had standing. Read-only; kept for the
+## code that asks "is this family a friend".
+var friends: Dictionary:
+	get:
+		var out := {}
+		for k in standing:
+			if int(standing[k]) >= 50:
+				out[k] = true
+		return out
 ## Place id -> the year counsel was last given, a verse recited, a man
 ## challenged there: once a year each.
 var counselled := {}

@@ -8,6 +8,13 @@ extends RefCounted
 var kind: WorldTypes.CaseKind = WorldTypes.CaseKind.RAID
 ## The family on the other side.
 var against := ""
+## The house the band speaks for, when the case is another house's ("" when
+## it is the band's own). The verdict's silver is the client's, and a
+## failed case is the client's to carry, not a feud of the band's.
+var client := ""
+## The houses that stood with the band and with the other side (Families).
+var houses_with: Array = []
+var houses_against: Array = []
 ## Ounces claimed (raid, land, insult). Killings use `wergild(victim_rank)`.
 var claim := 0
 var plaintiff_is_band := true

@@ -35,14 +35,26 @@ static func gather_support(rng: SimRng, rules: WorldRules, world: World, band: B
 			if String(fid) == their_faction:
 				continue
 			from_factions += _faction_support(rules, world.factions[fid])
-	var from_friends: int = band.friends.size() * rules.friend_support
-	c.supporters = from_fame + from_silver + brothers + from_factions + from_friends
+	# The houses: the band's friends, the other side's allies, and its enemies.
+	var from_houses := 0
+	var their_houses := 0
+	if world != null and world.families != null:
+		var backing := world.families.thing_backing(rules, band, c.against, c.client)
+		from_houses = int(backing.ours)
+		their_houses = int(backing.theirs)
+		c.houses_with = backing.with
+		c.houses_against = backing.against
+	c.supporters = from_fame + from_silver + brothers + from_factions + from_houses
 	var wealth := family_place.wealth if family_place != null else 0
 	var spread := rng.randi_range(-rules.their_supporters_spread, rules.their_supporters_spread)
-	c.their_supporters = maxi(0, rules.their_supporters_base + wealth / rules.family_standing + spread)
+	c.their_supporters = maxi(0, rules.their_supporters_base + wealth / rules.family_standing + spread + their_houses)
 	c.their_armed = rules.family_armed_men
-	_say(c, log, "The band gathers %d supporters (%d for its fame, %d bought with %d oz, %d oath brothers, %d from friendly lords, %d friends won by counsel); %s bring %d." % [
-		c.supporters, from_fame, from_silver, spent, brothers, from_factions, from_friends, c.against, c.their_supporters])
+	_say(c, log, "The band gathers %d supporters (%d for its fame, %d bought with %d oz, %d oath brothers, %d from friendly lords, %d from the houses that stand with it); %s bring %d, %d of them from their allies." % [
+		c.supporters, from_fame, from_silver, spent, brothers, from_factions, from_houses, c.against, c.their_supporters, their_houses])
+	if not c.houses_with.is_empty():
+		_say(c, log, "With the band stand %s." % ", ".join(PackedStringArray(c.houses_with)))
+	if not c.houses_against.is_empty():
+		_say(c, log, "With %s stand %s." % [c.against, ", ".join(PackedStringArray(c.houses_against))])
 	return c.supporters
 
 
@@ -109,6 +121,12 @@ static func outcome(rng: SimRng, rules: WorldRules, world: World, band: Band, c:
 	if v == WorldTypes.Verdict.PENDING:
 		v = _verdict_for(rules, c.kind, ratio)
 	c.verdict = v
+	if c.client != "":
+		return _client_outcome(rules, world, band, c, v, log)
+	# The other side remembers who took them to the Thing and won.
+	var band_won := (c.plaintiff_is_band and v != WorldTypes.Verdict.FAILED) or (not c.plaintiff_is_band and v == WorldTypes.Verdict.FAILED)
+	if band_won and world != null and world.families != null:
+		world.families.shift(rules, band, c.against, rules.standing_case_against)
 	match v:
 		WorldTypes.Verdict.COMPENSATION:
 			c.wergild = Feud.wergild(rules, c.victim_rank) if c.kind == WorldTypes.CaseKind.KILLING else c.claim
@@ -132,6 +150,33 @@ static func outcome(rng: SimRng, rules: WorldRules, world: World, band: Band, c:
 			var seat := family_seat(world, c.against)
 			Feud.start(rules, band, c.against, "a failed %s case at the Thing" % String(WorldTypes.CaseKind.keys()[c.kind]).to_lower(),
 					seat.id if seat != null else "", log)
+	return v
+
+
+## A case the band pleads for another house (`c.client`) against
+## `c.against`: a verdict for the client settles the feud between them (to
+## hold or break in the years to come) and wins the client's friendship;
+## the other side resents the band for it. A failed case costs the band a
+## little with its client and goes back to the houses' own feud.
+static func _client_outcome(rules: WorldRules, world: World, band: Band, c: ThingCase, v: WorldTypes.Verdict,
+		log: PackedStringArray) -> WorldTypes.Verdict:
+	var fs: Families = world.families if world != null else null
+	if v == WorldTypes.Verdict.FAILED:
+		_say(c, log, "The case of %s against %s fails, and the feud between them goes on." % [c.client, c.against])
+		if fs != null:
+			fs.shift(rules, band, c.client, rules.standing_refused)
+		return v
+	match v:
+		WorldTypes.Verdict.COMPENSATION:
+			c.wergild = Feud.wergild(rules, c.victim_rank) if c.kind == WorldTypes.CaseKind.KILLING else c.claim
+			_say(c, log, "The Thing awards %s %d oz from %s, and the law-men make a settlement between them." % [c.client, c.wergild, c.against])
+		_:
+			_say(c, log, "The Thing declares the men of %s who did the killings %s; a settlement is made between the houses." % [
+					c.against, "full outlaws" if v == WorldTypes.Verdict.FULL_OUTLAWRY else "outlawed for a time"])
+	if fs != null:
+		fs.settle_between(c.client, c.against)
+		fs.shift(rules, band, c.client, rules.standing_case_for)
+		fs.shift(rules, band, c.against, rules.standing_case_against)
 	return v
 
 

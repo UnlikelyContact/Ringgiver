@@ -25,20 +25,22 @@ static func _price_at(rules: WorldRules, place: Place, good: WorldTypes.Good, st
 
 
 ## What this band pays here: the price and the middlemen's spread, less
-## its `trade_edge` gift (never under the price itself). Rations at a farm
-## are sold at the farm's price.
+## its `trade_edge` gift (never under the price itself), dearer or cheaper
+## by the band's standing with the house of the place (Families.spread_off,
+## foe_factor).
+## Rations at a farm are sold at the farm's price.
 static func buy_price(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good) -> int:
 	if not place.has_market:
 		return price(rules, place, good)
-	var over := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)))
-	return maxi(1, ceili(float(price(rules, place, good)) * (1.0 + over) - 0.0001))
+	var over := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)) - Families.spread_off(rules, band, place))
+	return maxi(1, ceili(float(price(rules, place, good)) * (1.0 + over) * Families.foe_factor(rules, band, place) - 0.0001))
 
 
 ## What this band is paid here: the price less the spread, plus its
 ## `trade_edge` gift (never over the price itself).
 static func sell_price(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good) -> int:
-	var under := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)))
-	return maxi(0, floori(float(price(rules, place, good)) * (1.0 - under) + 0.0001))
+	var under := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)) - Families.spread_off(rules, band, place))
+	return maxi(0, floori(float(price(rules, place, good)) * (1.0 - under) / Families.foe_factor(rules, band, place) + 0.0001))
 
 
 ## Free cargo room: the ship's hold, or what the men can carry without one.

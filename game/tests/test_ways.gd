@@ -122,11 +122,17 @@ func test_counsel_and_verse_pay_the_men_who_have_learned_them() -> void:
 			var before := band.silver
 			var thing := j.c.world.place("gulathing")  # a Thing always has cases
 			assert_true(Callings.can_counsel(wr, j.c.world, band, thing))
+			var was := band.standing.duplicate()
 			var r := Callings.counsel(SimRng.new(s), wr, j.c.world, band, thing, PackedStringArray())
 			if r.ok:
 				held[i] += 1
 				fees[i] += band.silver - before
-				assert_true(band.friends.has(thing.family), "the family are his friends")
+				# He judged between two houses: the one he found for thinks the
+				# better of him (Families), the other a little the worse.
+				var won := str(r.winner)
+				var lost := str(r.loser)
+				assert_true(Families.standing(band, won) > int(was.get(won, 0)), "the house he found for is the warmer to him")
+				assert_true(Families.standing(band, lost) < int(was.get(lost, 0)), "the other the colder")
 			assert_true(not Callings.can_counsel(wr, j.c.world, band, thing), "once a year a place")
 	print("    gate: counsel held, of 40: unlearned %d, law-wise %d; mean fee %d vs %d oz" % [held[0], held[1],
 			fees[0] / maxi(1, held[0]), fees[1] / maxi(1, held[1])])
