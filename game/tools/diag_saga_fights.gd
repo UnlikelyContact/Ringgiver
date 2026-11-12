@@ -13,7 +13,7 @@ func _init() -> void:
 	var only := args[2] if args.size() > 2 else ""
 	var show_log := args.size() > 3 and args[3] == "log"
 	var rules := CombatRules.new()
-	for name in ["plunder", "deck_board", "deck_boarded", "hall_bar", "hall_meet", "hall_wait", "deck_board_edge", "fire_bar", "fire_meet", "fire_bar_even", "fire_meet_even", "burning", "breakout"]:
+	for name in ["plunder", "deck_board", "deck_boarded", "hall_bar", "hall_meet", "hall_wait", "deck_board_edge", "fire_bar", "fire_meet", "fire_bar_even", "fire_meet_even", "fire_bar_help", "fire_bar_even_help", "burning", "breakout"]:
 		if only != "" and only != name:
 			continue
 		var wins := [0, 0, 0]
@@ -83,6 +83,13 @@ static func _build(name: String, s: int, rules: CombatRules) -> Dictionary:
 		"fire_bar_even", "fire_meet_even":
 			# The same night between equal bands of green men.
 			return Scenario.build_hall_defence(s, rules, _bands(s, rules, [6, 2, 1], [6, 2, 1], CombatTypes.Tier.GREEN), true, name.trim_prefix("fire_").trim_suffix("_even"))
+		"fire_bar_help", "fire_bar_even_help":
+			# Barred, and a friendly house comes out of the dark with six men
+			# if the door holds (battles-2: barring the door).
+			var hb := _bands(s, rules, [6, 2, 1], [8, 2, 0] if name == "fire_bar_help" else [6, 2, 1],
+					CombatTypes.Tier.VETERAN if name == "fire_bar_help" else CombatTypes.Tier.GREEN)
+			hb.help = {"men": Scenario.hands(SimRng.new(s).fork("help"), 0, 6, CombatTypes.Tier.BLOODED, rules, 61), "line": "friends come out of the dark, {n} of them"}
+			return Scenario.build_hall_defence(s, rules, hb, true, "bar")
 		"burning":
 			return Scenario.build_hall_burning(s, rules, _bands(s, rules, [8, 2, 1], [6, 2, 0]))
 		"breakout":

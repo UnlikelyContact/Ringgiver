@@ -68,10 +68,10 @@ extends RefCounted
 ## lists every cell it drew in `features` (Field keeps its own features off
 ## them). Deterministic like the rest.
 
-enum Kind { HOLD_GROUND, REACH_THE_SHIPS, THE_HALL, ESCAPE, PLUNDER, CARGO, DECK, FIRE }
+enum Kind { HOLD_GROUND, REACH_THE_SHIPS, THE_HALL, ESCAPE, PLUNDER, CARGO, DECK, FIRE, CATTLE }
 
-const NAMES := ["the ford", "the ships", "the hall", "the dark", "the hall's silver", "the cargo", "the ship", "the walls"]
-const SHORT := ["ford", "ships", "hall", "the dark", "silver", "cargo", "deck", "walls"]
+const NAMES := ["the ford", "the ships", "the hall", "the dark", "the hall's silver", "the cargo", "the ship", "the walls", "the cattle"]
+const SHORT := ["ford", "ships", "hall", "the dark", "silver", "cargo", "deck", "walls", "cattle"]
 ## The kinds a varied field may draw (Scenario.build): the escape is only
 ## ever built on purpose.
 const DRAWN_KINDS := 3
@@ -110,6 +110,11 @@ var ship_taken := -1
 var fire_men := 2
 var fire_rounds := 6
 var fire_count := 0
+## The barred hall (Scenario._bar_the_door): the fire is a clock as well.
+## Each round adds one to `smoke`, two while they hold the walls, and at
+## `smoke_rounds` the roof takes whatever the yard holds. 0: no such clock.
+var smoke_rounds := 0
+var smoke := 0
 ## The burned hall as the saga's first fight (Scenario.build_escape with the
 ## leader spared; docs/design/notes/first-fight.md): the fight bends so that
 ## a first-timer who does roughly the right thing gets out. The escaping
@@ -157,6 +162,12 @@ func _init(p_kind: Kind, p_attacker: int, seed_in: int, rules: CombatRules = nul
 			approach_rounds = r.fire_night_rounds
 			fire_men = r.fire_men
 			fire_rounds = r.fire_rounds
+		Kind.CATTLE:
+			rounds = r.strand_rounds
+			approach_rounds = r.strand_rounds
+			herd = r.cattle_herd
+			gather_men = r.cattle_gather_men
+			lost_per_man = r.cattle_lost_per_man
 
 
 ## Sizes the ships' task and the ford's foothold to a band of `band` men: a
@@ -309,6 +320,8 @@ func keeps_together(w: Warrior) -> bool:
 ## Only the escape says no: its band slips away only once it is through
 ## the ring (`way_open`), so the way out is fought for.
 func allows_withdraw(battle: Battle, side: int) -> bool:
+	if kind == Kind.CATTLE:
+		return side != attacker or at_boats(battle)
 	if kind == Kind.DECK:
 		return men_aboard(battle, 1 - side, side) == 0  # nobody of theirs on her: cut the lashings
 	if kind != Kind.ESCAPE or side != attacker:
@@ -462,6 +475,9 @@ func brief(side: int) -> String:
 		Kind.FIRE:
 			return ("Hold the walls %d rounds and the roof will take" % fire_rounds) if attacking \
 					else ("Drive them from the walls before the roof takes (%d rounds of fire)" % fire_rounds)
+		Kind.CATTLE:
+			return "Round up the cattle in the pasture and drive them down to the boats before the district gathers" if attacking \
+					else "Keep the cattle from the boats"
 		_:
 			return ("Take the hall, %d rounds from contact" % rounds) if attacking else ("Hold the hall, %d rounds from contact" % rounds)
 
@@ -471,6 +487,8 @@ func brief(side: int) -> String:
 func clock_text(battle: Battle) -> String:
 	if kind == Kind.FIRE:
 		return "dawn in %d" % maxi(0, rounds - battle.round)
+	if kind == Kind.CATTLE:
+		return "all the district up in %d" % maxi(0, rounds - battle.round)
 	if kind == Kind.ESCAPE:
 		return ""
 	if clock_start < 0:
@@ -496,6 +514,8 @@ func progress(battle: Battle) -> String:
 			return "in the hall %d/%d" % [men_on(battle, attacker), cells.size()]
 		Kind.FIRE:
 			return "fire %d/%d" % [fire_count, fire_rounds]
+		Kind.CATTLE:
+			return "cattle %d of %d" % [driven(), herd]
 		_:
 			return "hall %d/%d" % [men_on(battle, attacker), cells.size()]
 
@@ -520,6 +540,8 @@ func check(battle: Battle) -> int:
 func _decide(battle: Battle) -> int:
 	if kind == Kind.FIRE:
 		return _decide_fire(battle)
+	if kind == Kind.CATTLE:
+		return _decide_cattle(battle)
 	if kind == Kind.DECK:
 		var cleared := _decide_deck(battle)
 		if cleared >= 0:
@@ -577,6 +599,28 @@ func _decide_deck(battle: Battle) -> int:
 ## The burning: every round the burners keep `fire_men` at the walls is a
 ## round of fire, contact or none; `fire_rounds` of them and the roof takes.
 func _decide_fire(battle: Battle) -> int:
+	if smoke_rounds > 0:
+		# The barred hall: only a man at the walls with no blade at him
+		# lights a torch, and the smoke rises whatever the yard holds.
+		var free := _free_at_walls(battle)
+		if clock_start >= 0:
+			smoke += 2 if free >= fire_men else 1
+		if smoke >= smoke_rounds:
+			reason = "the torches on the roof have it alight at last"
+			taken = true
+			battle.hall_alight = true
+			return attacker
+		if free >= fire_men:
+			fire_count += 1
+		if fire_count >= fire_rounds:
+			reason = "side %d holds the walls, and the roof takes fire" % attacker
+			taken = true
+			battle.hall_alight = true
+			return attacker
+		if battle.round >= rounds:
+			reason = "dawn comes, and the burners draw off before the neighbours see them"
+			return defender()
+		return -1
 	if men_on(battle, attacker) >= fire_men:
 		fire_count += 1
 		if fire_count == 1:
@@ -657,6 +701,8 @@ func time_up_reason() -> String:
 			return "side %d cuts the lashings and rows away" % defender()
 		Kind.FIRE:
 			return "the burners give it up: side %d's hall stands" % defender()
+		Kind.CATTLE:
+			return "the whole district is up: side %d must leave the cattle" % attacker
 		_:
 			return "the hall stands: side %d holds it" % defender()
 
@@ -679,6 +725,8 @@ func ai_line(leader_name: String, attacking: bool) -> String:
 				return "%s calls his men over the side" % leader_name
 			Kind.FIRE:
 				return "%s calls for the torches" % leader_name
+			Kind.CATTLE:
+				return "%s will not stand about in a field of cows" % leader_name
 			_:
 				return "%s means to see the hall burn" % leader_name
 	return "%s keeps to %s: let them come to him" % [leader_name, name]
@@ -697,3 +745,108 @@ static func escape_order(battle: Battle, side: int) -> CombatTypes.Shout:
 	if obj != null and obj.kind == Kind.ESCAPE and obj.way_open(battle):
 		return CombatTypes.Shout.FALL_BACK
 	return CombatTypes.Shout.PUSH
+
+
+# --- The strandhogg (Kind.CATTLE; docs/design/notes/battles-2.md) ----------------
+## The pasture is `cells`; the band's boats are drawn up along the strand
+## (`boats`). A man of the band in the pasture with nobody at arm's length
+## helps round up the herd: a beast for every `gather_men` of them a round,
+## until the `herd` is all taken. What is gathered goes with the band, less
+## a beast for each man of it who goes down or runs (`lost_per_man`). The
+## band gets away with it by getting aboard: its leader near the boats and
+## nobody at arm's length (Battle.withdraw). The district's men come on the
+## clock (Battle.arrivals, from Scenario.build_strandhogg); at `rounds` the
+## whole district is up and the band must leave the cattle.
+var herd := 12
+var gather_men := 2
+var gathered := 0
+var lost := 0
+var lost_per_man := 1
+var boats: Array[Vector2i] = []
+## The leader AI's greed: it calls the band down to the boats once this
+## share of the herd is taken, the district comes at it in strength, or
+## `leave_round` comes; and whether it has.
+var greed := 0.6
+var leave_round := 12
+var leaving := false
+var _losses_seen := 0
+
+
+## Head of cattle the band has with it now.
+func driven() -> int:
+	return maxi(0, gathered - lost)
+
+
+## Whether the band's leader stands by the boats (within two hexes of one).
+func at_boats(battle: Battle) -> bool:
+	var l := battle.leader_of(attacker)
+	if l == null:
+		return false
+	for b in boats:
+		if BattleGrid.distance(l.pos, b) <= 2:
+			return true
+	return false
+
+
+func _decide_cattle(battle: Battle) -> int:
+	var losses: int = battle.result.downed[attacker] + battle.result.fled[attacker]
+	if losses > _losses_seen:
+		if gathered > lost:
+			lost = mini(gathered, lost + (losses - _losses_seen) * lost_per_man)
+		_losses_seen = losses
+	var free := 0
+	for w in battle.active(attacker):
+		if not w.broken and has_cell(w.pos) and battle.grid.adjacent_warriors(w.pos, defender()).is_empty():
+			free += 1
+	var n := mini(free / maxi(1, gather_men), herd - gathered)
+	if n > 0:
+		gathered += n
+		battle.log.append("the band rounds up %d head (%d of %d)" % [n, gathered, herd])
+	if battle.round >= rounds:
+		reason = time_up_reason()
+		return defender()
+	return -1
+
+
+## The leader AI's strandhogg: stand in the pasture while the beasts are
+## rounded up, then down to the boats (Fall back: the wall gives ground
+## toward them) once it has taken what its greed asks, or the district is
+## on it in strength, or its time is up; at the boats, clear them off if
+## they are at arm's length. Battle withdraws it once it can get aboard.
+static func cattle_order(battle: Battle, side: int) -> CombatTypes.Shout:
+	var obj := battle.objective
+	if battle.round <= 1:
+		return CombatTypes.Shout.SHIELD_WALL
+	var mine := LeaderAI.standing(battle.active(side))
+	var engaged := false
+	for w in mine:
+		if not battle.grid.adjacent_warriors(w.pos, 1 - side).is_empty():
+			engaged = true
+	if obj.at_boats(battle):
+		return CombatTypes.Shout.PUSH if engaged else CombatTypes.Shout.HOLD
+	if obj.leaving:
+		return CombatTypes.Shout.FALL_BACK
+	var close := 0
+	for e in LeaderAI.standing(battle.active(1 - side)):
+		for w in mine:
+			if BattleGrid.distance(w.pos, e.pos) <= 4:
+				close += 1
+				break
+	var want := ceili(obj.herd * obj.greed - 0.0001)
+	if obj.driven() >= want or close * 2 >= mine.size() or battle.round >= obj.leave_round or obj.gathered >= obj.herd:
+		obj.leaving = true
+		var l := battle.leader_of(side)
+		battle.log.append("%s calls them down to the boats with %d head" % [l.display_name if l != null else "the band", obj.driven()])
+		return CombatTypes.Shout.FALL_BACK
+	return CombatTypes.Shout.HOLD
+
+
+## The barred hall: the burners at the walls with no enemy at arm's length.
+func _free_at_walls(battle: Battle) -> int:
+	var n := 0
+	for c in cells:
+		var w := battle.grid.occupant(c)
+		if w != null and w.side == attacker and w.is_active() and not w.broken \
+				and battle.grid.adjacent_warriors(c, defender()).is_empty():
+			n += 1
+	return n

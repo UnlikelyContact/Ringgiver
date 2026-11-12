@@ -44,6 +44,8 @@ var _killer := ""
 
 const MAX_FIGHTERS := 12
 const ENEMY_FIRST_ID := 1001
+## Ids of the men a friendly house sends to a barred hall (battles-2).
+const HELP_FIRST_ID := 4001
 
 
 func _init(seed_in: int, p_rules: CampaignRules = null, p_combat_rules: CombatRules = null) -> void:
@@ -186,6 +188,7 @@ func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, at
 	o.ships_here = bool(about.get("ships_here", false))
 	o.can_burn = bool(about.get("can_burn", false))
 	o.burning = bool(about.get("burning", false))
+	o.great = about.get("great", {})
 	o.enemy_size = maxi(1, enemy_size)
 	o.enemy_tier = enemy_tier
 	o.attacking = attacking
@@ -306,11 +309,15 @@ func build_fight(offer: FightOffer, choice: int) -> Dictionary:
 	var built: Dictionary
 	var template := ""
 	var st := stake(offer, choice)
-	if choice == FightOffer.Choice.BURN:
+	if offer.cause == "strandhogg" and choice == FightOffer.Choice.TAKE_THE_FIELD:
+		built = _strandhogg_fight(offer, ours, enemy, seed_in)
+	elif not offer.great.is_empty():
+		built = _sector_fight(offer, ours, enemy, seed_in)
+	elif choice == FightOffer.Choice.BURN:
 		built = Scenario.build_hall_burning(seed_in, combat_rules, {"ours": ours, "theirs": enemy})
 	elif offer.ground == "hall":
 		var how := "meet" if choice == FightOffer.Choice.TAKE_THE_FIELD else ("wait" if choice == FightOffer.Choice.LAY_AMBUSH else "bar")
-		built = Scenario.build_hall_defence(seed_in, combat_rules, {"ours": ours, "theirs": enemy}, offer.burning, how)
+		built = Scenario.build_hall_defence(seed_in, combat_rules, {"ours": ours, "theirs": enemy, "help": _hall_help(offer, how, seed_in)}, offer.burning, how)
 	elif offer.ground == "sea":
 		# Both afloat: the hulls lashed together, the side that came on boarding.
 		built = Scenario.build_deck(seed_in, combat_rules, {"ours": ours, "theirs": enemy}, int(st.attacker), offer.doctrine)
@@ -374,6 +381,7 @@ func build_fight(offer: FightOffer, choice: int) -> Dictionary:
 	# His luck goes with him into the fight, when he is in it.
 	if stallari == null and offer.cause != "":
 		battle.set_luck(0, Leader.luck_modifier(rules, band))
+	_give_wings(offer, choice, built, fighters)
 	built.fighters = fighters
 	built.house = offer.house
 	built.stake = st
@@ -399,6 +407,10 @@ func stake(offer: FightOffer, choice: int) -> Dictionary:
 	if offer.they_know_first or (choice == FightOffer.Choice.LAY_AMBUSH and offer.ground != "hall"):
 		return out
 	var held := choice == FightOffer.Choice.WAIT_FOR_THEM
+	if offer.cause == "strandhogg" and choice == FightOffer.Choice.TAKE_THE_FIELD:
+		out.kind = Objective.Kind.CATTLE
+		out.text = "Round up the cattle and drive them down to the boats before the district gathers: the first of them come in about %d rounds" % cr.strand_first_party
+		return out
 	if choice == FightOffer.Choice.BURN:
 		out.kind = Objective.Kind.ESCAPE
 		out.attacker = 1
@@ -984,3 +996,140 @@ func summary() -> String:
 		tally.battles, tally.wins, tally.deaths, tally.maimed, tally.departures, tally.recruits,
 		tally.successions, band.luck, band.fame, band.honor, (" | OVER: " + over_reason) if over else "",
 	]
+
+
+# --- Battles 2 (docs/design/notes/battles-2.md) ------------------------------------
+
+## The strandhogg fought (Scenario.build_strandhogg): the first
+## `strand_herders` of the enemy are the herders by the farm, their first
+## the man who leads them; the rest come in `strand_parties` parties on the
+## clock, the district gathering. The leader AI's greed is the band's
+## `strand_greed` (CampaignRules).
+func _strandhogg_fight(offer: FightOffer, ours: Array[Warrior], enemy: Array[Warrior], seed_in: int) -> Dictionary:
+	var h := mini(rules.strand_herders, enemy.size())
+	var herders: Array[Warrior] = []
+	var rest: Array[Warrior] = []
+	for i in enemy.size():
+		if i < h:
+			herders.append(enemy[i])
+		else:
+			var w: Warrior = enemy[i]
+			w.is_leader = false
+			w.is_banner = false
+			w.is_horn = false
+			rest.append(w)
+	# The parties grow as the district gathers: the k-th takes a share of
+	# the rest in proportion to k + 1 (Journey._strandhogg sized them so).
+	var n := maxi(1, combat_rules.strand_parties)
+	var parties: Array = []
+	var weights := 0
+	for k in n:
+		weights += k + 1
+	var at := 0
+	for k in n:
+		var take := rest.size() - at if k == n - 1 else roundi(float(rest.size()) * (k + 1) / weights)
+		var party: Array[Warrior] = []
+		for i in range(at, mini(rest.size(), at + take)):
+			party.append(rest[i])
+		at += take
+		if not party.is_empty():
+			parties.append(party)
+	return Scenario.build_strandhogg(seed_in, combat_rules, {"ours": ours, "herders": herders, "parties": parties},
+			ours.size(), rules.strand_greed)
+
+
+## A great battle's sector (Scenario.build_sector) from the offer's
+## parameters (FightOffer.great); the enemy's leader AI is the offer's.
+func _sector_fight(offer: FightOffer, ours: Array[Warrior], enemy: Array[Warrior], seed_in: int) -> Dictionary:
+	var p := offer.great.duplicate()
+	if not p.has("doctrine"):
+		p.doctrine = offer.doctrine
+	return Scenario.build_sector(seed_in, combat_rules, {"ours": ours, "theirs": enemy}, p)
+
+
+## The barred hall's hope (battles-2, Scenario._bar_the_door): the
+## friendliest house the band has (Families: the best standing among the
+## houses that are its friends) sends men out of the dark if the door
+## holds, `hall_help_men` of them plus one for every `hall_help_per` of
+## standing over the friend's mark, up to `hall_help_max`; none when it has
+## no friend. Only when the door is barred against fire. {} for none, else
+## {men, line, house}.
+func _hall_help(offer: FightOffer, how: String, seed_in: int) -> Dictionary:
+	if not offer.burning or how != "bar" or world == null or world.families == null or world_rules == null:
+		return {}
+	var best := ""
+	var best_st := -999
+	for name in world.families.names():
+		if name == offer.house or not Families.is_friend(world_rules, band, name):
+			continue
+		var st := Families.standing(band, name)
+		if st > best_st or (st == best_st and name < best):
+			best = name
+			best_st = st
+	if best == "":
+		return {}
+	var n := mini(rules.hall_help_max, rules.hall_help_men + maxi(0, best_st - world_rules.standing_friend) / maxi(1, rules.hall_help_per))
+	var men := Scenario.hands(SimRng.new(seed_in).fork("hall-help"), 0, n, CombatTypes.Tier.BLOODED, combat_rules, HELP_FIRST_ID, 30)
+	return {"men": men, "house": best, "line": "%s's men come out of the dark with torches and spears, {n} of them" % best.trim_suffix("'s kin")}
+
+
+## The named lieutenants (Wing): in a fight with `wing_min_line` men or
+## more in the line, the band's sworn second (and in a band of
+## `wing_third_band` men or more, the best of the rest) commands a wing,
+## with the word a sensible leader would give for the fight before him
+## (Wing.sensible_word); the player may change it on the battle screen's
+## sheet (`built.wings`). The enemy's named men do the same, by their
+## leader's doctrine, where the enemy is a named house or a king's. Not in
+## the fights fought at doors and walls, a ring, a strandhogg or a column
+## caught on the march.
+func _give_wings(offer: FightOffer, choice: int, built: Dictionary, fighters: Array[Man]) -> void:
+	var battle: Battle = built.battle
+	if choice == FightOffer.Choice.BURN or offer.ground == "hall" or offer.cause == "strandhogg" or offer.they_know_first:
+		return
+	var ours: Array[Warrior] = built.ours
+	if ours.size() >= combat_rules.wing_min_line:
+		var picks: Array[Man] = []
+		var second := band.man_by_id(band.sworn_second_id)
+		if second != null and fighters.has(second):
+			picks.append(second)
+		if not picks.is_empty() and band.living_men().size() >= rules.wing_third_band:
+			var third: Man = null
+			for m in fighters:
+				if m == band.leader or picks.has(m) or m.role == CombatTypes.Role.MISSILE:
+					continue
+				if third == null or [m.tier, m.stat(CombatTypes.Stat.WITS) + m.stat(CombatTypes.Stat.NERVE), -m.id] > [third.tier, third.stat(CombatTypes.Stat.WITS) + third.stat(CombatTypes.Stat.NERVE), -third.id]:
+					third = m
+			if third != null:
+				picks.append(third)
+		var lts: Array[Warrior] = []
+		var tempers := []
+		var words := []
+		var lead := battle.sworn_leader(0)
+		for m in picks:
+			for w in ours:
+				if w.id == m.id and w != lead:
+					var t := Wing.temper_of(m.personality, m.traits, m.stat(CombatTypes.Stat.WITS))
+					lts.append(w)
+					tempers.append(t)
+					words.append(Wing.sensible_word(offer.doctrine, offer.attacking or choice == FightOffer.Choice.LAY_AMBUSH, t))
+		if not lts.is_empty():
+			Wing.form(battle, 0, lts, words, tempers)
+			built.wings = true
+	var theirs: Array[Warrior] = built.theirs
+	if (offer.house != "" or not offer.great.is_empty()) and theirs.size() >= combat_rules.wing_min_line:
+		var pool := []
+		for w in theirs:
+			if not w.is_leader and w.role != CombatTypes.Role.MISSILE:
+				pool.append([-(w.nerve + w.wits), w.id, w])
+		pool.sort()
+		var elts: Array[Warrior] = []
+		var et := []
+		var ew := []
+		for i in mini(2 if theirs.size() >= rules.wing_third_band else 1, pool.size()):
+			var w: Warrior = pool[i][2]
+			var t := Wing.temper_of(w.personality, PackedStringArray(), w.wits)
+			elts.append(w)
+			et.append(t)
+			ew.append(Wing.doctrine_word(offer.doctrine, t))
+		if not elts.is_empty():
+			Wing.form(battle, 1, elts, ew, et)

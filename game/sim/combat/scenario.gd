@@ -472,6 +472,8 @@ static func build_hall_defence(seed_in: int, rules: CombatRules, bands := {}, bu
 		objective.place_cells(keep)
 	battle.objective = objective
 	BandFactory.deploy_formation(battle.grid, ours, BattleGrid.from_offset(c, our_row), Vector2i(0, -1), rules, FormationTemplate.ranks())
+	if burning and how == "bar":
+		_bar_the_door(battle, rules, hall, ours, bands.get("help", {}))
 	var tr := SimRng.new(seed_in).fork("hall-attack")
 	var off := tr.randi_range(-2, 2)
 	if how == "wait":
@@ -684,3 +686,309 @@ static func build_deck(seed_in: int, rules: CombatRules, bands := {}, attacker :
 	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": 0,
 			"objective": objective, "field": null, "field_name": "deck", "title": "Ships lashed together",
 			"band": ours.size(), "size": size, "hulls": hulls, "gangways": gangways}
+
+
+# --- Battles 2 (docs/design/notes/battles-2.md) --------------------------------
+
+## Men to come onto the field later (Battle.arrivals): `n` of them, none
+## the leader, banner or horn of anything, ids from `first_id`.
+static func hands(rng: SimRng, side: int, n: int, tier: CombatTypes.Tier, rules: CombatRules, first_id: int,
+		name_offset := 0, stat_center := -1) -> Array[Warrior]:
+	var out := BandFactory.make_mixed_band(rng, side, n, 0, 0, tier, rules, CombatTypes.Armor.NONE, name_offset, first_id, stat_center)
+	for w in out:
+		w.is_leader = false
+		w.is_banner = false
+		w.is_horn = false
+		w.display_name = w.display_name.trim_suffix(" the leader")
+	return out
+
+
+## The strandhogg (concept.md, "Strandhogg: a quick shore raid for cattle
+## and supplies"): a small fight with a deadline. The band has come up from
+## its boats on the strand (the bottom row) into the district's pasture
+## and stands in it, facing up the field toward the farm (BUILDING along
+## the top), with the herd about it; a few herders (`herders`, their first
+## the leader) stand by the farm. The district's men gather on the clock
+## (`parties`: arrays of men, each coming in turn from the top, the left
+## and the right edges, the first at `strand_first_party` and one every
+## `strand_party_every` rounds). Round up the cattle (Objective.Kind.CATTLE:
+## standing in the pasture with nobody at arm's length) and get them down
+## to the boats and aboard (Battle.withdraw by the boats); greed against
+## getting away is the choice. `bands` {ours, herders, parties}; without
+## them a band of `band` and the district drawn here. `greed` sets the
+## leader AI's (Objective.greed). Returns Scenario's dictionary,
+## `field_name` "strandhogg", plus `boats`.
+static func build_strandhogg(seed_in: int, rules: CombatRules, bands := {}, band := 8, greed := 0.6) -> Dictionary:
+	var size := Vector2i(rules.strand_width, rules.strand_height)
+	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
+	var g := battle.grid
+	var c := size.x / 2
+	var brng := SimRng.new(seed_in).fork("bands")
+	var split := band_split(band, rules)
+	var ours: Array[Warrior] = bands.get("ours", BandFactory.make_mixed_band(brng.fork("a"), 0, split[0], split[1], split[2], CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1))
+	var herders: Array[Warrior] = bands.get("herders", BandFactory.make_mixed_band(brng.fork("b"), 1, 2, 0, 0, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 16, 101))
+	var parties: Array = bands.get("parties", [])
+	if not bands.has("parties"):
+		for k in rules.strand_parties:
+			parties.append(hands(brng.fork("party:%d" % k), 1, rules.strand_party + k * rules.strand_party_growth, CombatTypes.Tier.GREEN, rules, 201 + k * 10, 20 + k * 3))
+	# The farm along the top, the strand along the bottom, a few trees and
+	# a little mud between.
+	for col in range(c - 3, c + 3):
+		g.set_terrain(BattleGrid.from_offset(col, 0), CombatTypes.Terrain.BUILDING)
+	var tr := SimRng.new(seed_in).fork("strand-ground")
+	for i in 5:
+		var col := tr.randi_range(0, 2) if i % 2 == 0 else tr.randi_range(size.x - 3, size.x - 1)
+		g.set_terrain(BattleGrid.from_offset(col, tr.randi_range(2, size.y - 4)), CombatTypes.Terrain.TREE)
+	for i in 4:
+		g.set_terrain(BattleGrid.from_offset(tr.randi_range(3, size.x - 4), tr.randi_range(7, size.y - 3)), CombatTypes.Terrain.MUD)
+	var objective := Objective.new(Objective.Kind.CATTLE, 0, seed_in, rules)
+	var pasture: Array[Vector2i] = []
+	for row in range(2, 7):
+		for col in range(2, size.x - 2):
+			var x := BattleGrid.from_offset(col, row)
+			if g.is_passable(x):
+				pasture.append(x)
+	objective.place_cells(pasture)
+	for col in range(c - 3, c + 4):
+		var b := BattleGrid.from_offset(col, size.y - 1)
+		g.set_terrain(b, CombatTypes.Terrain.FLAT)
+		objective.boats.append(b)
+	objective.greed = greed
+	objective.leave_round = rules.strand_first_party + rules.strand_party_every * 2
+	battle.objective = objective
+	BandFactory.deploy_formation(g, ours, BattleGrid.from_offset(c, 5), Vector2i(0, -1), rules, FormationTemplate.ranks())
+	BandFactory.deploy_line(g, herders, BattleGrid.from_offset(c, 1), Vector2i(0, 1), rules)
+	battle.add_band(ours)
+	battle.add_band(herders)
+	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
+	# The district's men on the clock, from the farm's side, then the flanks.
+	for k in parties.size():
+		var men: Array[Warrior] = []
+		men.assign(parties[k])
+		if men.is_empty():
+			continue
+		var cells: Array[Vector2i] = []
+		var facing := Vector2i(0, 1)
+		match k % 3:
+			0:
+				for col in range(1, size.x - 1):
+					cells.append(BattleGrid.from_offset(col, 1))
+			1:
+				# Along the shore, between the band and its boats.
+				for row in range(size.y - 3, size.y / 2 - 1, -1):
+					cells.append(BattleGrid.from_offset(0, row))
+				facing = Vector2i(1, 0)
+			2:
+				for row in range(size.y - 3, size.y / 2 - 1, -1):
+					cells.append(BattleGrid.from_offset(size.x - 1, row))
+				facing = Vector2i(-1, 0)
+		var from := ["from the farm", "out of the trees on the left", "along the shore from the right"][k % 3] as String
+		battle.add_arrival(rules.strand_first_party + k * rules.strand_party_every, 1, men, cells, facing,
+				"the district's men come %s, {n} of them" % from)
+	for side in 2:
+		battle.result.started[side] = battle.active(side).size()
+	if not bands.has("ours"):
+		ours[0].display_name = "You"
+	return {"battle": battle, "ours": ours, "theirs": herders, "doctrine": LeaderAI.Doctrine.AGGRESSIVE, "offset": 0,
+			"objective": objective, "field": null, "field_name": "strandhogg", "title": "Strandhogg",
+			"band": ours.size(), "size": size, "boats": objective.boats}
+
+
+## The barred hall against fire (`build_hall_defence`, "bar" with fire):
+## the band is inside its hall with the door barred, and fights in the
+## doorway and at the byre door in a gable end, narrow fronts where numbers
+## count for less: a man in a door has two at him at most. The hall is
+## bigger than the open yard's (its floor `bar_floor_rows` deep, FLAT
+## within the timber); the burners must hold its walls (the yard's hexes
+## along the timber) and the fire is slow to take in the snow-wet thatch
+## (`bar_fire_rounds` of fire); the fire is also a clock
+## (Objective.smoke_rounds: the torches thrown on the roof take it in time,
+## whatever happens in the yard), so in the end the band must break out
+## unless they are driven off. `help` {men, line}: a friendly house's men
+## come out of the dark `bar_help_round` rounds after the lines meet, if
+## the door has held so long. The band's leader AI holds its doors
+## (Battle.bar_hold) until then.
+static func _bar_the_door(battle: Battle, rules: CombatRules, hall: Dictionary, ours: Array[Warrior], help: Dictionary) -> void:
+	var g := battle.grid
+	var c: int = hall.c
+	var h := g.height
+	var top := h - 2 - rules.bar_floor_rows  # the front wall's row
+	for w in ours:
+		g.remove(w)
+	for row in range(top, h):
+		for col in range(c - 4, c + 5):
+			var x := BattleGrid.from_offset(col, row)
+			var inside := row > top and row < h - 1 and col > c - 4 and col < c + 4
+			g.set_terrain(x, CombatTypes.Terrain.FLAT if inside else CombatTypes.Terrain.BUILDING)
+	var door := BattleGrid.from_offset(c, top)
+	g.set_terrain(door, CombatTypes.Terrain.DOOR)
+	var dr := SimRng.new(battle.result.seed_value).fork("byre-door")
+	var end_col := c - 4 if dr.randf() < 0.5 else c + 4
+	var byre := BattleGrid.from_offset(end_col, h - 2)
+	g.set_terrain(byre, CombatTypes.Terrain.DOOR)
+	# The walls: the yard's hexes along the timber, outside it.
+	var walls: Array[Vector2i] = []
+	for row in range(top - 1, h):
+		for col in g.width:
+			var x := BattleGrid.from_offset(col, row)
+			var inside := row >= top and col >= c - 4 and col <= c + 4
+			if inside or not g.is_passable(x):
+				continue
+			for n in g.neighbors(x):
+				if g.terrain_at(n) == CombatTypes.Terrain.BUILDING:
+					walls.append(x)
+					break
+	battle.objective.place_cells(walls)
+	battle.objective.fire_rounds = rules.bar_fire_rounds
+	battle.objective.smoke_rounds = rules.bar_smoke_rounds
+	# The band: the leader in the doorway, a man or two at the byre door,
+	# the rest on the floor behind them, nearest the doors first.
+	var leader: Warrior = null
+	var rest: Array[Warrior] = []
+	for w in ours:
+		if w.is_leader and leader == null:
+			leader = w
+		else:
+			rest.append(w)
+	# The doorway is held by the steadiest shield of them, the leader on the
+	# floor behind him; with nobody else, by the leader himself.
+	var keeper: Warrior = null
+	for w in rest:
+		if w.role == CombatTypes.Role.SHIELD and (keeper == null or w.grit + w.nerve > keeper.grit + keeper.nerve):
+			keeper = w
+	if keeper != null:
+		rest.erase(keeper)
+	var spots: Array[Vector2i] = [door]
+	if keeper != null and leader != null:
+		spots.append(BattleGrid.from_offset(c, top + 1))
+	var byre_in := BattleGrid.from_offset(end_col + (1 if end_col < c else -1), h - 2)
+	var floor: Array = []  # [distance to the nearer door, col, row]
+	for row in range(top + 1, h - 1):
+		for col in range(c - 3, c + 4):
+			var x := BattleGrid.from_offset(col, row)
+			if x == byre_in or x == BattleGrid.from_offset(c, top + 1):
+				continue
+			floor.append([mini(BattleGrid.distance(x, door), BattleGrid.distance(x, byre_in) + 1), col, row])
+	floor.sort()
+	var men: Array[Warrior] = []
+	if keeper != null:
+		men.append(keeper)
+	if leader != null:
+		men.append(leader)
+	var at_byre := false
+	for w in rest:
+		if not at_byre and w.role != CombatTypes.Role.MISSILE:
+			spots.append(byre)
+			men.append(w)
+			at_byre = true
+			continue
+		men.append(w)
+	if spots.size() < men.size():
+		spots.append(byre_in)
+	for f in floor:
+		if spots.size() >= men.size():
+			break
+		spots.append(BattleGrid.from_offset(int(f[1]), int(f[2])))
+	for i in men.size():
+		var w := men[i]
+		var at: Vector2i = spots[i] if i < spots.size() else _nearest_free(g, BattleGrid.from_offset(c, top + 1))
+		if not g.is_free(at):
+			at = _nearest_free(g, at)
+		g.place(w, at)
+		w.facing = Vector2i(0, -1)
+		if at == byre or at == byre_in:
+			w.facing = BattleGrid.direction_to(at, BattleGrid.from_offset(end_col + (-1 if end_col < c else 1), h - 2))
+	if leader != null:
+		leader.line_facing = Vector2i(0, -1)
+	battle.bar_hold = true
+	battle.barred = true
+	var helpers: Array[Warrior] = []
+	helpers.assign(help.get("men", []))
+	if not helpers.is_empty():
+		# Round the ends of the yard, from the dark on either side.
+		var cells: Array[Vector2i] = []
+		for row in range(top - 2, h):
+			cells.append(BattleGrid.from_offset(0, row))
+			cells.append(BattleGrid.from_offset(g.width - 1, row))
+		battle.add_arrival(0, 0, helpers, cells, Vector2i(0, -1),
+				str(help.get("line", "friends come out of the dark, {n} of them")))
+		battle.arrivals[-1]["after_contact"] = rules.bar_help_round
+		battle.arrivals[-1]["dread"] = rules.bar_help_dread
+	hall["door"] = door
+	hall["byre"] = byre
+
+
+## A great battle's sector (Sector; concept.md, Hafrsfjord): the band holds
+## one part of a longer line. `params`:
+##   ground       "deck" (ships lashed together: Scenario.build_deck) or
+##                "shore" (an open field: the symmetric field, flat)
+##   attacker     the side that comes on (boards, on the decks)
+##   doctrine     the enemy's leader AI (LeaderAI.Doctrine)
+##   battle_name, ours_name, theirs_name   for the log
+##   edge         our kings' share of the strength of the whole line, 0-1
+##   left, right  the neighbours' names (the band's own side's men)
+##   banner       where the king's banner stands: -1, +1, or 0 with the band
+##   banner_name  whose banner
+##   flank_men    men a breaking (or winning) neighbour lets onto a flank
+##   tier         the enemy's flankers' tier; ally_tier the friends'
+##   day_rounds   the day's length
+## `bands` {ours, theirs} as `build`. Returns Scenario's dictionary,
+## `field_name` "sector", plus `sector`.
+static func build_sector(seed_in: int, rules: CombatRules, bands: Dictionary, params: Dictionary) -> Dictionary:
+	var ground := str(params.get("ground", "shore"))
+	var attacker := int(params.get("attacker", 1))
+	var doctrine: LeaderAI.Doctrine = int(params.get("doctrine", LeaderAI.Doctrine.AGGRESSIVE)) as LeaderAI.Doctrine
+	var built: Dictionary
+	if ground == "deck":
+		built = build_deck(seed_in, rules, bands, attacker, doctrine)
+	else:
+		built = build("equal_green", seed_in, rules, false, (bands.ours as Array).size(), "", bands, {"doctrine": doctrine})
+	var battle: Battle = built.battle
+	var g := battle.grid
+	var sector := Sector.new(SimRng.new(seed_in).fork("sector").seed_value)
+	sector.battle_name = str(params.get("battle_name", "the battle"))
+	sector.ours_name = str(params.get("ours_name", "your side"))
+	sector.theirs_name = str(params.get("theirs_name", "the enemy"))
+	sector.edge = clampf(float(params.get("edge", 0.5)), 0.05, 0.95)
+	sector.banner_hand = int(params.get("banner", 0))
+	sector.banner_name = str(params.get("banner_name", "the king's banner"))
+	sector.day_rounds = int(params.get("day_rounds", rules.sector_day_rounds))
+	sector.drift = rules.sector_drift
+	sector.weight = rules.sector_weight
+	sector.own_weight = rules.sector_own_weight
+	sector.banner_weight = rules.sector_banner_weight
+	var n := int(params.get("flank_men", rules.sector_flank_men))
+	var fr := SimRng.new(seed_in).fork("sector-men")
+	var tier: CombatTypes.Tier = int(params.get("tier", CombatTypes.Tier.BLOODED)) as CombatTypes.Tier
+	var ally_tier: CombatTypes.Tier = int(params.get("ally_tier", CombatTypes.Tier.BLOODED)) as CombatTypes.Tier
+	for hand in [-1, 1]:
+		var ours_cells: Array[Vector2i] = []
+		var theirs_cells: Array[Vector2i] = []
+		if ground == "deck":
+			# Over the ends of the hulls, where the next ships lie lashed.
+			for side in 2:
+				var deck: Array = (built.hulls as Dictionary)[side]
+				var cols: Array[int] = []
+				for x: Vector2i in deck:
+					cols.append(BattleGrid.to_offset(x).x)
+				var edge_col: int = cols.min() if hand < 0 else cols.max()
+				for x: Vector2i in deck:
+					if absi(BattleGrid.to_offset(x).x - edge_col) <= 1:
+						(ours_cells if side == 0 else theirs_cells).append(x)
+		else:
+			var col := 0 if hand < 0 else g.width - 1
+			var mid := g.height / 2
+			for row in range(mid, g.height):
+				ours_cells.append(BattleGrid.from_offset(col, row))
+			for row in range(mid - 1, -1, -1):
+				theirs_cells.append(BattleGrid.from_offset(col, row))
+		var name_key := "left" if hand < 0 else "right"
+		sector.neighbours.append({"hand": hand, "name": str(params.get(name_key, "the men on your %s" % name_key)),
+				"state": 0, "cells": ours_cells, "ally_cells": theirs_cells})
+		sector.foes_over[hand] = hands(fr.fork("foes:%d" % hand), 1, n, tier, rules, 3001 + (hand + 1) * 20, 40 + (hand + 1) * 2)
+		sector.friends_over[hand] = hands(fr.fork("friends:%d" % hand), 0, n, ally_tier, rules, 2001 + (hand + 1) * 20, 50 + (hand + 1) * 2)
+	battle.sector = sector
+	built.sector = sector
+	built.field_name = "sector"
+	built.title = str(params.get("title", "The great battle"))
+	return built

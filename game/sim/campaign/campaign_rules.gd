@@ -551,3 +551,18 @@ var hold_burn_loyalty := 70
 ## A house's men who take a band's hall (Objective THE_HALL taken) carry
 ## off this share of its store.
 var hall_plundered_food := 0.5
+
+# --- Battles 2 (docs/design/notes/battles-2.md) --------------------------------
+## The strandhogg fought (Campaign._strandhogg_fight): the herders by the
+## farm when the band comes up from the boats, and the leader AI's greed
+## (the share of the herd it waits for before it makes for the boats).
+var strand_herders := 2
+var strand_greed := 0.6
+## The barred hall's hope (Campaign._hall_help): the friendliest house sends
+## this many men, one more for every `hall_help_per` of standing over the
+## friend's mark, at most `hall_help_max`.
+var hall_help_men := 4
+var hall_help_per := 10
+var hall_help_max := 8
+## A band of this many living men has a third named man for a wing.
+var wing_third_band := 16

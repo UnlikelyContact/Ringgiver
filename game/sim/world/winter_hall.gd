@@ -1432,7 +1432,7 @@ func hall_fight_done(j: Journey, ctx: Dictionary, built: Dictionary, result: Bat
 				j._say("The men of %s are beaten off from the hall%s." % [against, ", and the fire is put out" if ctx.burning else ""])
 				band.log("beat off %s's men from the hall at %s" % [against, place_name])
 			elif ctx.burning:
-				_hall_burned(j)
+				_hall_burned(j, against)
 				if band.leader != null and band.leader.alive and not c.over:
 					var left := 0
 					for w: Warrior in built.theirs:
@@ -1458,7 +1458,7 @@ func hall_fight_done(j: Journey, ctx: Dictionary, built: Dictionary, result: Bat
 ## The roof has taken: what the fire takes from the hall. The household
 ## is let out first, as the burners must (and they do): the wife, the
 ## children and the thralls live. The buildings and the store burn.
-func _hall_burned(j: Journey) -> void:
+func _hall_burned(j: Journey, against := "") -> void:
 	var c := j.c
 	var band := c.band
 	var hall := Hall.ensure(band, c.rules)
@@ -1466,7 +1466,8 @@ func _hall_burned(j: Journey) -> void:
 	hall.buildings.clear()
 	hall.seats = c.rules.hall_base_seats
 	band.food = 0
-	j._say("The roof takes fire. The women, the children and the thralls are let out first; the household lives.")
+	if not j.burners_let_none_out(against):  # battles-2: the burners may let none out
+		j._say("The roof takes fire. The women, the children and the thralls are let out first; the household lives.")
 	j._say("The hall burns%s, and the store with it." % ((", with its %d buildings" % lost) if lost > 0 else ""))
 
 

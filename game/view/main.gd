@@ -100,6 +100,10 @@ func _men_bounds() -> Array[Vector2]:
 			var p := Iso.to_screen(c)
 			lo = lo.min(p)
 			hi = hi.max(p)
+		for c in battle.objective.boats:  # the strandhogg's boats: where to go
+			var p := Iso.to_screen(c)
+			lo = lo.min(p)
+			hi = hi.max(p)
 	if lo.x == INF:
 		return [Vector2.ZERO, Vector2.ZERO]
 	if view != null and view.is_night():
@@ -227,6 +231,40 @@ func _saga_fight(name: String, s: int, rules: CombatRules, ours: Array[Warrior])
 			return Scenario.build_hall_burning(s, rules, {"ours": ours, "theirs": theirs})
 		"plunder":
 			return Scenario.build("equal_green", s, rules, true, n, "", {"ours": ours}, {"objective": Objective.Kind.PLUNDER, "attacker": 0})
+	return _battles_2_fight(name, s, rules, ours, theirs)
+
+
+## Battles 2's fights by name, for the tools: "wings" (an open field, your
+## two named men with their words), "strandhogg", "sector" (Hafrsfjord's
+## sector on the lashed ships), "sector_shore" (a great battle ashore),
+## "fire_bar" (fire in the night, the door barred, a friendly house
+## coming). {} for any other name.
+func _battles_2_fight(name: String, s: int, rules: CombatRules, ours: Array[Warrior], theirs: Array[Warrior]) -> Dictionary:
+	match name:
+		"wings":
+			var sc := Scenario.build("equal_green", s, rules, true, ours.size(), "meadow", {"ours": ours, "theirs": theirs}, {"objective": -1})
+			var b: Battle = sc.battle
+			var lts: Array[Warrior] = []
+			for w in ours:
+				if not w.is_leader and w.role == CombatTypes.Role.SHIELD and lts.size() < 2:
+					lts.append(w)
+			Wing.form(b, 0, lts, [Wing.Word.PRESS, Wing.Word.FALL_BACK], [Wing.Temper.RASH, Wing.Temper.STEADY])
+			var elts: Array[Warrior] = []
+			if theirs.size() > 3:
+				elts.append(theirs[3])
+			Wing.form(b, 1, elts, [Wing.Word.HOLD_LINE], [Wing.Temper.PLAIN])
+			return sc
+		"strandhogg":
+			var small: Array[Warrior] = ours.slice(0, mini(ours.size(), 6))
+			return Scenario.build_strandhogg(s, rules, {"ours": small}, small.size())
+		"sector", "sector_shore":
+			var p := {"ground": "deck" if name == "sector" else "shore", "attacker": 0, "battle_name": "Hafrsfjord",
+					"title": "Hafrsfjord", "ours_name": "Harald", "theirs_name": "the kings of the west", "edge": 0.55,
+					"left": "Rognvald's ship", "right": "the king's ship", "banner": 1, "banner_name": "Harald's banner"}
+			return Scenario.build_sector(s, rules, {"ours": ours, "theirs": theirs}, p)
+		"fire_bar":
+			var help := {"men": Scenario.hands(SimRng.new(s).fork("help"), 0, 5, CombatTypes.Tier.BLOODED, rules, 4001), "line": "Thorir's men come out of the dark, {n} of them"}
+			return Scenario.build_hall_defence(s, rules, {"ours": ours, "theirs": theirs, "help": help}, true, "bar")
 	return {}
 
 

@@ -229,7 +229,11 @@ static func _answer(j: Journey, d: Dictionary, bent: int) -> String:
 			# The berserk takes the darkest road to his vengeance: the burning.
 			if bent == Way.Id.BERSERK and offer.allows(FightOffer.Choice.BURN) and offer.house == band.vengeance:
 				return str(FightOffer.Choice.BURN)
+			if offer.cause == "strandhogg":
+				return str(_strandhogg_choice(j, offer))
 			return str(Sandbox.choose_fight(offer))
+		"mercy":
+			return _mercy(j, bent)
 		"spine":
 			for o in d.options:
 				if o.id == "serve" and bent == Way.Id.KINGS_MAN:
@@ -400,6 +404,9 @@ static func _act(j: Journey, bent: int) -> void:
 			and int(j.life.get("bot_watched:" + here.id, -1)) != c.cal.year:
 		j.life["bot_watched:" + here.id] = c.cal.year  # once a place a summer
 		j.act("watch")
+		return
+	# Cattle for the stores (battles-2: the strandhogg, fought).
+	if _strandhogg(j, bent, ids):
 		return
 	# A ship too battered to trust is mended first.
 	if ids.has("mend") and band.ship.damage >= wr.ship_unsailable_damage - 1:
@@ -936,3 +943,37 @@ static func _law_land(j: Journey, bent: int, ids: Dictionary) -> bool:
 		if _go(j, "iceland"):
 			return true
 	return false
+
+
+# --- Battles 2 (docs/design/notes/battles-2.md) ---------------------------------
+
+## A strandhogg for a man whose stores run low: the Viking and the berserk
+## at a farmstead they have not raided this year, with three men or more,
+## once a place a summer. Told by the dice (the bot's fights always are).
+static func _strandhogg(j: Journey, bent: int, ids: Dictionary) -> bool:
+	if not ids.has("strandhogg") or (bent != Way.Id.VIKING and bent != Way.Id.BERSERK):
+		return false
+	var band := j.c.band
+	var here := j.here()
+	var key := "bot_strand:" + here.id
+	if band.fighters(j.c.rules).size() < 3 or band.food > band.fighters().size() * 6 or int(j.life.get(key, -1)) == j.c.cal.year:
+		return false
+	j.life[key] = j.c.cal.year
+	j.act("strandhogg")
+	return true
+
+
+## The strandhogg offered: go in, unless the band is too few to hold off
+## the herders (two men or fewer).
+static func _strandhogg_choice(j: Journey, offer: FightOffer) -> int:
+	if offer.our_men <= 2 and offer.allows(FightOffer.Choice.FADE_AWAY):
+		return FightOffer.Choice.FADE_AWAY
+	return FightOffer.Choice.TAKE_THE_FIELD
+
+
+## Before the fire: the custom, but a berserk whose name is already
+## blackened (honor under `bot_nithing_honor`) lets none out.
+static func _mercy(j: Journey, bent: int) -> String:
+	if bent == Way.Id.BERSERK and j.c.band.honor < j.c.world_rules.bot_nithing_honor:
+		return "none_out"
+	return "let_out"
