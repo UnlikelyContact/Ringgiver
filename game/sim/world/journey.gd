@@ -854,6 +854,8 @@ func _weather(days: float) -> void:
 		band.known_places[best] = true
 		_look_about()
 		_was_at = band.location
+		# Ashore where the merchant he guards was bound: that guard is done.
+		TradeRoad.check_escort(self)
 
 
 ## Another party has come up with the band.

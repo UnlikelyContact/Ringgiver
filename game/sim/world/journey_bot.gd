@@ -660,7 +660,8 @@ static func _houses(j: Journey, bent: int, ids: Dictionary) -> bool:
 ## Sets off for a place. True when he is on his way (or there, or stopped
 ## by something to answer): the turn is spent.
 static func _go(j: Journey, to: String) -> bool:
-	if not j.go_to_place(to):
+	# Already there: going would pass no time, and he would ask again.
+	if to == j.c.band.location or not j.go_to_place(to):
 		return false
 	j.travel()
 	return true
