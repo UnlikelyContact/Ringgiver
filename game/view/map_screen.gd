@@ -33,7 +33,13 @@ var quick_box: CheckBox
 ## HBoxContainer the map's names keep out from under (MapCanvas); the
 ## hints put their "?" on its end.
 var time_bar: HBoxContainer
-var paused := false
+## Whether the days stand. Set from anywhere (the tools set it), the
+## controls follow.
+var paused := false:
+	set(v):
+		paused = v
+		if pause_btn != null:
+			_time_buttons()
 var fast := false
 var _quick := false
 var _seen := ""  # what the panel was last drawn for, so it is redrawn only on a change
@@ -156,19 +162,22 @@ func _build_panel() -> void:
 	_rank_box.add_theme_constant_override("separation", UiTheme.S1)
 	_rank_box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	head.add_child(_rank_box)
-	var summer := HBoxContainer.new()
-	summer.add_theme_constant_override("separation", UiTheme.S2)
-	col.add_child(summer)
+	# The summer: the days left in words beside the date, and a thin bar of
+	# the days gone under them.
+	var when := HBoxContainer.new()
+	when.add_theme_constant_override("separation", UiTheme.S2)
+	who.remove_child(_date_label)
+	when.add_child(_date_label)
+	_date_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_summer_label = UiTheme.label("", "KeyLabel", false)
+	_summer_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	when.add_child(_summer_label)
+	col.add_child(when)
 	_summer = ProgressBar.new()
 	_summer.show_percentage = false
-	_summer.custom_minimum_size = Vector2(0, 6)
-	_summer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_summer.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_summer.custom_minimum_size = Vector2(0, 5)
 	_summer.tooltip_text = "The summer gone"
-	summer.add_child(_summer)
-	_summer_label = UiTheme.label("", "KeyLabel", false)
-	summer.add_child(_summer_label)
-
+	col.add_child(_summer)
 	var strip := UiTheme.panel("WellPanel")
 	col.add_child(strip)
 	var stats := HBoxContainer.new()
@@ -327,7 +336,8 @@ func _status() -> void:
 	var total := int(s.day) + int(s.days_left)
 	_summer.max_value = maxi(1, total)
 	_summer.value = int(s.day)
-	_summer_label.text = "%d DAYS OF SUMMER LEFT" % int(s.days_left)
+	_summer_label.text = "%d DAYS LEFT" % int(s.days_left)
+	_summer_label.tooltip_text = "Days of summer left before the band must winter"
 	_summer_label.add_theme_color_override("font_color", Palette.UI_BLOOD.lightened(0.2) if int(s.days_left) <= Hints.WINTER_DAYS / 2 else Palette.UI_MUTED)
 	var rank_key := "%s|%s|%s|%d" % [s.rank, s.way, s.outlaw, int(s.feuds)]
 	if _rank_box.get_meta("key", "") != rank_key:

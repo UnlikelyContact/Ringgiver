@@ -255,11 +255,11 @@ static func _build() -> Theme:
 	_variation(t, "RowButton", "Button")
 	_button_set(t, "RowButton", row, row_h, row_p, row_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, BODY, font("bold"))
 	# The battle's commands: dark iron, the shout given marked in gold.
-	var cmd := box(Color(Palette.UI_NIGHT, 0.9), Palette.UI_RULE_DIM, 1, RADIUS, S1, S1)
+	var cmd := box(Color(Palette.UI_NIGHT, 0.94), Palette.UI_RULE_DIM, 1, RADIUS, S1, S1)
 	var cmd_h := box(Color(Palette.UI_WOOD_HOVER, 0.95), Palette.UI_RULE, 1, RADIUS, S1, S1)
 	var cmd_p := box(Color("4a3a1c"), Palette.UI_GOLD, 2, RADIUS, S1, S1)
 	cmd_p.border_width_top = 4
-	var cmd_d := box(Color(Palette.UI_NIGHT, 0.7), Color(Palette.UI_RULE_DIM, 0.4), 1, RADIUS, S1, S1)
+	var cmd_d := box(Color(Palette.UI_NIGHT, 0.92), Color(Palette.UI_RULE_DIM, 0.4), 1, RADIUS, S1, S1)
 	_variation(t, "CommandButton", "Button")
 	_button_set(t, "CommandButton", cmd, cmd_h, cmd_p, cmd_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Color(Palette.UI_FAINT, 0.8), 16, font("bold"))
 	# Small controls laid over the map or the field (the time cluster, the
