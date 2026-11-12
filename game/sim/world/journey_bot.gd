@@ -956,9 +956,12 @@ static func _nature(j: Journey, bent: int) -> void:
 	j.choose_nature(PackedStringArray(pick.get(bent, ["steady", "open_handed"])))
 
 
-## What he keeps in the chest whatever he buys: a year's living for the band.
+## What he keeps in the chest whatever he buys: a year's living for the
+## band and the price of land and a better hull, which come first. A young
+## band spends little on works; a rich one has them (docs/design/notes/
+## men-silver.md: set so that the five-year tables of balance.md hold).
 static func _reserve(j: Journey) -> int:
-	return 200 + 10 * j.c.band.fighters().size()
+	return 350 + 15 * j.c.band.fighters().size()
 
 
 ## Silver laid out where it does some good, above the reserve: helmets,
