@@ -819,3 +819,33 @@ var vengeance_wergild_mult := 1.5
 var vengeance_stat := 5
 ## A house abroad (outside Norway's own regions) does not offer marriage or
 ## fostering, and is not brought to a reckoning as a Norse house is.
+
+# --- The saga's fights (docs/design/notes/saga-fights.md) --------------------
+## The burning of a house in its hall by the band (Families.burned): the
+## band's honor lost, unless that house had burned the band's own first
+## (the one burning the sagas half forgive: `burning_avenged_honor` then);
+## the standing lost with every house tied to the burned one; the chance
+## the burned house's kin and friends get the band outlawed at the Thing;
+## the fame of it either way (it is talked of).
+var burning_band_honor := 20
+var burning_avenged_honor := 3
+var burning_ally_standing := -25
+var burning_outlaw_chance := 0.5
+var burning_fame := 4
+## A feud's ambush beaten off cools the feud a step; one that took the band's
+## men warms it a step (the feud's `level`, 1 to 3). Every man killed either
+## way is on the feud's ledger (`kills_ours`, `kills_theirs`).
+var feud_ambush_cools := 1
+## A brawl at the Thing won: the other side's case loses footing, and the
+## band's standing with them rises this much (they have seen it fight);
+## lost, it falls this much and the feud rises a step.
+var thing_brawl_won_standing := 5
+var thing_brawl_lost_standing := -5
+## A ship taken at sea (Objective.Kind.DECK: her deck cleared from stem to
+## stern) is the band's: kept when she is a better hull than its own (or it
+## has none, and the old one goes at `ship_trade_in`), else sold off for
+## `prize_sale_share` of her price (a prize sold in haste on a strange
+## shore fetches little). What hull a party's ship is, by its kind.
+var prize_sale_share := 0.2
+var prize_hulls := {"merchant": WorldTypes.ShipKind.KNARR, "rival_ship": WorldTypes.ShipKind.KARVE,
+	"levy": WorldTypes.ShipKind.SNEKKJA, "the king's ships": WorldTypes.ShipKind.SNEKKJA, "avengers": WorldTypes.ShipKind.KARVE}

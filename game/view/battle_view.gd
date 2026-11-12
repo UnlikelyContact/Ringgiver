@@ -41,6 +41,15 @@ var _drag_moved := false
 const MIN_ZOOM := 0.8
 const MAX_ZOOM := 4.0
 var _fire_time := 0.0
+## The ship fight's water and timber (Scenario.build_deck), in the map's
+## teal: the open sea, its wave marks and foam; the deck's planks, seams,
+## the strake along the gunwale and the mast.
+const SEA_DEEP := Color("244a52")
+const SEA_WAVE := Color("3f6f72")
+const SEA_FOAM := Color("b4d0cf")
+const DECK := Color("7d5f3e")
+const DECK_SEAM := Color("5e4529")
+const STRAKE := Color("4a3420")
 
 
 func setup(p_battle: Battle, p_player: Warrior, p_camera: Camera2D) -> void:
@@ -598,6 +607,8 @@ func _draw() -> void:
 	for row in g.height:
 		for col_i in g.width:
 			_draw_feature(g, BattleGrid.from_offset(col_i, row))
+	if g.has_sea:
+		_draw_masts()
 	if is_night():
 		_draw_night()
 	draw_objective()
@@ -653,9 +664,16 @@ func _draw() -> void:
 				draw_circle(dot, 3.5, Color(Palette.GOLD, alpha))
 
 
-## The burned hall is fought at night (Objective.Kind.ESCAPE).
+## The burned hall is fought at night (Objective.Kind.ESCAPE), and so are
+## the saga's fights at a hall (Battle.night).
 func is_night() -> bool:
-	return battle.objective != null and battle.objective.kind == Objective.Kind.ESCAPE
+	return battle.night or (battle.objective != null and battle.objective.kind == Objective.Kind.ESCAPE)
+
+
+## Whether the hall's roof is burning: the escape and the burning always,
+## a defence once the fire has taken.
+func hall_burning() -> bool:
+	return battle.hall_alight or (battle.objective != null and battle.objective.kind == Objective.Kind.ESCAPE)
 
 
 ## Night over the ground (the men, drawn above, stay clear to read), then
@@ -675,6 +693,9 @@ func _draw_night() -> void:
 		return
 	var t := _fire_time
 	var s := Iso.SIZE
+	if not hall_burning():
+		_draw_torches(t)
+		return
 	var centre := Vector2.ZERO
 	for c in hall:
 		centre += Iso.to_screen(c)
@@ -707,6 +728,8 @@ func _draw_night() -> void:
 ## water, a hall's timber, a doorway.
 func _draw_ground(g: BattleGrid, c: Vector2i, light: bool) -> void:
 	var t := g.terrain_at(c)
+	if g.has_sea and _draw_sea(g, c, t):
+		return
 	var col := Palette.GROUND.lightened(0.04) if light else Palette.GROUND
 	match t:
 		CombatTypes.Terrain.MUD:
@@ -887,3 +910,98 @@ func _arrow(from: Vector2, to: Vector2, col: Color, width := 3.0) -> void:
 	draw_line(start, end, col, width)
 	var side := Vector2(-n.y, n.x) * 6
 	draw_colored_polygon(PackedVector2Array([end + n * 8, end - n * 2 + side, end - n * 2 - side]), col)
+
+
+## The night before the roof takes: firelight at the doors, and a torch in
+## the hand of every attacker at the walls (Objective.Kind.FIRE's cells).
+func _draw_torches(t: float) -> void:
+	var g := battle.grid
+	var s := Iso.SIZE
+	for row in g.height:
+		for col_i in g.width:
+			var c := BattleGrid.from_offset(col_i, row)
+			if g.terrain_at(c) == CombatTypes.Terrain.DOOR:
+				draw_circle(Iso.to_screen(c), s * 1.2, Color(1.0, 0.6, 0.2, 0.10 + 0.03 * sin(t * 2.0)))
+	var obj := battle.objective
+	if obj == null or obj.kind != Objective.Kind.FIRE:
+		return
+	for w in battle.active(obj.attacker):
+		if not obj.has_cell(w.pos):
+			continue
+		var p: Vector2 = (tokens[w] as Token).position if tokens.has(w) else Iso.to_screen(w.pos)
+		var base := p + Vector2(Token.R * 0.9, -Token.R * 0.6)
+		var flick := 0.8 + 0.2 * sin(t * 7.0 + float(w.id))
+		draw_circle(base, s * 0.9, Color(1.0, 0.5, 0.15, 0.12))
+		draw_colored_polygon(PackedVector2Array([base + Vector2(-4, 0), base + Vector2(0, -14 * flick), base + Vector2(4, 0)]), Color(0.95, 0.45, 0.1, 0.95))
+		draw_colored_polygon(PackedVector2Array([base + Vector2(-2, 0), base + Vector2(0, -8 * flick), base + Vector2(2, 0)]), Color(1.0, 0.85, 0.35, 1.0))
+
+
+## The ship fight's water and planking: open sea in the map's teal with a
+## wave mark or two, the deck in planks with a seam along the hull, and the
+## gunwale strake along the rail on its outer side.
+func _draw_sea(g: BattleGrid, c: Vector2i, t: CombatTypes.Terrain) -> bool:
+	var p := Iso.to_screen(c)
+	var s := Iso.SIZE
+	var hexa := Iso.hexagon(c, 0.0)
+	match t:
+		CombatTypes.Terrain.SEA:
+			draw_colored_polygon(hexa, SEA_DEEP)
+			var h := absi((c.x * 73856093) ^ (c.y * 19349663))
+			var o := Vector2(float(h % 7) - 3.0, float((h / 7) % 5) - 2.0) * s * 0.06
+			draw_arc(p + o + Vector2(-s * 0.25, 0), s * 0.22, PI * 1.15, PI * 1.85, 6, SEA_WAVE, 2.0)
+			draw_arc(p + o + Vector2(s * 0.2, s * 0.22), s * 0.18, PI * 1.15, PI * 1.85, 6, SEA_WAVE, 2.0)
+			# Foam where the sea meets a hull.
+			for n in g.neighbors(c):
+				var nt := g.terrain_at(n)
+				if nt == CombatTypes.Terrain.RAIL or nt == CombatTypes.Terrain.FLAT:
+					var q := Iso.to_screen(n)
+					draw_line(p.lerp(q, 0.38), p.lerp(q, 0.46), Color(SEA_FOAM, 0.55), 3.0)
+			return true
+		CombatTypes.Terrain.FLAT, CombatTypes.Terrain.RAIL:
+			draw_colored_polygon(hexa, DECK)
+			for i in range(-1, 2):
+				var y := i * s * 0.36
+				draw_line(p + Vector2(-s * 0.85, y), p + Vector2(s * 0.85, y), DECK_SEAM, 1.0)
+			if t == CombatTypes.Terrain.RAIL:
+				# The strake: a dark band along the edge that faces the water.
+				for n in g.neighbors(c):
+					if g.terrain_at(n) == CombatTypes.Terrain.SEA:
+						var q := Iso.to_screen(n)
+						var mid := p.lerp(q, 0.48)
+						var across := (q - p).normalized().orthogonal() * s * 0.5
+						draw_line(mid - across, mid + across, STRAKE, 5.0)
+						draw_line(mid - across, mid + across, Palette.OUTLINE, 1.5)
+			return true
+		CombatTypes.Terrain.BRIDGE:
+			# A gangway: planks over the water between the gunwales.
+			draw_colored_polygon(hexa, SEA_DEEP)
+			var w := s * 0.5
+			draw_rect(Rect2(p + Vector2(-w, -s * 0.85), Vector2(2 * w, s * 1.7)), Palette.PLANK)
+			for i in 4:
+				var y := -s * 0.85 + (i + 0.5) * (s * 1.7 / 4.0)
+				draw_line(p + Vector2(-w, y), p + Vector2(w, y), Palette.OUTLINE, 1.0)
+			draw_line(p + Vector2(-w, -s * 0.85), p + Vector2(-w, s * 0.85), STRAKE, 2.5)
+			draw_line(p + Vector2(w, -s * 0.85), p + Vector2(w, s * 0.85), STRAKE, 2.5)
+			return true
+	return false
+
+
+## Each hull's mast, amidships on its middle row, with the yard across it
+## and the sail furled along the yard.
+func _draw_masts() -> void:
+	var obj := battle.objective
+	if obj == null or obj.hulls.is_empty():
+		return
+	var s := Iso.SIZE
+	for side in obj.hulls:
+		var cells: Array = obj.hulls[side]
+		if cells.is_empty():
+			continue
+		var sum := Vector2.ZERO
+		for c: Vector2i in cells:
+			sum += Iso.to_screen(c)
+		var at := sum / cells.size() + Vector2(s * 1.2, 0)
+		draw_circle(at, s * 0.2, Palette.OUTLINE)
+		draw_circle(at, s * 0.15, STRAKE)
+		draw_line(at + Vector2(0, -s * 1.1), at + Vector2(0, s * 1.1), Palette.OUTLINE, 5.0)
+		draw_line(at + Vector2(0, -s * 1.1), at + Vector2(0, s * 1.1), Color("c9b48a"), 3.0)

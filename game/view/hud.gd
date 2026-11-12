@@ -459,13 +459,25 @@ func _on_finished(result: BattleResult) -> void:
 	var outcome := result.outcome(0)
 	Audio.result(outcome)
 	Audio.close(false)
-	result_panel.open(OUTCOME_TITLES[outcome])
+	var title: String = OUTCOME_TITLES[outcome]
+	var burn := view.battle.objective
+	if burn != null and burn.kind == Objective.Kind.ESCAPE and burn.attacker == 1 and result.winner == 0:
+		# The burning: what counts is whether their head came out of it.
+		var head := view.battle.sworn_leader(1)
+		title = "The hall burns, and their head with it" if head != null and head.is_down() else "The hall burns, but their head got out"
+	result_panel.open(title)
 	result_panel.title_label.add_theme_color_override("font_color", _outcome_color(outcome))
 	var box := result_panel.body
 	var obj := view.battle.objective
 	var at := ""
-	if obj != null and obj.kind == Objective.Kind.ESCAPE:
+	if obj != null and obj.kind == Objective.Kind.ESCAPE and obj.attacker == 1:
+		at = "You ringed their hall in the dark."
+	elif obj != null and obj.kind == Objective.Kind.ESCAPE:
 		at = "You made for the dark beyond their ring."
+	elif obj != null and obj.kind == Objective.Kind.DECK:
+		at = "You fought ship to ship, the hulls lashed together."
+	elif obj != null and obj.kind == Objective.Kind.FIRE:
+		at = "You stood to keep the fire from your hall."
 	elif obj != null:
 		at = "You %s %s." % ["came for" if obj.attacker == 0 else "stood to hold", obj.name]
 	var why := _why(result)

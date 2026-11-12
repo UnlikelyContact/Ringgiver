@@ -50,7 +50,7 @@ static func kind_named(key: String) -> int:
 static func choose(rng: SimRng, rules: CombatRules, objective: Objective) -> Kind:
 	if objective != null:
 		match objective.kind:
-			Objective.Kind.THE_HALL:
+			Objective.Kind.THE_HALL, Objective.Kind.PLUNDER:
 				return Kind.FARMSTEAD
 			Objective.Kind.HOLD_GROUND:
 				return Kind.RIVER
@@ -177,7 +177,7 @@ func _draw(grid: BattleGrid, r: SimRng, objective: Objective) -> void:
 			_banks(grid, r)
 		Kind.FARMSTEAD:
 			var hall: Array[Vector2i] = []
-			if objective != null and objective.kind == Objective.Kind.THE_HALL:
+			if objective != null and (objective.kind == Objective.Kind.THE_HALL or objective.kind == Objective.Kind.PLUNDER):
 				hall = objective.features
 			else:
 				# A steading out on a flank between the lines.
@@ -319,7 +319,8 @@ func _yard(grid: BattleGrid, r: SimRng, hall: Array[Vector2i]) -> void:
 ## either end, and sometimes a broken fence beyond it, away from the fight;
 ## never in front of it.
 func _round_the_ships(grid: BattleGrid, r: SimRng, objective: Objective) -> void:
-	if objective == null or objective.kind != Objective.Kind.REACH_THE_SHIPS or objective.cells.is_empty() or r.randf() < 0.4:
+	if objective == null or (objective.kind != Objective.Kind.REACH_THE_SHIPS and objective.kind != Objective.Kind.CARGO) \
+			or objective.cells.is_empty() or r.randf() < 0.4:
 		return
 	var lo := 9999
 	var hi := -9999

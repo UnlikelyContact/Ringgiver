@@ -38,8 +38,12 @@ enum Arc { FRONT, FRONT_RIGHT, LEFT, RIGHT, REAR }
 ## passable, costs breath like MUD, and a man standing in it locks shields
 ## with nobody. BRIDGE and DOOR are passable flat ground (a stream's
 ## crossing, a hall's doorway). SLOPE is high ground: a line standing on it
-## pushes harder (Push.group_strength).
-enum Terrain { FLAT, MUD, WATER, SLOPE, TREE, ROCK, FENCE, BUILDING, FORD, BRIDGE, DOOR }
+## pushes harder (Push.group_strength). SEA and RAIL are the ship fight's
+## alone (Scenario.build_deck), so no other field ever holds them: SEA is
+## open water round and between the hulls, which nobody stands in and a
+## man thrown into goes overboard (Push, Battle); RAIL is the gunwale
+## strake along a deck's edge, flat planking to stand on.
+enum Terrain { FLAT, MUD, WATER, SLOPE, TREE, ROCK, FENCE, BUILDING, FORD, BRIDGE, DOOR, SEA, RAIL }
 
 ## Post-battle fate of a man who went Down.
 enum Fate { RECOVERED, MAIMED, DEAD }
@@ -49,4 +53,4 @@ const WOUND_NAMES := ["unhurt", "bruised", "wounded", "grievous", "down"]
 const SHOUT_NAMES := ["-", "shield wall", "hold", "push", "to me", "break them", "fall back", "svinfylking", "taunt"]
 const STAT_NAMES := ["might", "skill", "grit", "nerve", "wits"]
 const ROLE_NAMES := ["shield", "spear", "bow"]
-const TERRAIN_NAMES := ["flat", "mud", "water", "slope", "tree", "rock", "fence", "building", "ford", "bridge", "door"]
+const TERRAIN_NAMES := ["flat", "mud", "water", "slope", "tree", "rock", "fence", "building", "ford", "bridge", "door", "sea", "rail"]

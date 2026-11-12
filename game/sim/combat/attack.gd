@@ -47,6 +47,8 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	var winner_attacked := a_att if a_won else b_att
 	var winner_reaches := a_reaches if a_won else b_reaches
 	r.winner.add_effort(CombatTypes.Stat.SKILL)
+	if r.loser.luck != 0:
+		_close_call(rules, r, log)
 
 	# Reach: a defender who wins against a spear striking from the second
 	# rank cannot touch him.
@@ -210,6 +212,20 @@ static func is_locked(grid: BattleGrid, w: Warrior) -> bool:
 		if _shield_ok(n):
 			return true
 	return false
+
+
+## A lucky leader's close calls go his way, an unlucky one's against him
+## (Warrior.luck, CombatRules.luck_close_margin): a blow that lands on him
+## with little to spare glances off his helm; one that would have glanced
+## bites. Nobody else's luck is ever anything but 0.
+static func _close_call(rules: CombatRules, r: ExchangeResult, log: PackedStringArray) -> void:
+	var m := absi(r.margin)
+	if r.loser.luck > 0 and r.tier == OpposedRoll.Tier.HIT and m <= rules.luck_close_margin:
+		r.tier = OpposedRoll.Tier.GLANCING
+		log.append("the blow turns on %s's helm: the men say his luck holds" % r.loser.display_name)
+	elif r.loser.luck < 0 and r.tier == OpposedRoll.Tier.GLANCING and m >= rules.luck_close_margin - 1:
+		r.tier = OpposedRoll.Tier.HIT
+		log.append("a blow that should have glanced bites into %s: his luck is out" % r.loser.display_name)
 
 
 static func _apply_glancing(rules: CombatRules, grid: BattleGrid, r: ExchangeResult) -> void:

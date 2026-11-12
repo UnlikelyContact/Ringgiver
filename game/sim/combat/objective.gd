@@ -33,6 +33,30 @@ extends RefCounted
 ##                   dead), or his men all break and scatter into the night.
 ##                   Every one of those is an escape (BattleResult.End.ESCAPE):
 ##                   the fight cannot be won here, only left. It has no clock.
+##                   The burning of another's hall (Scenario.build_hall_burning)
+##                   is the same with the sides the other way about: their
+##                   men break out, yours are the ring.
+##
+## The saga's own (docs/design/notes/saga-fights.md), appended so the old
+## values keep theirs and never drawn for a varied field:
+##
+##   PLUNDER         a raid on a steading: the hall as THE_HALL (the raider
+##                   must stand in it), on a clock that is the neighbours
+##                   gathering. When the clock runs out the raider, if he
+##                   has the more standing men, has the field but not the
+##                   hall: he wins without `taken`, and goes with less.
+##   CARGO           a robbery on land: the packs and the boat drawn up as
+##                   the ships' strip; reach it as the ships.
+##   DECK            two hulls lashed together (Scenario.build_deck): a ship
+##                   is taken when none of her own crew stands on her deck
+##                   and the enemy does: cleared from stem to stern. The
+##                   attacker is the side that boards; when the clock runs
+##                   out the defender cuts the lashings and rows away. A side
+##                   whose deck holds no enemy may cut loose (allows_withdraw).
+##   FIRE            a hall at night with fire: the attacker must keep
+##                   `fire_men` of his men at the walls (the cells, the yard
+##                   along the hall) for `fire_rounds` rounds in all, and the
+##                   roof takes; the defender wins by driving them off.
 ##
 ## The clock: `rounds` are counted from the round the lines meet
 ## (Battle.lines_met: a man of one side at arm's length of the other), not
@@ -44,10 +68,10 @@ extends RefCounted
 ## lists every cell it drew in `features` (Field keeps its own features off
 ## them). Deterministic like the rest.
 
-enum Kind { HOLD_GROUND, REACH_THE_SHIPS, THE_HALL, ESCAPE }
+enum Kind { HOLD_GROUND, REACH_THE_SHIPS, THE_HALL, ESCAPE, PLUNDER, CARGO, DECK, FIRE }
 
-const NAMES := ["the ford", "the ships", "the hall", "the dark"]
-const SHORT := ["ford", "ships", "hall", "the dark"]
+const NAMES := ["the ford", "the ships", "the hall", "the dark", "the hall's silver", "the cargo", "the ship", "the walls"]
+const SHORT := ["ford", "ships", "hall", "the dark", "silver", "cargo", "deck", "walls"]
 ## The kinds a varied field may draw (Scenario.build): the escape is only
 ## ever built on purpose.
 const DRAWN_KINDS := 3
@@ -74,6 +98,18 @@ var reason := ""
 ## The ford: the stream's row and which way the defender's rear lies from it.
 var stream_row := -1
 var back := 0
+## Set when the attacker won by doing the task itself (the hall stood in,
+## the deck cleared, the roof alight, the ships reached), not by breaking
+## the other side or by the clock: the campaign reads it (a raid's plunder).
+var taken := false
+## The ship fight: each side's own deck, side -> its cells; and the side
+## whose ship was taken, or -1.
+var hulls := {}
+var ship_taken := -1
+## The burning: men needed at the walls, rounds of fire needed, rounds so far.
+var fire_men := 2
+var fire_rounds := 6
+var fire_count := 0
 var _seed := 0
 var _streak := 0  # rounds running the attacker has held the hall
 var _checked_round := -1
@@ -98,6 +134,17 @@ func _init(p_kind: Kind, p_attacker: int, seed_in: int, rules: CombatRules = nul
 			rounds = r.objective_ships_rounds
 		Kind.THE_HALL:
 			rounds = r.objective_hall_rounds
+		Kind.PLUNDER:
+			rounds = r.objective_plunder_rounds
+		Kind.CARGO:
+			rounds = r.objective_ships_rounds
+		Kind.DECK:
+			rounds = r.objective_deck_rounds
+		Kind.FIRE:
+			rounds = r.fire_night_rounds
+			approach_rounds = r.fire_night_rounds
+			fire_men = r.fire_men
+			fire_rounds = r.fire_rounds
 
 
 ## Sizes the ships' task and the ford's foothold to a band of `band` men: a
@@ -159,7 +206,7 @@ func place(grid: BattleGrid, front_row: int, p_back: int, centre_col: int) -> vo
 			stream_row = clampi(front_row - back, 0, grid.height - 1)
 			self.back = p_back
 			_place_ford(grid, r, stream_row, centre_col)
-		Kind.REACH_THE_SHIPS:
+		Kind.REACH_THE_SHIPS, Kind.CARGO:
 			var n := r.randi_range(8, 10)
 			var left := -(n / 2)
 			# A strip objective_ships_depth rows behind the defender's front, or
@@ -169,8 +216,33 @@ func place(grid: BattleGrid, front_row: int, p_back: int, centre_col: int) -> vo
 			for i in n:
 				var col := clampi(centre_col + left + i, 0, grid.width - 1)
 				_mark(grid, BattleGrid.from_offset(col, front_row + depth * back), CombatTypes.Terrain.FLAT, true)
-		Kind.THE_HALL:
+		Kind.THE_HALL, Kind.PLUNDER:
 			_place_hall(grid, r, front_row, back, centre_col)
+
+
+## For a scenario that draws its own ground (the hall at night, the deck):
+## `p_cells` are the objective, every one also a feature; nothing is drawn.
+func place_cells(p_cells: Array[Vector2i]) -> void:
+	cells.clear()
+	features.clear()
+	for c in p_cells:
+		cells.append(c)
+		features.append(c)
+
+
+## The ship fight: side -> the cells of its own deck.
+func set_hulls(p_hulls: Dictionary) -> void:
+	hulls = p_hulls
+
+
+## Standing men of `side` on the deck of `owner`'s ship.
+func men_aboard(battle: Battle, side: int, owner: int) -> int:
+	var n := 0
+	for c in hulls.get(owner, []):
+		var w := battle.grid.occupant(c)
+		if w != null and w.side == side and w.is_active() and not w.broken:
+			n += 1
+	return n
 
 
 ## The escape's edge of the dark: every passable hex of offset row `row`.
@@ -219,6 +291,8 @@ func way_open(battle: Battle) -> bool:
 ## Only the escape says no: its band slips away only once it is through
 ## the ring (`way_open`), so the way out is fought for.
 func allows_withdraw(battle: Battle, side: int) -> bool:
+	if kind == Kind.DECK:
+		return men_aboard(battle, 1 - side, side) == 0  # nobody of theirs on her: cut the lashings
 	if kind != Kind.ESCAPE or side != attacker:
 		return true
 	return way_open(battle)
@@ -359,6 +433,17 @@ func brief(side: int) -> String:
 			return ("Get %d men to the ships, %d rounds from contact" % [ships_men, rounds]) if attacking else ("Keep them from the ships, %d rounds from contact" % rounds)
 		Kind.ESCAPE:
 			return "Get out: reach the dark beyond their ring" if attacking else "Let none of them out of the fire"
+		Kind.PLUNDER:
+			return ("Take the hall before their neighbours come, %d rounds from contact" % rounds) if attacking \
+					else ("Hold the hall until the neighbours come, %d rounds from contact" % rounds)
+		Kind.CARGO:
+			return ("Get %d men to the cargo, %d rounds from contact" % [ships_men, rounds]) if attacking else ("Keep them from the cargo, %d rounds from contact" % rounds)
+		Kind.DECK:
+			return ("Board her and clear her deck from stem to stern, %d rounds from contact" % rounds) if attacking \
+					else ("Keep them off your deck; clear it and you may cut loose, %d rounds from contact" % rounds)
+		Kind.FIRE:
+			return ("Hold the walls %d rounds and the roof will take" % fire_rounds) if attacking \
+					else ("Drive them from the walls before the roof takes (%d rounds of fire)" % fire_rounds)
 		_:
 			return ("Take the hall, %d rounds from contact" % rounds) if attacking else ("Hold the hall, %d rounds from contact" % rounds)
 
@@ -366,6 +451,8 @@ func brief(side: int) -> String:
 ## The clock for the HUD: "12 left" once the lines have met, else how long
 ## the attacker will have ("16 once they meet").
 func clock_text(battle: Battle) -> String:
+	if kind == Kind.FIRE:
+		return "dawn in %d" % maxi(0, rounds - battle.round)
 	if kind == Kind.ESCAPE:
 		return ""
 	if clock_start < 0:
@@ -383,6 +470,14 @@ func progress(battle: Battle) -> String:
 		Kind.ESCAPE:
 			var d := leader_distance(battle)
 			return "the dark: %d away" % d if d < 99 else ""
+		Kind.CARGO:
+			return "cargo %d/%d" % [men_on(battle, attacker), ships_men]
+		Kind.DECK:
+			return "boarders %d, her crew %d" % [men_aboard(battle, attacker, defender()), men_aboard(battle, defender(), defender())]
+		Kind.PLUNDER:
+			return "in the hall %d/%d" % [men_on(battle, attacker), cells.size()]
+		Kind.FIRE:
+			return "fire %d/%d" % [fire_count, fire_rounds]
 		_:
 			return "hall %d/%d" % [men_on(battle, attacker), cells.size()]
 
@@ -405,6 +500,12 @@ func check(battle: Battle) -> int:
 
 
 func _decide(battle: Battle) -> int:
+	if kind == Kind.FIRE:
+		return _decide_fire(battle)
+	if kind == Kind.DECK:
+		var cleared := _decide_deck(battle)
+		if cleared >= 0:
+			return cleared
 	if clock_start < 0:
 		if battle.round >= approach_rounds:
 			reason = "side %d never comes on: %s is side %d's" % [attacker, name, defender()]
@@ -421,19 +522,65 @@ func _decide(battle: Battle) -> int:
 				return attacker
 			reason = "the ford is held: side %d keeps it" % defender()
 			return defender()
-		Kind.REACH_THE_SHIPS:
+		Kind.REACH_THE_SHIPS, Kind.CARGO:
 			if a >= ships_men:
-				reason = "side %d reaches the ships" % attacker
+				reason = "side %d reaches %s" % [attacker, name]
+				taken = true
 				return attacker
-		Kind.THE_HALL:
+		Kind.THE_HALL, Kind.PLUNDER:
 			_streak = _streak + 1 if a * 2 >= cells.size() and a > 0 else 0
 			if _streak >= hall_streak:
-				reason = "side %d takes the hall" % attacker
+				reason = ("side %d takes the hall" % attacker) if kind == Kind.THE_HALL \
+						else "side %d breaks into the hall and carries off the silver" % attacker
+				taken = true
 				return attacker
 	if left <= 0:
 		reason = time_up_reason()
+		if kind == Kind.PLUNDER and _standing(battle, attacker) > _standing(battle, defender()):
+			reason = "the neighbours are coming: side %d takes what it can carry and goes" % attacker
+			return attacker
 		return defender()
 	return -1
+
+
+## The ship fight: a ship whose deck holds none of her own crew standing
+## and some of the enemy is taken, cleared from stem to stern; -1 else.
+func _decide_deck(battle: Battle) -> int:
+	for owner in [defender(), attacker]:
+		var other: int = 1 - owner
+		if men_aboard(battle, owner, owner) == 0 and men_aboard(battle, other, owner) > 0:
+			reason = "side %d clears the deck of side %d's ship from stem to stern" % [other, owner]
+			ship_taken = owner
+			taken = other == attacker
+			return other
+	return -1
+
+
+## The burning: every round the burners keep `fire_men` at the walls is a
+## round of fire, contact or none; `fire_rounds` of them and the roof takes.
+func _decide_fire(battle: Battle) -> int:
+	if men_on(battle, attacker) >= fire_men:
+		fire_count += 1
+		if fire_count == 1:
+			reason = ""
+			battle.log.append("side %d is at the walls with fire" % attacker)
+	if fire_count >= fire_rounds:
+		reason = "side %d holds the walls, and the roof takes fire" % attacker
+		taken = true
+		battle.hall_alight = true
+		return attacker
+	if battle.round >= rounds:
+		reason = "dawn comes, and the burners draw off before the neighbours see them"
+		return defender()
+	return -1
+
+
+func _standing(battle: Battle, side: int) -> int:
+	var n := 0
+	for w in battle.active(side):
+		if not w.broken:
+			n += 1
+	return n
 
 
 ## The escape (see the header): -1 while the band is still in the ring,
@@ -478,6 +625,14 @@ func time_up_reason() -> String:
 			return "the ships are safe: side %d holds them" % defender()
 		Kind.ESCAPE:
 			return "nobody comes after them: side %d gets away into the dark" % attacker
+		Kind.PLUNDER:
+			return "the neighbours come: the hall stands, and side %d holds it" % defender()
+		Kind.CARGO:
+			return "the cargo is safe: side %d keeps it" % defender()
+		Kind.DECK:
+			return "side %d cuts the lashings and rows away" % defender()
+		Kind.FIRE:
+			return "the burners give it up: side %d's hall stands" % defender()
 		_:
 			return "the hall stands: side %d holds it" % defender()
 
@@ -492,6 +647,14 @@ func ai_line(leader_name: String, attacking: bool) -> String:
 				return "%s will not leave the ford to them" % leader_name
 			Kind.REACH_THE_SHIPS:
 				return "%s makes for the ships" % leader_name
+			Kind.CARGO:
+				return "%s makes for the cargo" % leader_name
+			Kind.PLUNDER:
+				return "%s means to have the hall's silver" % leader_name
+			Kind.DECK:
+				return "%s calls his men over the side" % leader_name
+			Kind.FIRE:
+				return "%s calls for the torches" % leader_name
 			_:
 				return "%s means to see the hall burn" % leader_name
 	return "%s keeps to %s: let them come to him" % [leader_name, name]

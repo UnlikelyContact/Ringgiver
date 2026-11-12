@@ -12,7 +12,10 @@
 ## the band stands, wstep:<n> goes to step n (0 the store .. 6 spring; past
 ## the hall's talk the winter is lived through), wchoose:<id> makes a
 ## choice by its id (Journey.winter_choose), wauto keeps the choices as
-## they stand and begins the spring.
+## they stand and begins the spring. wfeud:<feud_attack|hall_burning>:<meet|bar|wait>
+## puts a house's men at the hall first in the talk (the fight goes to the
+## battle screen when the winter is lived through); addmen:<n> gives the
+## band n more men; on the battle screen, lose breaks every man of yours.
 ##
 ## The opening (docs/design/notes/tutorial.md): `what` "begin" is the name
 ## screen, "night:<n>" the night's card n, "escape" the burned hall's fight
@@ -371,6 +374,20 @@ func _init() -> void:
 					for ch in map.get_children():
 						if ch is WinterScreen:
 							ch.queue_free()
+			elif cmd.begins_with("wfeud:"):
+				# A house's men at the hall tonight (saga-fights.md): the card
+				# put first in the hall's talk, with the leader's choice.
+				var parts := cmd.split(":")
+				if j.winter_hall != null:
+					var card := WinterEvents.card(SimRng.new(5), j.c.rules, j.c.band, parts[1])
+					if not card.is_empty():
+						WinterHall._hall_fight_card(j.c, SimRng.new(6), card)
+						card.choice = parts[2] if parts.size() > 2 else "meet"
+						j.winter_hall.talk.insert(0, card)
+			elif cmd.begins_with("addmen:"):
+				for k in int(cmd.trim_prefix("addmen:")):
+					j.c.band.add_man(Recruits.random(SimRng.new(900 + k), j.c.rules, j.c.band.next_id()))
+				j.c._arm_new_men()
 			elif cmd == "wauto":
 				j.winter_auto()
 				for ch in map.get_children():
@@ -408,6 +425,17 @@ func _init() -> void:
 					view.step()
 					if r == 1:
 						view.pending_shout = CombatTypes.Shout.PUSH
+				continue
+			elif cmd == "lose" and game.battle_node != null:
+				# Your men's hearts all go at once: the fight is lost this round.
+				await process_frame
+				var lv: BattleView = game.battle_node.view
+				lv.anim_scale = 0.0
+				lv.auto_pause = false
+				for w in lv.battle.side_warriors(0):
+					w.broken = true
+					w.morale = 0
+				lv.step()
 				continue
 			elif cmd == "leave" and game.battle_node != null:
 				game.leave_battle()

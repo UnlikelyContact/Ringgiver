@@ -993,3 +993,49 @@ func tidings_of(year := 0) -> PackedStringArray:
 		ys.sort()
 		year = int(ys[-1])
 	return tidings.get(year, PackedStringArray())
+
+
+# --- The band burns a house (the saga's fights) -------------------------------------
+
+## The band has burned `name` in its hall (Scenario.build_hall_burning,
+## Journey): the house is halved, its head dead if he fell in the yard or
+## stayed in the fire (`head_fell`: his heir holds what is left), and it is
+## remembered. Every house tied to it by blood, marriage, fostering or
+## friendship thinks the worse of the band (`burning_ally_standing`), and
+## the band's honor goes (`burning_band_honor`), unless the burned house
+## had burned the band's own hall first (`burned_first`: the one burning
+## the sagas half forgive, `burning_avenged_honor`). Returns the houses
+## turned against the band. The women, the children and the thralls were
+## let out: the band does no nithing's deed.
+func burned(rules: WorldRules, world: World, rng: SimRng, band: Band, name: String, head_fell: bool,
+		burned_first: bool, out: PackedStringArray) -> Array[String]:
+	var h := house(name)
+	var turned: Array[String] = []
+	if h == null:
+		return turned
+	var seat: Place = world.place(h.seat) if world != null else null
+	var at := seat.display_name if seat != null else h.seat
+	var who := band.leader.display_name if band.leader != null else "the band"
+	var dead_head := h.head
+	h.strength = maxi(3, roundi(h.strength * (1.0 - rules.burning_strength_loss)))
+	if head_fell:
+		_succeed(rng, h)
+		var told: PackedStringArray = tidings.get(band.year, PackedStringArray())
+		_tell(told, name, "%s burned %s in their hall at %s; %s died there." % [who, name, at, dead_head])
+		tidings[band.year] = told
+	band.honor = clampi(band.honor - (rules.burning_avenged_honor if burned_first else rules.burning_band_honor), 0, 100)
+	band.fame = clampi(band.fame + rules.burning_fame, 0, 100)
+	for ally in allies_of(name):
+		set_standing(band, ally, standing(band, ally) + rules.burning_ally_standing)
+		turned.append(ally)
+	out.append("The women, the children and the thralls of %s were let out before the roof fell." % name)
+	if head_fell:
+		out.append("%s died at %s; %s holds what is left of the house." % [dead_head, at, h.head])
+	else:
+		out.append("%s got out of the fire, and the house will not forget it." % dead_head)
+	if not turned.is_empty():
+		out.append("%s will not forgive the burning." % ", ".join(PackedStringArray(turned)))
+	if burned_first:
+		out.append("Men say it was a burning for a burning, and few blame %s for it." % who)
+	band.log("%s burned %s in their hall at %s%s" % [who, name, at, (", and %s died in it" % dead_head) if head_fell else ""])
+	return turned
