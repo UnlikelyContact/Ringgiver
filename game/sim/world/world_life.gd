@@ -239,7 +239,7 @@ static func _settle_fight(j: Journey, win: Roam.Party, lose: Roam.Party, fled: b
 	var fs := j.c.world.families
 	if fs != null and win.family != "" and lose.family != "" and win.family != lose.family \
 			and fs.houses.has(win.family) and fs.houses.has(lose.family):
-		fs.record_killing(wr, j.c.band, win.family, lose.family, j.c.world.year)
+		fs.record_killing(wr, j.c.band, win.family, lose.family, j.c.world.year, win.kind == "house_men" and lose.kind == "house_men")
 	var text := ""
 	if lose.hunted:
 		var end := "but they got away with their lives, and little else" if fled else ("and took her and all she carried" if lose.kind == "merchant" else "and cut them down")
@@ -281,7 +281,9 @@ static func _strike(j: Journey, r: SimRng, days: float) -> void:
 			if d < best_d:
 				best_d = d
 				best = id
-		if best != "" and roam.set_course(p, best):
+		if best != "":
+			# It makes for the farm once it comes to the harbour it is bound
+			# for (Roam.step_parties), by the sea route.
 			p.strike = best
 
 
@@ -302,7 +304,7 @@ static func _raids(j: Journey, r: SimRng) -> void:
 		var at_it: bool = MapGrid.cell_of(p.pos) == roam.grid.place_cell.get(p.strike, Vector2i(-9, -9)) or p.pos.distance_to(MapGrid.centre(roam.grid.place_cell[p.strike])) < 0.6
 		if p.raiding_until < 0.0:
 			if not at_it:
-				if p.at >= p.route.size() and not p.busy():
+				if p.at >= p.route.size() and not p.busy() and p.home == p.strike:
 					p.strike = ""  # it could not come there: it goes elsewhere
 				continue
 			p.raiding_until = roam.clock + wr.place_raid_days
@@ -560,7 +562,7 @@ static func after_fight(j: Journey, ctx: Dictionary, result: BattleResult) -> vo
 							j._shift(p.family, wr.standing_help_against)
 						var fs := j.c.world.families
 						if fs != null and p != null and fs.houses.has(ally.family) and fs.houses.has(p.family):
-							fs.record_killing(wr, band, ally.family, p.family, j.c.world.year)
+							fs.record_killing(wr, band, ally.family, p.family, j.c.world.year, true)
 						j._say("%s will not forget who stood with them." % ally.family)
 				if p != null:
 					tell(j, "%s took the side of %s against %s" % [who, _who(j, ally), _who(j, p)], ally.pos, true)

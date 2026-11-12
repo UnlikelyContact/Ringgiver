@@ -336,7 +336,10 @@ func add_house_party(rules: WorldRules, world: World, family: String, seat: Stri
 	h.speed = rules.raider_speed
 	h.pos = MapGrid.centre(grid.place_cell[seat])
 	h.strike = to_seat
-	if not set_course(h, to_seat):
+	h.route = sea_route(seat, to_seat).duplicate()
+	h.at = 0
+	h.home = to_seat
+	if h.route.is_empty():
 		return null
 	parties.append(h)
 	return h
@@ -391,7 +394,14 @@ func _new_route(p: Party, rng: SimRng, places: Array[String]) -> void:
 	if grid.place_cell.has(p.home) and here == grid.place_cell[p.home]:
 		p.route = sea_route(p.home, to).duplicate()
 	else:
-		# Off her course (a chase): the way from where she is.
+		# Off her course (a chase, a fight): back to the nearest harbour,
+		# a short search, and from there the kept sea routes.
+		var best_d := INF
+		for id in places:
+			var d := MapGrid.centre(grid.place_cell[id]).distance_to(p.pos)
+			if d < best_d and grid.place_cell[id] != here:
+				best_d = d
+				to = id
 		p.route = grid.find_path(here, grid.place_cell[to], 0.0001, 7.0, true).cells
 	p.home = to
 
@@ -406,6 +416,7 @@ func step_parties(dt: float, rng: SimRng, rules: WorldRules, world: World, band_
 	var band_wet := grid.is_sea(band_cell)
 	var band_shore := band_wet or grid.terrain(band_cell) == MapGrid.T.SHORE
 	var places: Array[String] = []
+	var home_places: Array[String] = []
 	for p in parties:
 		if p.escorted:
 			p.pos = pos  # under the band's guard: where it goes, he goes
@@ -447,10 +458,22 @@ func step_parties(dt: float, rng: SimRng, rules: WorldRules, world: World, band_
 		elif p.kind == "ship_thieves":
 			_follow(p, dt)  # home with her, and there they stay
 		elif p.sails:
-			if p.at >= p.route.size() and p.strike == "":
-				if places.is_empty():
-					places = _harbours(world, p.kind == "merchant")
-				_new_route(p, rng, places)
+			if p.at >= p.route.size() and p.strike != "" and p.home != p.strike and grid.place_cell.has(p.home):
+				# A farm in its sights: from the harbour it has come to, the way
+				# there is the sea route (kept once found, no search on the way).
+				p.route = sea_route(p.home, p.strike).duplicate()
+				p.at = 0
+				p.home = p.strike
+			elif p.at >= p.route.size() and p.strike == "":
+				if p.kind == "kings_ships" or p.kind == "house_men":
+					# The king's ships and a house's men keep to Norway's own waters.
+					if home_places.is_empty():
+						home_places = _harbours(world, false, true)
+					_new_route(p, rng, home_places)
+				else:
+					if places.is_empty():
+						places = _harbours(world, p.kind == "merchant")
+					_new_route(p, rng, places)
 			# (At the farm it made for, it waits: WorldLife starts the raid.)
 			_follow(p, dt)
 		else:
@@ -461,13 +484,15 @@ func step_parties(dt: float, rng: SimRng, rules: WorldRules, world: World, band_
 	return met
 
 
-func _harbours(world: World, markets_only: bool) -> Array[String]:
+func _harbours(world: World, markets_only: bool, home_only := false) -> Array[String]:
 	var out: Array[String] = []
 	var ids: Array = world.places.keys()
 	ids.sort()
 	for id in ids:
 		var p: Place = world.places[id]
 		if not p.is_open(world.year) or p.region == WorldTypes.Region.ICELAND:
+			continue
+		if home_only and not Families.HOME_REGIONS.has(p.region):
 			continue
 		if p.has_market or (not markets_only and p.kind != WorldTypes.PlaceKind.THING_SITE):
 			out.append(id)

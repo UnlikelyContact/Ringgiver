@@ -177,10 +177,16 @@ static func reckon(j: Journey) -> void:
 			return  # one at a time
 
 
-## The summer's end: men lent by a house go home for the winter.
+## The summer's end: men lent by a house go home for the winter, and a
+## hired man who has come to think well enough of the band (loyalty at
+## `hire_swear_loyalty` or more) swears himself to it: no more wage, a
+## share of the plunder like the rest.
 static func end_of_summer(j: Journey) -> void:
 	var band := j.c.band
 	for m in band.living_men():
 		if m.lent_by != "":
 			band.remove_man(m)
 			j._say("%s goes home to %s for the winter, with thanks." % [m.display_name, m.lent_by])
+		elif m.wage > 0 and m.loyalty >= j.c.world_rules.hire_swear_loyalty:
+			m.wage = 0
+			j._say("%s will take no more wage: he swears himself to %s for the winter and after." % [m.display_name, band.leader.display_name])

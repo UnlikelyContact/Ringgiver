@@ -763,12 +763,15 @@ var crew_max_men := 4
 ## at a farm), rolled once a visit: each has a price to join and a wage
 ## every `wage_days`. A man not paid loses `unpaid_loyalty`; a man whose
 ## loyalty is under CampaignRules.loyalty_leave_below takes his leave at
-## the next place the band comes to. Men lent by a house go home at the
-## summer's end, or at once if the house turns against the band.
+## the next place the band comes to; one whose loyalty is at
+## `hire_swear_loyalty` at the summer's end swears himself to the band and
+## takes no more wage. Men lent by a house go home at the summer's end, or
+## at once if the house turns against the band.
 var hire_offers := 3
 var hire_offers_farm := 1
 var wage_days := 30.0
 var unpaid_loyalty := 15
+var hire_swear_loyalty := 50
 ## The kinds of men for hire: key -> {text, tier, price, wage, loyalty,
 ## bias (stat bonuses: might, skill, grit, nerve, wits), honor (what taking
 ## him costs), weight (how often he is about)}.
@@ -802,5 +805,9 @@ var vengeance_backing_ratio := 0.8
 ## The wergild the burners offer, once they must, is this many times the
 ## dead man's: they pay dearly or not at all.
 var vengeance_wergild_mult := 1.5
+## The burners' men in the field (a reckoning at their seat, blood taken
+## for silver refused) fight at this stat centre: the jarl's picked men,
+## not the farmers of the place.
+var vengeance_stat := 5
 ## A house abroad (outside Norway's own regions) does not offer marriage or
 ## fostering, and is not brought to a reckoning as a Norse house is.

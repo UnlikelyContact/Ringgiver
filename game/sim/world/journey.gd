@@ -1244,9 +1244,11 @@ func _answer_house(d: Dictionary, id: String) -> void:
 				_say("%s takes %d oz of wergild from %s, and the feud is ended." % [who, int(d.ounces), name])
 			else:
 				var men2 := Sandbox._forced(c, mini(wr.avenger_men, h.strength))
+				var stat2 := wr.feud_stat_base + 1
 				if name == band.vengeance:
 					men2 = mini(int(fs.reckoning_terms(wr, band, name).men), Campaign.MAX_FIGHTERS)
-				_offer_fight("men of %s" % name, wr.house_fight_tier, men2, true, wr.feud_stat_base + 1, false, false,
+					stat2 = wr.vengeance_stat
+				_offer_fight("men of %s" % name, wr.house_fight_tier, men2, true, stat2, false, false,
 						{"kind": "blood", "family": name}, "%s will have blood, not silver, from %s." % [who, name], true)
 
 
@@ -1437,6 +1439,8 @@ func _act_house(id: String, p: Place) -> bool:
 			if not friends.is_empty():
 				_say("%s send men: %d of them stand with you against %s." % [", ".join(PackedStringArray(friends)), int(t.sent), h.name])
 			var center := int(wr.defender_stat_by_kind[p.kind] + p.defenses * wr.defender_stat_per_defense)
+			if h.name == band.vengeance:
+				center = wr.vengeance_stat  # the jarl's picked men, not farmers
 			_offer_fight("the reckoning with %s" % h.name, wr.house_fight_tier, int(t.men), true, clampi(center, 1, 10), false, false,
 					{"kind": "reckoning", "family": h.name, "friends": friends}, "%s comes to %s for the reckoning." % [band.leader.display_name, p.display_name], true)
 		_:

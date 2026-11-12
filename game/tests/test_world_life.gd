@@ -403,13 +403,22 @@ func test_the_party_step_is_cheap() -> void:
 	var j := Journey.begin(18, "younger_son", "Egil")
 	_free(j)
 	var n := 0
-	var t0 := Time.get_ticks_usec()
+	var step_us := 0
+	var life_us := 0
+	var worst := 0
 	for i in 400:
 		j.roam.clock += 0.2
+		var t0 := Time.get_ticks_usec()
 		j.roam.step_parties(0.2, j._fork("perf"), j.c.world_rules, j.c.world, j.c.band.fighters().size(), "")
+		var t1 := Time.get_ticks_usec()
 		WorldLife.tick(j, 0.2)
+		var t2 := Time.get_ticks_usec()
+		step_us += t1 - t0
+		life_us += t2 - t1
+		worst = maxi(worst, t2 - t0)
 		n += 1
 		j.decisions.clear()
-	var each := float(Time.get_ticks_usec() - t0) / n
-	print("    gate: %d parties, step and the world's life %.0f us a step (400 steps of 0.2 days)" % [j.roam.parties.size(), each])
+	var each := float(step_us + life_us) / n
+	print("    gate: %d parties; Roam.step_parties %.0f us a step, WorldLife.tick %.0f us a step (reckoned every %.1f days), worst step %d us" % [
+			j.roam.parties.size(), float(step_us) / n, float(life_us) / n, j.c.world_rules.life_tick_days, worst])
 	assert_true(each < 5000.0, "%.0f us a step" % each)

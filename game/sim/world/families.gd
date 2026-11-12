@@ -553,9 +553,12 @@ func abroad(name: String) -> bool:
 
 
 ## A killing between two houses' men out in the world (WorldLife): a pair
-## with nothing between them takes a grudge; a grudge comes to a feud with
-## the killing on its ledger; a feud takes the killing.
-func record_killing(rules: WorldRules, band: Band, killer: String, dead: String, year: int) -> void:
+## with nothing between them takes a grudge; a feud takes the killing on
+## its ledger. A grudge comes to a feud with it only when the houses' own
+## men met (`open_war`); a raid by one house's ship on another's farm
+## leaves a grudge, and the houses' own year decides whether it comes to
+## blood.
+func record_killing(rules: WorldRules, band: Band, killer: String, dead: String, year: int, open_war := false) -> void:
 	if killer == dead or not houses.has(killer) or not houses.has(dead):
 		return
 	var p := pair(killer, dead)
@@ -563,6 +566,8 @@ func record_killing(rules: WorldRules, band: Band, killer: String, dead: String,
 		add_tie(killer, dead, "grudge", year)
 		return
 	if str(p.enmity) == "grudge":
+		if not open_war:
+			return
 		add_tie(killer, dead, "feud", year)
 		p = pair(killer, dead)
 	_kill(rules, band, p, killer, dead)
