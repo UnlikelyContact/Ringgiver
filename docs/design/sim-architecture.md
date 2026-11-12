@@ -1108,6 +1108,10 @@ this is the map of what is where.
 | The saga's fights | `sim/combat/{scenario,objective,field}.gd` (escape, hall defence, burning, break-out, deck), `Campaign.stake` | `saga-fights.md`, `tutorial.md`, `first-fight.md` |
 | Law, land, the unfree, omens | `sim/world/{thing_play,outlawry,landtake,thralls,omens}.gd` | `law-land.md` |
 | Saving | `sim/save/{save_codec,save_play,save_store}.gd` | `save.md` |
+| The whole weighed | `Campaign.room`, `Journey.vengeance_outlook`, `tools/saga_trace.gd`, `tests/test_balance.gd` | `balance.md` |
+| The wider world | `sim/world/east_road.gd` (rivers, portages, the guard), `norway_data.gd`, `market.gd` | `wider-world.md` |
+| The leader's nature, arms and works | `sim/campaign/natures.gd`, the men-and-silver section of `journey.gd`, `Man.woman` and `Warrior.said` | `men-silver.md` |
+| Wings, strandhogg, the great battle | `sim/combat/{wing,sector}.gd`, `Scenario.build_strandhogg`, `build_sector`, `Objective.Kind.CATTLE` | `battles-2.md` |
 | The view | `view/{ui_theme,ui_modal,map_canvas,map_art,map_icons,winter_screen,saga_screen,men_panel,settings,saves_modal,audio,audio_synth,tutorial,hints,battle_hints}.gd` | `ui.md`, `map-art.md`, `shell.md` |
 
 Rules that hold across all of it:
@@ -1131,4 +1135,10 @@ Rules that hold across all of it:
 - **The view reads plain values.** Screens are built from dictionaries
   the sim hands out (`Families.report`, `Journey.household`,
   `price_book`, `winter_state`, `saga`), with `UiTheme` and `UiModal`.
-
+- **Lists drag under a thumb.** A button keeps a touch to itself, so a
+  list made of rows could not be scrolled on a phone. `UiTheme.touch_scroll`
+  (called for every node from the audio autoload's `node_added` hook)
+  makes buttons and panels inside a `ScrollContainer` pass the touch on;
+  the engine drops the row's press when the scroll begins. New lists get
+  this for free; a control that must keep the touch inside a scroll sets
+  its own filter after entering the tree.

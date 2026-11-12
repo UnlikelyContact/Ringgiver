@@ -1539,14 +1539,48 @@ dragged (a button kept the touch; rows in a scroll now pass it on), a
 second card on day one (the spring omen keeps out of the first summer),
 and a clipped count of men.
 
+**The wider world** (`wider-world.md`). West: Shetland on the line to
+Iceland, Ketil Flatnose's Hebrides with a house of their own in the web,
+and the farms of Skye for raiding. East: from Birka or Gotland by the
+Neva to Aldeigjuborg and Holmgard, the haul to the Dnieper on rollers,
+Koenugard, the rapids, and Miklagard at the end, all on the one map. A
+ship is slow on a river and slower on the rollers, by her hull; the haul
+tires the men and may be ambushed. Furs, amber, ivory and captives sell
+high in the east and silk comes home at twice its price; the whole road
+there and back is most of a summer, and the emperor's guard will take a
+band for a winter.
+
+**The leader's nature, and things worth silver** (`men-silver.md`). After
+the name the player says what kind of man he is: two of reckless or
+steady, open-handed or close-fisted, silver-tongued or grim, deep-minded
+or quick to anger, each true in the rules and passed on in part to his
+sons. Arms are bought in summer from a smith, for a named man or the
+chest, and at the great markets now and then a sword with a name. Silver
+goes into the hall (benches, a high seat worth talking of, a boathouse,
+a smithy), a skald kept, feasts for a house or the district, a stone or
+a mound for the dead, and a ship's sail, shields and dragon's head. A
+woman may ask to swear, once in a long saga; the saga says she and her
+of her everywhere, the fight's own lines included.
+
+**More in the fight** (`battles-2.md`). With eight men or more the sworn
+second leads a wing on one word given before the fight, and acts on it
+by his own temper. A strandhogg is fought: round up the cattle, drive
+them to the boats, be gone before the district gathers. Before a
+burning the household may be let out, or not, and the second is a
+nithing's deed that no silver settles. Hafrsfjord and the other great
+battles are one sector of a long line, with neighbours who hold, waver
+or break. A barred door is fought in the doorways, and a friendly house
+may come.
+
 Open after this pass, in order of weight: the sound has been checked by
 number and not by ear; the whole has been played end to end only by the
 stand-in players and by scripted taps on the live build, not yet by a
-person for an evening; barring the door against a stronger burning party
-is still a death; a long saga gathers more silver than it can spend; the
-king's man reaches his vengeance in three summers. In hand: the wider
-world west and east, the leader's nature and things worth silver, and
-named lieutenants, strandhogg and the great battle as fights.
+person for an evening; a wing's word helps little when well chosen and
+hurts much when ill chosen; barring the door against a stronger burning
+party is still most often a death; the trader's summer on the east road
+earns no more than a summer at home; a man who takes the high seat
+without being a son has no nature of his own; the king's man reaches
+his vengeance in three summers.
 
 ## Open questions
 
