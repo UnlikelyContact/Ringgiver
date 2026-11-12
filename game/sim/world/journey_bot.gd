@@ -83,6 +83,14 @@ static func winter(j: Journey, bent: int) -> void:
 		for i in h.talk.size():
 			if str(h.talk[i].kind) == "vow":
 				j.winter_choose("talk:%d:vow:0" % i)
+	# The seer is asked by a man with silver to spare; the thralls are
+	# watched by the careful, freed by the law-wise and the skald.
+	for i in h.talk.size():
+		var kind := str(h.talk[i].kind)
+		if kind == "volva" and band.silver >= 60:
+			j.winter_choose("talk:%d:ask" % i)
+		elif kind == "thralls":
+			j.winter_choose("talk:%d:%s" % [i, "free" if bent == Way.Id.LAWMAN or bent == Way.Id.SKALD else ("press" if bent == Way.Id.BERSERK else "watch")])
 	var guard := 0
 	while j.in_winter() and not h.resolved and guard < 10:
 		guard += 1
@@ -115,6 +123,10 @@ static func _answer(j: Journey, d: Dictionary, bent: int) -> String:
 			for o in d.options:
 				if o.id == "serve" and bent == Way.Id.KINGS_MAN:
 					return "serve"
+				if o.id == "sail_iceland" and (band.outlawry == WorldTypes.Outlawry.FULL or bent == Way.Id.TRADER):
+					return "sail_iceland"
+				if o.id == "hear":
+					return "hear"
 			return "ignore"
 		"demand":
 			return "pay" if band.silver >= int(d.ask) * 2 else "thing"
@@ -126,6 +138,14 @@ static func _answer(j: Journey, d: Dictionary, bent: int) -> String:
 			return _answer_house(j, d, bent)
 		"world":
 			return _answer_world(j, d, bent)
+		"thing":
+			return ThingPlay.bot(j, d, bent)
+		"land":
+			return Landtake.bot(j, d, bent)
+		"unfree":
+			return Thralls.bot(j, d, bent)
+		"omen":
+			return Omens.bot(j, d, bent)
 	return str(d.options[0].id)
 
 
@@ -215,6 +235,10 @@ static func _act(j: Journey, bent: int) -> void:
 		if back == "" or not j.go_to_place(back):
 			j.act("camp")
 		return
+	# The law, the land and the unfree first: an outlaw's way out, the
+	# land he can buy, the men he left at home, a man held for sale.
+	if _law_land(j, bent, ids):
+		return
 	# A ship too battered to trust is mended first.
 	if ids.has("mend") and band.ship.damage >= wr.ship_unsailable_damage - 1:
 		j.act("mend")
@@ -241,7 +265,7 @@ static func _act(j: Journey, bent: int) -> void:
 	# A feud to plead when at a Thing, or a house he promised to speak for;
 	# work in hand to finish.
 	for id in ids:
-		if str(id).begins_with("case:") or str(id).begins_with("speak:"):
+		if str(id).begins_with("case:") or str(id).begins_with("speak:") or str(id).begins_with("answer:") or str(id).begins_with("case_land:"):
 			j.act(id)
 			return
 	if _houses(j, bent, ids):
@@ -250,6 +274,9 @@ static func _act(j: Journey, bent: int) -> void:
 		if j.sail(str(j.contract.to_place)) or not j.decisions.is_empty():
 			return
 	if _hire(j, bent, ids):
+		return
+	if ids.has("thralls_home") and band.thralls.size() < 6:
+		j.act("thralls_home")
 		return
 	if _captives(j, bent, ids):
 		return
@@ -414,7 +441,7 @@ static func _houses(j: Journey, bent: int, ids: Dictionary) -> bool:
 					return true
 				if _go(j, fs.house(want).seat):
 					return true
-	if not band.pledges.is_empty():
+	if not band.pledges.is_empty() or _thing_due(j):
 		var thing := _nearest(j, func(q: Place) -> bool: return q.kind == WorldTypes.PlaceKind.THING_SITE)
 		if thing != "" and _go(j, thing):
 			return true
@@ -440,7 +467,7 @@ static func _go(j: Journey, to: String) -> bool:
 ## A place worth raiding with the men in hand.
 static func _raidable(j: Journey, p: Place) -> bool:
 	var c := j.c
-	if not Journey.RAID_KINDS.has(p.kind) or p.id == c.band.home or p.wealth < c.world_rules.raid_min_wealth:
+	if not Journey.RAID_KINDS.has(p.kind) or p.id == c.band.home or p.wealth < c.world_rules.raid_min_wealth or not Landtake.raidable(j, p):
 		return false
 	if int(c.band.raided.get(p.id, -1)) == c.cal.year:
 		return false
@@ -617,4 +644,71 @@ static func _captives(j: Journey, bent: int, ids: Dictionary) -> bool:
 	if ids.has("ransom"):
 		j.act("ransom")
 		return true
+	return false
+
+
+# --- Law, land and the unfree (docs/design/notes/law-land.md) -------------------------
+
+## A summons he will answer, or a land quarrel he will plead, this summer.
+static func _thing_due(j: Journey) -> bool:
+	var band := j.c.band
+	if Outlawry.is_outlawed(band, j.c.cal):
+		return false
+	var summons: Dictionary = band.law.get("summons", {})
+	for fam in summons:
+		var sm: Dictionary = summons[fam]
+		if int(sm.get("year", -1)) == j.c.cal.year and bool(sm.get("answer", false)):
+			return true
+	return not (band.law.get("land_case", {}) as Dictionary).is_empty()
+
+
+## The law, the land and the unfree, as a man of his bent would have them:
+## an outlaw makes his peace or goes west (with his own ship when he has
+## one); a man held for sale is bought back or taken; land is bought when
+## the silver is well over what is needed and the band has no more than a
+## couple of units; a man is left at the farm when there are thralls to
+## watch; the law-wise and the skald free a thrall now and then; land is
+## taken in Iceland when the band is there. True when he did something.
+static func _law_land(j: Journey, bent: int, ids: Dictionary) -> bool:
+	var c := j.c
+	var band := c.band
+	var od := Outlawry.bot_deed(j, bent, ids)
+	if od != "":
+		j.act(od)
+		return true
+	if Outlawry.is_outlawed(band, c.cal) and Outlawry.in_realm(j) and j.sail_speed() > 0.0 and j.roam.aboard \
+			and (band.outlawry == WorldTypes.Outlawry.FULL or j.days_left() < 60):
+		var haven := Outlawry._west_haven(j)
+		if haven != "" and haven != band.location and _go(j, haven):
+			return true
+	for id in ids:
+		if str(id).begins_with("ransom_taken:") and band.silver >= 60:
+			j.act(id)
+			return true
+		if str(id).begins_with("rescue_taken:") and band.fighters(c.rules).size() >= 8:
+			j.act(id)
+			return true
+	if not band.taken.is_empty() and band.location != str(band.taken[0].at) and band.silver >= 60:
+		var to := str(band.taken[0].at)
+		if j.days_to(to) >= 0 and j.days_to(to) + 10 <= j.days_left() and _go(j, to):
+			return true
+	if ids.has("landtake"):
+		j.act("landtake")
+		return true
+	if ids.has("buy_land") and band.land < 3 and band.silver >= 200 + 60 * band.land:
+		j.act("buy_land")
+		return true
+	if ids.has("keepers") and band.thralls.size() >= 3 and band.keepers.is_empty():
+		j.act("keepers")
+		return true
+	if ids.has("manumit") and (bent == Way.Id.LAWMAN or bent == Way.Id.SKALD) and band.thralls.size() >= 2:
+		j.act("manumit")
+		return true
+	# Iceland, once it is open and known: an outlaw's road, and the trader's.
+	var iceland := c.world.place("iceland")
+	if not band.settled_iceland and iceland != null and iceland.is_open(c.world.year) and band.knows("iceland") \
+			and (band.outlawry == WorldTypes.Outlawry.FULL or (bent == Way.Id.TRADER and band.ship != null and band.ship.kind == WorldTypes.ShipKind.KNARR)) \
+			and band.location != "iceland" and j.days_to("iceland") >= 0 and j.days_to("iceland") + 10 <= j.days_left():
+		if _go(j, "iceland"):
+			return true
 	return false

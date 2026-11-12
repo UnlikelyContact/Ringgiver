@@ -49,6 +49,10 @@ const PLACES := [
 	# The raider's prey: rich, and no king's levy near.
 	{"id": "iona", "name": "the monastery on Iona", "region": R.WEST, "kind": K.FARMSTEAD, "pos": Vector2(-16, 62), "wealth": 75, "defenses": 0, "faction": "", "family": "the monks of Iona"},
 	{"id": "northumbria", "name": "the Northumbrian coast", "region": R.WEST, "kind": K.FARMSTEAD, "pos": Vector2(8, 74), "wealth": 60, "defenses": 1, "faction": "", "family": "the Northumbrians"},
+	# Frankia: the host on the Seine, where Rollo goes in his exile, and
+	# Rouen up the river (law-land).
+	{"id": "seine", "name": "the camp on the Seine", "region": R.FRANKIA, "kind": K.HALL, "pos": Vector2(2, 106), "wealth": 35, "defenses": 4, "faction": "seine", "family": "the Seine host"},
+	{"id": "rouen", "name": "Rouen", "region": R.FRANKIA, "kind": K.TOWN, "pos": Vector2(12, 110), "wealth": 80, "defenses": 5, "faction": "", "family": "the Franks of the Seine"},
 	{"id": "iceland", "name": "the Iceland land-take", "region": R.ICELAND, "kind": K.FARMSTEAD, "pos": Vector2(-40, 10), "wealth": 10, "defenses": 0, "faction": "", "family": "Ingolf's kin", "open_year": 874},
 ]
 
@@ -72,6 +76,10 @@ const SHORES := [
 	[Vector2(-37, 72), Vector2(-28, 70), Vector2(-24, 78), Vector2(-26, 89), Vector2(-35, 93), Vector2(-41, 84)],
 	# Iceland
 	[Vector2(-51, 6), Vector2(-41, 2), Vector2(-30, 6), Vector2(-32, 14), Vector2(-44, 17)],
+	# The Frankish shore, from the Breton capes to the Frisian sands (law-land:
+	# the Seine and Rouen stand on it)
+	[Vector2(-14, 108), Vector2(-2, 105), Vector2(8, 104), Vector2(20, 106), Vector2(34, 108), Vector2(42, 113),
+		Vector2(42, 126), Vector2(-14, 126)],
 	# Gotland
 	[Vector2(110, 76), Vector2(113, 77), Vector2(114, 83), Vector2(111, 85), Vector2(109, 81)],
 ]
@@ -90,7 +98,7 @@ const LANES := [
 	["kaupang", "gotland", 7, true], ["gotland", "birka", 3, true],
 	["avaldsnes", "orkney", 4, true], ["giske", "orkney", 5, true], ["orkney", "dublin", 4, true],
 	["orkney", "iceland", 7, true],
-	["orkney", "iona", 3, true], ["iona", "dublin", 3, false], ["orkney", "northumbria", 4, true],
+	["orkney", "iona", 3, true], ["northumbria", "seine", 5, true], ["ribe", "seine", 6, true], ["seine", "rouen", 1, false], ["iona", "dublin", 3, false], ["orkney", "northumbria", 4, true],
 ]
 
 const FACTIONS := [
@@ -119,6 +127,8 @@ const FACTIONS := [
 		"holdings": ["gotland"], "strength": 50, "ambition": "trade", "relations": {"svear": 10}},
 	{"id": "orkney", "name": "the Orkney jarls", "leader": "Sigurd the Mighty", "kind": WorldTypes.FactionKind.JARL,
 		"holdings": ["orkney"], "strength": 40, "ambition": "hold", "relations": {"more": 40, "dublin_norse": 10}},
+	{"id": "seine", "name": "the host on the Seine", "leader": "Weland", "kind": WorldTypes.FactionKind.JARL,
+		"holdings": ["seine"], "strength": 40, "ambition": "hold", "relations": {"danes": 10}},
 	{"id": "dublin_norse", "name": "the Norse of Dublin", "leader": "Ivar's sons", "kind": WorldTypes.FactionKind.KING,
 		"holdings": ["dublin"], "strength": 120, "ambition": "trade", "relations": {"orkney": 10}},
 ]

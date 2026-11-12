@@ -203,7 +203,7 @@ var spine := [
 		"text": "At Hafrsfjord the kings of the west meet Harald's fleet; the petty kingdoms fall to him.",
 		"effects": {"absorb": ["rogaland", "hordaland", "agder"], "flag": "harald_line", "on_defeat": "harald_falls",
 			"battle": {"attackers": 30, "tier": CombatTypes.Tier.VETERAN}}},
-	{"year": 874, "id": "iceland_opens", "precondition": "always", "place": "iceland", "options": ["ignore"],
+	{"year": 874, "id": "iceland_opens", "precondition": "always", "place": "iceland", "options": ["sail_iceland", "send_settlers", "ignore"],
 		"text": "Ingolf Arnarson takes land in Iceland; men who will not bow to kings follow him west.",
 		"effects": {"open": "iceland"}},
 	{"year": 875, "id": "orkney_earldom", "precondition": "always", "place": "orkney", "faction": "orkney", "options": ["serve", "ignore"],
@@ -215,6 +215,9 @@ var spine := [
 	{"year": 930, "id": "eric_bloodaxe", "precondition": "harald_line", "faction": "harald", "options": ["back_eric", "betray_eric", "ignore"],
 		"text": "Eric Bloodaxe takes his father's high seat and kills his brothers for it.",
 		"effects": {"leader": {"harald": "Eric Bloodaxe"}}},
+	{"year": 930, "id": "althing", "precondition": "always", "place": "iceland", "options": ["hear"],
+		"text": "The Icelanders set up the Althing at Thingvellir: one law for all the land, and a lawspeaker to say it.",
+		"effects": {"flag": "althing"}},
 	{"year": 934, "id": "haakon_the_good", "precondition": "harald_line", "place": "frostathing", "faction": "harald", "options": ["acclaim", "ignore"],
 		"text": "Haakon, Athelstan's foster-son, is acclaimed king at the Frostathing; Eric flees west.",
 		"effects": {"leader": {"harald": "Haakon the Good"}}},
@@ -819,3 +822,180 @@ var vengeance_wergild_mult := 1.5
 var vengeance_stat := 5
 ## A house abroad (outside Norway's own regions) does not offer marriage or
 ## fostering, and is not brought to a reckoning as a Norse house is.
+
+# --- Law, land and the unfree (thing_play, outlawry, landtake, thralls, omens) -----
+## The Thing played (ThingPlay). Silver spent on oath-helpers, in steps of
+## `ounces_per_supporter` (one supporter each): the choices offered.
+var thing_spend_steps := [0, 10, 20, 40]
+## Houses that stand with neither side and can be won over before the case
+## is heard, at most this many shown.
+var waverers_max := 2
+## A law-man hired for one case: his fee and his Wits; for `lawman_keep_fee`
+## he stays in the band as a law-wise man of its own.
+var lawman_hire_fee := 15
+var lawman_wits := 7
+var lawman_keep_fee := 45
+## The law-men of the Things: who pleads for hire where.
+var lawmen := {"gulathing": "Thorleif the Wise", "frostathing": "Thorir Hound", "eidsvoll": "Arnfinn the Law-skilled",
+	"iceland": "Ulfljot"}
+## A man of the band who sits through this many cases beside the pleader
+## (the band's best Wits after him) learns the law: he is law-wise.
+var law_sat_cases := 2
+## A favour promised for a house's backing: called in the next spring for
+## this much, and refusing it costs this much standing.
+var favour_ounces := 15
+var favour_refused_standing := -15
+## The standoff (a verdict against the side with more spears): pressing
+## makes the other side yield in about this share at even spears, rising
+## with the spears' odds; otherwise it comes to blows. Pressing at all is
+## overbearing (honor).
+var press_yield_base := 0.35
+var press_honor := 5
+## Arbitration by the house every house owes (Horda-Kari's kin): its fee,
+## and the wergild it awards as a share of the full claim.
+var arbiter_house := "Horda-Kari's kin"
+var arbiter_fee := 10
+var arbitration_share := 0.5
+## The verdict asked for: a fair one (wergild) is honor; outlawry is the
+## harder verdict and the other house's kin resent it along the ties; a
+## verdict asked beyond what the weight of the case carries is refused and
+## resented anyway.
+var fair_verdict_honor := 3
+var harsh_verdict_standing := -15
+var overreach_standing := -10
+## Losing: an appeal to the king (his man, at a Thing in his realm) turns
+## outlawry into wergild for this much silver and some of his regard.
+var appeal_relation := 30
+var appeal_ounces := 20
+var appeal_relation_cost := 10
+## Summons in spring: a house the band has wronged takes it to the Thing.
+var summons_chance := 0.25
+## A skald's verse taken for níð by a house that has come to think ill of him.
+var nid_chance := 0.35
+## A land quarrel with a neighbour of the band's land, a spring in this many.
+var land_quarrel_chance := 0.15
+
+## Outlawry (Outlawry). A lesser outlaw must be out of Norway by the winter
+## or he is a full outlaw. A full outlaw draws bounty hunters each spring in
+## Norway: `hunters_base` men and one more for each `hunters_per_fame` of
+## fame, at most `hunters_parties` parties; the price on his head is
+## `bounty_base` plus fame / 2.
+var hunters_chance := 0.7
+var hunters_base := 5
+var hunters_per_fame := 20
+var hunters_parties := 2
+var hunters_tier: CombatTypes.Tier = CombatTypes.Tier.VETERAN
+var hunters_stat := 4
+var bounty_base := 20
+## A sworn friend may shelter a full outlaw for the winter, secretly; word
+## gets out in this share of winters and costs that house with its lord.
+var secret_shelter_risk := 0.25
+var shelter_found_relation := -15
+## The king's pardon: silver (`pardon_base` plus fame), or service: a fight
+## for the king against his enemies.
+var pardon_base := 60
+var pardon_service_men := 8
+## Killing other outlaws earns a full outlaw his peace (the Grettir clause).
+var grettir_kills := 3
+## The outlaw's road: robbing travellers in the wilds.
+var rob_road_silver := 6
+var rob_road_honor := 2
+var rob_road_days := 2
+
+## Land (Landtake). A farm bought of a house that will sell (a
+## well-wisher or better), a unit at a time; a friend sells cheaper.
+var land_price := 55
+var land_price_friend := 45
+var land_buy_max := 2
+## Every unit wants this many hands to work it; a unit nobody works yields
+## `land_untended_share` of its worth (the tenants' due).
+var land_hands_per_unit := 2
+var land_untended_share := 0.25
+## A household (a wife) works this many units' worth with her people; each
+## man left to keep the farm is a hand and a guard.
+var household_hands := 2
+var keepers_max := 3
+## Held this many years, land is odal: it yields a fifth more and no king
+## can take it.
+var odal_years := 20
+var odal_bonus := 0.2
+## A hersir is granted this much land by his lord; the lord's summons each
+## spring after: go (days) or pay.
+var hersir_grant_units := 2
+var levy_duty_ounces := 20
+var levy_duty_days := 8
+## A steading left empty by a house the band has ended by the sword.
+var claim_units := 1
+var claim_standing := -10
+## Raiders who come to the band's farm while it is away: the keepers, the
+## household and the thralls hold it, or they lose half the year's yield
+## and some of the unfree.
+var farm_raid_loss := 0.5
+## Iceland: a household and its stock want a knarr, or passage on a
+## settler's knarr for this much.
+var iceland_passage := 40
+var iceland_fire_base := 2
+var iceland_buy_units := 1
+var iceland_buy_price := 30
+## The settler houses that come to Iceland (Families): [year, house, head, temper].
+var iceland_settlers := [
+	[875, "Ketilbjorn's kin", "Ketilbjorn the Old", "steadfast"],
+	[878, "Skallagrim's kin", "Skallagrim", "proud"],
+	[884, "Thorolf Mostur-beard's kin", "Thorolf", "steadfast"],
+	[892, "Aud the Deep-minded's kin", "Aud", "peaceable"],
+	[900, "Geirmund's kin", "Geirmund Dark-skin", "grasping"],
+]
+var iceland_wealth_per_house := 6
+## Men's ambitions, in steps of `ambition_fulfilled` (CampaignRules): land
+## held, a marriage made, a feud settled, a home settled.
+var ambition_land := 60
+var ambition_wife := 50
+var ambition_vengeance := 50
+var ambition_home := 60
+
+## The unfree (Thralls). A named person of a house among the captives is
+## ransomed for this much, and the house is glad of it; a plain captive
+## for `captive_ransom`.
+var named_ransom := 30
+var ransom_standing := 6
+## Selling a house's people abroad: standing with it a head, and honor for
+## a named freeborn person sold.
+var sell_standing := -3
+var sell_named_standing := -20
+var sell_named_honor := 3
+## Dublin pays more for captives than any other market.
+var captive_price_dublin := 21
+## Thralls eat this much of the store a winter, and each is a hand.
+var thrall_food := 2
+## Unrest among the thralls, 0..10: rises with their number past the
+## watch, with the band away, with a hard hand; falls with a free man's
+## word and manumission.
+var unrest_per_unwatched := 1
+var unrest_away := 2
+var unrest_pressed := 2
+var unrest_revolt := 6
+## Freeing a thrall: honor, and in `freedman_house_years` the freedmen on
+## the band's land are a house of their own, the band's friends.
+var manumit_honor := 2
+var freedman_house_years := 5
+## A man of the band taken by slavers after a fight lost abroad: in this
+## share of such fights; his price at the market where he is held is
+## `taken_price` and `taken_per_tier` a tier; after `taken_years` he is
+## sold on east, beyond finding.
+var taken_chance := 0.5
+var taken_price := 30
+var taken_per_tier := 10
+var taken_years := 2
+
+## Omens (Omens). A spring has an omen in this share; a raid in this
+## share. Heeding: `omen_wait_days`, or a sacrifice of `sacrifice_ounces`.
+var spring_omen_chance := 0.35
+var raid_omen_chance := 0.2
+var omen_wait_days := 3
+var sacrifice_ounces := 5
+var omen_nerve := 3
+## A seer in the hall at winter, asked for this much: her word is true.
+var volva_chance := 0.35
+var volva_fee := 8
+## Her early winter: the summer is this many days short.
+var early_winter_days := 25

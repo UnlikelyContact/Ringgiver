@@ -625,8 +625,7 @@ func _apply_report(plan: WinterPlan, report: WinterReport) -> void:
 func _thaw(opts := {}) -> void:
 	# Land yields; the world moves on.
 	if world != null:
-		band.food += band.land * world_rules.land_food_per_unit
-		band.silver += band.land * world_rules.land_silver_per_unit
+		Landtake.thaw_yield(world_rules, band, cal.year, log)
 		Sandbox.year_end(self, log)
 	# Births, aging and growth, bonds drifting, then who stays.
 	Family.winter_births(rng.fork("births:%d" % cal.year), rules, band, cal, log)

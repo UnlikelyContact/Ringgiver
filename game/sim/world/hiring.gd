@@ -88,11 +88,7 @@ static func actions(j: Journey) -> Array[Dictionary]:
 				"enabled": band.silver >= int(o.price) and not full,
 				"hint": "%s. %s; he wants %d oz each month of the summer.%s" % [Journey._cap(str(o.text)), CombatTypes.TIER_NAMES[(o.man as Man).tier].capitalize(),
 						int(o.wage), (" Men will think the less of you for taking him on (honor -%d)." % int(o.honor)) if int(o.honor) > 0 else ""]})
-	if band.captives > 0 and Journey.SETTLED.has(p.kind):
-		if (p.kind == WorldTypes.PlaceKind.HALL or p.kind == WorldTypes.PlaceKind.TOWN) and not wr.slave_markets.has(p.id):
-			out.append({"id": "ransom", "label": "Let %d captives be ransomed" % band.captives,
-					"hint": "Their kin send %d oz a head through the lord here." % wr.captive_ransom})
-		out.append({"id": "free", "label": "Set the captives free", "hint": "They go home and tell of it: honor, and no silver."})
+	# Captives: ransomed, freed, set to work (Thralls.actions, law-land).
 	return out
 
 
@@ -123,21 +119,7 @@ static func act(j: Journey, id: String) -> bool:
 		j._say("%s takes %s into his band for %d oz: %s." % [who, m.display_name, int(o.price), str(wr.hire_kinds[str(o.kind)].text)])
 		band.log("%s took %s into his band" % [who, m.display_name])
 		return true
-	match id:
-		"ransom":
-			var n := band.captives
-			band.captives = 0
-			band.silver += n * wr.captive_ransom
-			j._say("The kin of %d captives ransom them at %s for %d oz." % [n, p.display_name, n * wr.captive_ransom])
-			j._pass(2.0)
-		"free":
-			var n2 := band.captives
-			band.captives = 0
-			band.honor = clampi(band.honor + mini(n2, wr.free_honor_max), 0, 100)
-			j._say("%s lets %d captives go home; they will speak of it." % [who, n2])
-		_:
-			return false
-	return true
+	return false
 
 
 ## Every `wage_days` of the summer the hired men are paid, as far as the
