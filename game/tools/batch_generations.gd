@@ -60,7 +60,7 @@ func _init() -> void:
 					seed_in + i, years, j.c.cal.year, chs.size(), int(j.c.tally.get("years_passed", 0)), j.c.band.silver,
 					float(j.c.band.silver - silver0) / lived, j.c.band.living_men().size(),
 					("ENDED " + str(ending.get("kind", j.c.over_reason))) if j.c.over else "going on", ""])
-			print("      " + "; ".join(names) + "   stops " + str(j.c.tally.get("years_stops", {})))
+			print("      " + "; ".join(names) + "   stops " + str(j.c.tally.get("years_stops", {})) + "   answered by the hall's word " + str(j.c.tally.get("years_answered", {})))
 			print("      by five years: " + " | ".join(samples))
 			if verbose:
 				print(j.saga().text)

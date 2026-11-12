@@ -137,7 +137,8 @@ func test_years_stop_for_each_interrupt() -> void:
 	var fs := j.c.world.families
 	var friend := ""
 	for n in fs.names():
-		if not (j.c.band.house_ties.get(n, []) as Array).is_empty() and j.c.band.knows(fs.house(n).seat):
+		var ties: Array = j.c.band.house_ties.get(n, [])
+		if (ties.has("kin") or ties.has("marriage")) and j.c.band.knows(fs.house(n).seat):
 			friend = n
 			break
 	assert_true(friend != "", "the burned man has kin")

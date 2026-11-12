@@ -337,3 +337,14 @@ func test_the_challenge_is_no_foregone_loss() -> void:
 			kept += 1
 	print("    the heir kept the seat %d of 12: %s" % [kept, str(ways)])
 	assert_true(kept >= 3, "the heir has honest ways to keep his seat: %d of 12" % kept)
+
+
+func test_the_hall_warns_when_the_band_outgrows_its_boat() -> void:
+	var j := Journey.begin(7, "younger_son", "Egil")
+	JourneyBot.play_year(j, Way.Id.SKALD, true)
+	assert_true(j.in_winter())
+	j.c.band.ship = Ship.make(WorldTypes.ShipKind.FAERING)
+	_men(j, 6)
+	j.winter_choose("goto:%d" % WinterHall.STEPS.find("men"))
+	var notes := " ".join(j.winter_state().notes)
+	assert_true(notes.contains("will not put to sea"), notes)

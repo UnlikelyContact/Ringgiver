@@ -131,6 +131,20 @@ func _init() -> void:
 					print("      " + line)
 			_fights(j, lb2)
 		_flush_acts(acts_line)
+		# Coming and going with little done: a bot going round in circles.
+		var arrivals := 0
+		var idle := 0
+		for line in j.said.slice(said0):
+			if line.contains(" comes to ") and line.contains(" on day "):
+				arrivals += 1
+			if line.contains("days pass at") and line.contains("nothing new is heard"):
+				idle += 1
+		var done := j.acts.size() - int(j.life.get("trace_acts_mark", 0))
+		j.life["trace_acts_mark"] = j.acts.size()
+		if arrivals > 3 * done + 10:
+			odd.append("%d arrivals and only %d deeds: going round in circles" % [arrivals, done])
+		if idle >= 12:
+			odd.append("%d waits with nothing heard" % idle)
 		var now := _snap(j)
 		print("  = %s" % _delta(snap, now))
 		for k in ["silver", "food", "men"]:

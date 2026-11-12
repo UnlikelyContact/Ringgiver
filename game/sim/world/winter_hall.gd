@@ -1252,6 +1252,17 @@ func _state_men(j: Journey, s: Dictionary) -> void:
 	var c := j.c
 	var band := c.band
 	s.text = "The men. Take on those who come to the hall, let a man go, seat a man higher, and name who leads the wall when you do not, and who follows you if you fall."
+	# How many the hull will carry, and how many the band can keep at all
+	# (Campaign.room), so a band does not grow past its boat unawares.
+	var taking := 0
+	for cd in candidates:
+		taking += 1 if cd.taken else 0
+	var with_him := band.fighters(c.rules).size() - let_go.size() + taking
+	if band.ship != null and with_him > band.ship.crew_capacity(c.world_rules):
+		s.notes.append("Your %s carries %d at her oars; with %d men you will not put to sea in her until you have a bigger hull or fewer men." % [
+				WorldTypes.SHIP_NAMES[band.ship.kind], band.ship.crew_capacity(c.world_rules), with_him])
+	if band.living_men().size() - let_go.size() > c.room():
+		s.notes.append("You have benches and thwarts for %d men; the rest should be let go, or left to keep your farm." % c.room())
 	for i in candidates.size():
 		var cd: Dictionary = candidates[i]
 		var m: Man = cd.man

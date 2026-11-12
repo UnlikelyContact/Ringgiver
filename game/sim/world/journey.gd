@@ -943,8 +943,9 @@ func actions() -> Array[Dictionary]:
 				wr.counsel_difficulty + (wr.counsel_thing_harder if p.kind == WorldTypes.PlaceKind.THING_SITE else 0), p.family]})
 	if Callings.can_champion(wr, c.world, band, p):
 		out.append({"id": "champion", "label": "Stand in the farmer's place",
-				"hint": "A berserk has called %s out for their land. Meet him on the island yourself: %d oz, honor and their friendship if you blood him." % [
-						p.family, roundi(float(wr.champion_fee + p.wealth / wr.champion_wealth_per_oz) * float(band.gift("champion_fee", 1.0)))]})
+				"hint": "A berserk has called %s out for their land. Meet him on the island yourself: %d oz, honor and their friendship if you blood him. He is a seasoned man with the fury on him%s; beaten, you pay to leave the island." % [
+						p.family, roundi(float(wr.champion_fee + p.wealth / wr.champion_wealth_per_oz) * float(band.gift("champion_fee", 1.0))),
+						": few who are not seasoned themselves come back from it whole" if band.leader.tier < CombatTypes.Tier.VETERAN else ""]})
 	# The burners will not stake a burning on the island.
 	if Callings.can_challenge(wr, c.world, band, p) and p.family != band.vengeance:
 		var t := Callings.holmgang_terms(wr, c.world, band, p)
@@ -1269,6 +1270,7 @@ func invest(way: int) -> bool:
 func _work_here() -> Array:
 	var p := here()
 	if Families.is_foe(c.world_rules, c.band, p.family):
+		_offers[p.id] = []  # an ill-wisher has no work for him this summer
 		return []
 	if not _offers.has(p.id):
 		_offers[p.id] = Contracts.offers(_fork("work"), c.world_rules, c.world, c.band, p.id)

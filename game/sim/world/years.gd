@@ -290,9 +290,11 @@ static func _stop(j: Journey, y: int, offers := "") -> Dictionary:
 		var wanted: Array[Dictionary] = []
 		for d in asks:
 			# Wergild offered, a friend's daughter, or a call for help from a
-			# house bound to his by blood, marriage or fostering will not wait;
-			# other houses' asks can go unheard for a year.
-			var bound := not (band.house_ties.get(str(d.house), []) as Array).is_empty()
+			# house bound to his by blood or marriage will not wait (unless he
+			# left word for offers, OFFERS); a fostering house's call and other
+			# houses' asks can go unheard for a year.
+			var ties: Array = band.house_ties.get(str(d.house), [])
+			var bound := ties.has("kin") or ties.has("marriage")
 			var offer := str(d.ask) == "compensation" or (str(d.ask) == "marry" and Families.is_friend(wr, band, str(d.house)))
 			if offer and offers != "" and not (str(d.ask) == "compensation" and str(d.house) == band.vengeance):
 				_standing_answer(j, d, offers)
