@@ -465,6 +465,62 @@ var objective_ford_fraction := 0.25
 var objective_hall_rounds := 18
 var objective_hall_streak := 2
 
+# --- The saga's fights (docs/design/notes/saga-fights.md) ----------------
+## Every rule here acts only inside the fights it names: the raid's clock
+## (Objective.Kind.PLUNDER), the ship fight (SEA, RAIL, Kind.DECK), the hall
+## at night (Kind.FIRE, Battle.night) and the leader's luck (Warrior.luck,
+## zero in every other fight), so an ordinary field fights as it did.
+##
+## A raid on a steading: the raiders must stand in the hall (as THE_HALL)
+## before their neighbours come, this many rounds from contact. When the
+## time runs out with the raiders the stronger in standing men, they have
+## the field but not the hall: they go with what they can carry (the
+## campaign's `raid_late_share`); otherwise the steading is held.
+var objective_plunder_rounds := 16
+## The ship fight: the attacker (who boards) has this many rounds from
+## contact to clear the other deck from stem to stern; then the other ship
+## cuts loose and rows away.
+var objective_deck_rounds := 24
+## The deck: rows of planking across each hull (three or four men abreast),
+## its length the larger crew over `deck_men_per_column` plus room at the
+## stem and stern, between `deck_min_length` and `deck_max_length` columns.
+var deck_rows := 4
+var deck_men_per_column := 2.0
+var deck_min_length := 9
+var deck_max_length := 16
+## A man overboard drowns this often; a man in mail far more often, one in
+## leather a little more (CombatTypes.Armor). Otherwise he swims and is
+## hauled out.
+var overboard_drown := 0.2
+var overboard_drown_armor := [0.0, 0.1, 0.45]
+## The burning of a hall: the burners must keep at least this many men at
+## the walls (the hexes along the hall) for this many rounds in all, counted
+## from contact, and the roof takes; driven from the walls, the count stops.
+var fire_men := 2
+var fire_rounds := 6
+## The night is this many rounds long: at dawn the burners who have not
+## fired the roof draw off before the neighbours see them.
+var fire_night_rounds := 30
+## The hall at night (Scenario.build_hall_defence, build_hall_burning): the
+## field, the rows the hall takes along the bottom and how far up the yard
+## the attackers form.
+var hall_width := 16
+var hall_height := 12
+var hall_attack_distance := 5
+## The men breaking out of a burning hall (Scenario.build_hall_burning) are
+## desperate: heart this much above a plain band's.
+var breakout_morale_bonus := 2
+## Luck in a fight (Warrior.luck: -1, 0 or +1, the leader's, from
+## Leader.luck_modifier through the campaign): his side's men start this
+## much the warmer or colder of heart, never more ...
+var luck_morale := 1
+## ... and his own close calls go his way: a blow on him that lands by
+## `luck_close_margin` or less to spare is turned aside (a lucky man) or
+## one that would have glanced off bites (an unlucky one), and his fate
+## roll if he goes down is `luck_fate` the better or worse.
+var luck_close_margin := 3
+var luck_fate := 1
+
 # --- Fields and terrain (field.gd, battle_grid.gd, push.gd, battle.gd) -----
 ## A man who ends a step in MUD or a FORD spends this many steps' breath
 ## (breath_cost_move each) on top of the step itself.

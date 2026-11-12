@@ -13,6 +13,8 @@ var blocked: Array[Warrior] = []
 var advanced: Array[Warrior] = []
 ## Losers with the map edge at their backs: driven from the field (fled).
 var driven_off: Array[Warrior] = []
+## Losers with the sea at their backs on a deck: over the side (Battle).
+var overboard: Array[Warrior] = []
 ## side -> summed push strength of that side's men in contact (float).
 var strengths := {}
 ## Number of opposed contests rolled (one per touching pair of groups).

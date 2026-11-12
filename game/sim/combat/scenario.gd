@@ -367,11 +367,15 @@ static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dicti
 	battle.surprise(1, rules.escape_surprise_rounds, 0)
 	for w in steady:
 		w.morale = mini(Morale.MORALE_MAX, w.morale + rules.escape_morale_bonus)
-	for w in ours:
-		if w.is_leader:
-			battle.spared.append(w)
-	if battle.spared.is_empty() and not ours.is_empty():
-		battle.spared.append(ours[0])
+	# The burned hall's leader cannot die there (his saga begins); a man
+	# breaking out of his own burning hall later in the saga (`spare` false:
+	# Scenario.build_breakout) has no such luck.
+	if bands.get("spare", true):
+		for w in ours:
+			if w.is_leader:
+				battle.spared.append(w)
+		if battle.spared.is_empty() and not ours.is_empty():
+			battle.spared.append(ours[0])
 	for side in 2:
 		battle.result.started[side] = battle.active(side).size()
 	if not bands.has("ours"):
@@ -380,3 +384,293 @@ static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dicti
 	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": LeaderAI.Doctrine.AGGRESSIVE, "offset": 0,
 			"objective": objective, "field": null, "field_name": "burned_hall", "title": "The burned hall",
 			"band": ours.size(), "size": size, "gap": gap, "door": door}
+
+
+# --- The saga's fights (docs/design/notes/saga-fights.md) ----------------------
+
+## The night ground of a hall: the field `hall_width` by `hall_height`, the
+## hall's timber across the bottom three rows (nine wide, BUILDING), its
+## door in the middle of the front wall (DOOR), the tree line along the top
+## (the dark) and a few trees down the sides from the seed. Returns {door,
+## walls: the yard's hexes along the hall (front and ends), front_row: the
+## yard row before the hall, c: the middle column}.
+static func _night_hall(battle: Battle, rules: CombatRules, seed_in: int, door_col := -1) -> Dictionary:
+	var g := battle.grid
+	var w := g.width
+	var h := g.height
+	var c := w / 2
+	var door_row := h - 3
+	for row in range(door_row, h):
+		for col in range(c - 4, c + 5):
+			g.set_terrain(BattleGrid.from_offset(col, row), CombatTypes.Terrain.BUILDING)
+	var dc := c if door_col < 0 else door_col
+	var door := BattleGrid.from_offset(dc, door_row)
+	g.set_terrain(door, CombatTypes.Terrain.DOOR)
+	var tr := SimRng.new(seed_in).fork("hall-wood")
+	for col in w:
+		g.set_terrain(BattleGrid.from_offset(col, 0), CombatTypes.Terrain.TREE)
+	for i in 4:
+		var col := tr.randi_range(0, 1) if i % 2 == 0 else tr.randi_range(w - 2, w - 1)
+		g.set_terrain(BattleGrid.from_offset(col, tr.randi_range(2, h / 2)), CombatTypes.Terrain.TREE)
+	# The yard along the hall: every hex a man can stand on beside its timber.
+	var walls: Array[Vector2i] = []
+	for row in range(door_row - 1, h):
+		for col in w:
+			var x := BattleGrid.from_offset(col, row)
+			if not g.is_passable(x) or g.terrain_at(x) == CombatTypes.Terrain.DOOR:
+				continue
+			for n in g.neighbors(x):
+				if g.terrain_at(n) == CombatTypes.Terrain.BUILDING:
+					walls.append(x)
+					break
+	battle.night = true
+	return {"door": door, "walls": walls, "front_row": door_row - 1, "c": c, "door_row": door_row}
+
+
+## Your own hall, by night, when a house at feud comes for it (WinterHall,
+## the winter's "spears in the snow" and "fire in the night"): your men in
+## the yard before the door, the hall at their backs, the attackers coming
+## down the yard out of the dark. `burning` is the fire in the night: the
+## objective is the walls (Objective.Kind.FIRE: they must hold them
+## `fire_rounds` rounds and the roof takes); else they mean to take the
+## hall (THE_HALL: the door and the yard before it). `how` is the leader's
+## choice (FightOffer): "bar" (bar the door and hold the yard: your line
+## close before the door), "meet" (out, and meet them: your line up the
+## yard, the walls behind it open), "wait" (your scout warned you: you lie
+## in wait at the gate, and they come on strung out and surprised).
+## `bands` {ours, theirs} as `build`. Returns Scenario's dictionary,
+## `field_name` "hall_defence" or "hall_burning_defence", plus `door`.
+static func build_hall_defence(seed_in: int, rules: CombatRules, bands := {}, burning := false, how := "bar") -> Dictionary:
+	var size := Vector2i(rules.hall_width, rules.hall_height)
+	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
+	var brng := SimRng.new(seed_in).fork("bands")
+	var ours: Array[Warrior] = bands.get("ours", BandFactory.make_mixed_band(brng.fork("a"), 0, 6, 2, 1, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1))
+	var theirs: Array[Warrior] = bands.get("theirs", BandFactory.make_mixed_band(brng.fork("b"), 1, 8 if burning else 6, 2, 0,
+			CombatTypes.Tier.BLOODED, rules, CombatTypes.Armor.NONE, 16, 101))
+	var hall := _night_hall(battle, rules, seed_in)
+	var c: int = hall.c
+	var our_row: int = int(hall.front_row) - (1 if how == "bar" else 3)
+	var their_row := our_row - rules.hall_attack_distance
+	var objective := Objective.new(Objective.Kind.FIRE if burning else Objective.Kind.THE_HALL, 1, seed_in, rules)
+	if burning:
+		objective.place_cells(hall.walls)
+	else:
+		var keep: Array[Vector2i] = [hall.door]
+		for n in battle.grid.neighbors(hall.door):
+			if battle.grid.is_passable(n) and BattleGrid.to_offset(n).y < int(hall.door_row):
+				keep.append(n)
+		objective.place_cells(keep)
+	battle.objective = objective
+	BandFactory.deploy_formation(battle.grid, ours, BattleGrid.from_offset(c, our_row), Vector2i(0, -1), rules, FormationTemplate.ranks())
+	var tr := SimRng.new(seed_in).fork("hall-attack")
+	var off := tr.randi_range(-2, 2)
+	if how == "wait":
+		# Strung out on the way in at the gate, as a column caught on the march.
+		BandFactory.deploy_formation(battle.grid, theirs, BattleGrid.from_offset(c + off, their_row + 1), Vector2i(0, 1), rules, FormationTemplate.line())
+	else:
+		BandFactory.deploy_formation(battle.grid, theirs, BattleGrid.from_offset(c + off, their_row), Vector2i(0, 1), rules, FormationTemplate.ranks())
+	battle.add_band(ours)
+	battle.add_band(theirs)
+	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
+	if how == "wait":
+		battle.surprise(1, rules.ambush_surprise_rounds, rules.ambush_morale)
+	for side in 2:
+		battle.result.started[side] = battle.active(side).size()
+	if not bands.has("ours"):
+		ours[0].display_name = "You"
+	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": LeaderAI.Doctrine.AGGRESSIVE, "offset": off,
+			"objective": objective, "field": null, "field_name": "hall_burning_defence" if burning else "hall_defence",
+			"title": "Fire in the night" if burning else "Spears in the snow", "band": ours.size(), "size": size,
+			"door": hall.door}
+
+
+## Out of your own burning hall: the escape (`build_escape`) as a fight of
+## the saga, the ring the burners who are left, and the leader not spared:
+## he can die here. `bands` {ours, theirs, leader_name}.
+static func build_breakout(seed_in: int, rules: CombatRules, bands: Dictionary) -> Dictionary:
+	var b := bands.duplicate()
+	b.spare = false
+	var built := build_escape(seed_in, rules, b)
+	built.field_name = "breakout"
+	built.title = "Out through the door"
+	return built
+
+
+## The burning of another's hall (concept.md, "Hall-burnings: attack a
+## sleeping hall at night"): your men ring the hall in the dark, its
+## timber alight, and the house's men inside break out through a door at
+## the time and place of their own choosing: the escape the other way
+## about (Objective.Kind.ESCAPE with their side the attacker), the leader
+## AI's (`Battle.ai_breaks_out`). There are two doors, the great door in
+## the front wall and the byre door in an end, and the seed decides which
+## they come out of. They are desperate (`breakout_morale_bonus`). The
+## objective for you: let none of the fighting men through, above all the
+## head of the house (their sworn leader: the campaign reads whether he
+## fell). `bands` {ours, theirs}. Returns Scenario's dictionary,
+## `field_name` "burning", plus `door` (the one they come out of).
+static func build_hall_burning(seed_in: int, rules: CombatRules, bands := {}) -> Dictionary:
+	var size := Vector2i(rules.hall_width, rules.hall_height)
+	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
+	var g := battle.grid
+	var brng := SimRng.new(seed_in).fork("bands")
+	var ours: Array[Warrior] = bands.get("ours", BandFactory.make_mixed_band(brng.fork("a"), 0, 6, 2, 1, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1))
+	var theirs: Array[Warrior] = bands.get("theirs", BandFactory.make_mixed_band(brng.fork("b"), 1, 6, 2, 0, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 16, 101))
+	var hall := _night_hall(battle, rules, seed_in)
+	var c: int = hall.c
+	var door_row: int = hall.door_row
+	var dr := SimRng.new(seed_in).fork("burning-door")
+	# The byre door, in one end of the hall; which door they choose.
+	var end_col := c - 5 if dr.randf() < 0.5 else c + 5
+	var byre := BattleGrid.from_offset(end_col + (1 if end_col < c else -1), door_row + 1)
+	g.set_terrain(byre, CombatTypes.Terrain.DOOR)
+	var out_byre := dr.randf() < 0.4
+	var door: Vector2i = byre if out_byre else hall.door
+	var start := BattleGrid.from_offset(end_col, door_row) if out_byre else BattleGrid.from_offset(c, door_row - 1)
+	var objective := Objective.new(Objective.Kind.ESCAPE, 1, seed_in, rules)
+	objective.place_escape(g, 1)
+	battle.objective = objective
+	# Theirs: out of the smoke at the door, in a line facing up the yard.
+	BandFactory.deploy_formation(g, theirs, start, Vector2i(0, -1), rules, FormationTemplate.ranks())
+	for w in theirs:
+		w.morale = mini(Morale.MORALE_MAX, w.morale + rules.breakout_morale_bonus)
+	# Yours: the ring, an arc across the yard and down both ends of the hall.
+	var ring_row := door_row - 1 - rules.escape_ring_distance
+	var spots: Array[Vector2i] = []
+	spots.append(BattleGrid.from_offset(c, ring_row))
+	for k in range(1, 8):
+		for sgn in [-1, 1]:
+			var col: int = c + sgn * k * 2
+			var row := ring_row if k <= 2 else ring_row + (k - 2)
+			if col >= 0 and col < size.x and row < size.y:
+				spots.append(BattleGrid.from_offset(col, row))
+	var me := BattleGrid.from_offset(c, door_row)
+	var placed := 0
+	for w in ours:
+		w.reset_for_battle(rules)
+		var at := BattleGrid.NO_CELL
+		while placed < spots.size():
+			if g.is_free(spots[placed]):
+				at = spots[placed]
+				placed += 1
+				break
+			placed += 1
+		if at == BattleGrid.NO_CELL:
+			at = _nearest_free(g, BattleGrid.from_offset(c, ring_row - 1))
+		g.place(w, at)
+		w.facing = BattleGrid.direction_to(at, me)
+		if w.is_leader:
+			w.line_facing = w.facing
+			w.formation = FormationTemplate.line()
+	battle.add_band(ours)
+	battle.add_band(theirs)
+	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
+	battle.ai_breaks_out = true
+	battle.hall_alight = true
+	for side in 2:
+		battle.result.started[side] = battle.active(side).size()
+	if not bands.has("ours"):
+		ours[0].display_name = "You"
+	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": LeaderAI.Doctrine.AGGRESSIVE, "offset": 0,
+			"objective": objective, "field": null, "field_name": "burning", "title": "The burning",
+			"band": ours.size(), "size": size, "door": door}
+
+
+static func _nearest_free(g: BattleGrid, from: Vector2i) -> Vector2i:
+	var seen := {from: true}
+	var queue: Array[Vector2i] = [from]
+	while not queue.is_empty():
+		var x: Vector2i = queue.pop_front()
+		if g.is_free(x):
+			return x
+		for n in g.neighbors(x):
+			if not seen.has(n):
+				seen[n] = true
+				queue.append(n)
+	return from
+
+
+## Two ships lashed side by side (concept.md, "Ship fights: lashed ships,
+## boarding, men overboard"): theirs above, yours below, each a long
+## narrow deck `deck_rows` men abreast (RAIL along both gunwales, planks
+## between, the stem and stern drawn in), open sea (SEA) all round and
+## between them but for two gangways where the hulls touch, at the bow and
+## the waist (BRIDGE: planks). The walls stand along their own rails facing
+## each other over the water and meet only at the gangways, so the ground
+## is a few men wide there and depth tells. A man thrown back with the sea
+## behind him goes over the side, and a broken man at the rail jumps
+## (Battle); a ship is taken when her deck is cleared from stem to stern
+## (Objective.Kind.DECK); a side with no enemy aboard may cut the lashings
+## and row away (Battle.can_withdraw). `attacker` is the side that boards.
+## `bands` {ours, theirs} as `build`. Returns Scenario's dictionary,
+## `field_name` "deck", plus `hulls` (side -> its deck cells), `gangways`.
+static func build_deck(seed_in: int, rules: CombatRules, bands := {}, attacker := 0, doctrine := LeaderAI.Doctrine.STEADY) -> Dictionary:
+	var brng := SimRng.new(seed_in).fork("bands")
+	var ours: Array[Warrior] = bands.get("ours", BandFactory.make_mixed_band(brng.fork("a"), 0, 8, 2, 2, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1))
+	var theirs: Array[Warrior] = bands.get("theirs", BandFactory.make_mixed_band(brng.fork("b"), 1, 8, 2, 2, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 16, 101))
+	var d := rules.deck_rows
+	var most := maxi(ours.size(), theirs.size())
+	var length := clampi(ceili(most / rules.deck_men_per_column) + 3, rules.deck_min_length, rules.deck_max_length)
+	var size := Vector2i(length + 4, 2 * d + 3)
+	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
+	var g := battle.grid
+	var gap := d + 1
+	var hulls := {0: [], 1: []}
+	for row in size.y:
+		for col in size.x:
+			var x := BattleGrid.from_offset(col, row)
+			var side := -1
+			if row >= 1 and row <= d:
+				side = 1
+			elif row >= gap + 1 and row <= 2 * d + 1:
+				side = 0
+			var outer := row == 1 or row == 2 * d + 1
+			var inner := row == d or row == gap + 1
+			var first := 2
+			var last := 2 + length - 1
+			if outer:  # the stem and stern draw in
+				first += 1
+				last -= 1
+			if side < 0 or col < first or col > last:
+				g.set_terrain(x, CombatTypes.Terrain.SEA)
+				continue
+			g.set_terrain(x, CombatTypes.Terrain.RAIL if outer or inner else CombatTypes.Terrain.FLAT)
+			(hulls[side] as Array).append(x)
+	# The gangways: planks over the water where the hulls touch, at the bow
+	# and amidships, two hexes each.
+	var gangways: Array[Vector2i] = []
+	for col in [3, 2 + length / 2]:
+		for k in 2:
+			var x := BattleGrid.from_offset(col + k, gap)
+			g.set_terrain(x, CombatTypes.Terrain.BRIDGE)
+			gangways.append(x)
+	var objective := Objective.new(Objective.Kind.DECK, attacker, seed_in, rules)
+	objective.set_hulls(hulls)
+	battle.objective = objective
+	var centre := 2 + length / 2
+	BandFactory.deploy_formation(g, ours, BattleGrid.from_offset(centre, gap + 1), Vector2i(0, -1), rules, FormationTemplate.ranks())
+	BandFactory.deploy_formation(g, theirs, BattleGrid.from_offset(centre, d), Vector2i(0, 1), rules, FormationTemplate.ranks())
+	# Anyone the formation put off his own deck goes to the nearest free
+	# plank of it.
+	for side in 2:
+		var men: Array[Warrior] = ours if side == 0 else theirs
+		var own: Array = hulls[side]
+		for w in men:
+			if own.has(w.pos):
+				continue
+			var best := BattleGrid.NO_CELL
+			for x: Vector2i in own:
+				if g.is_free(x) and (best == BattleGrid.NO_CELL or BattleGrid.distance(x, w.pos) < BattleGrid.distance(best, w.pos)):
+					best = x
+			if best != BattleGrid.NO_CELL:
+				g.remove(w)
+				g.place(w, best)
+	battle.add_band(ours)
+	battle.add_band(theirs)
+	battle.set_ai(1, LeaderAI.new(doctrine))
+	for side in 2:
+		battle.result.started[side] = battle.active(side).size()
+	if not bands.has("ours"):
+		ours[0].display_name = "You"
+	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": 0,
+			"objective": objective, "field": null, "field_name": "deck", "title": "Ships lashed together",
+			"band": ours.size(), "size": size, "hulls": hulls, "gangways": gangways}

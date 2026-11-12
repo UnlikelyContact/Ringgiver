@@ -76,6 +76,20 @@ var drill := {}
 ## `fury_level` 2 strikes one better again.
 var fury := false
 var fury_level := 1
+## The leader's luck carried into the fight (Leader.luck_modifier through
+## the campaign): -1, 0 or +1. Zero for every other man and every fight
+## outside the saga: his close calls (MeleeExchange) and his fate roll lean
+## on it.
+var luck := 0
+## Rounds this man ended with an enemy at arm's length, and blows he
+## struck (an attack that reached): whether a leader stood in the front
+## rank, for the campaign (Leader.on_battle). Counted, never read, by the
+## battle.
+var contact_rounds := 0
+var strikes := 0
+## Thrown or driven off a deck into the sea (Scenario.build_deck): off the
+## field like a man who fled, and his fate is the sea's (Battle._finish).
+var overboard := false
 
 
 ## Whether the fury is on him now: a berserk with half his breath or more.
@@ -165,6 +179,9 @@ func reset_for_battle(rules: CombatRules) -> void:
 	heard_order = CombatTypes.Shout.NONE
 	order_lag = 0
 	effort = {}
+	contact_rounds = 0
+	strikes = 0
+	overboard = false
 	morale = clampi(int(round(nerve * rules.morale_start_from_nerve)) + rules.morale_start_bonus, 0, 10)
 
 
