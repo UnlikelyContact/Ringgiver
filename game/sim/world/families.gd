@@ -501,18 +501,71 @@ static func party_mood(rules: WorldRules, band: Band, family: String) -> int:
 	return 0
 
 
-## The reckoning with `name`: its men in the field, the friends of the band
-## among its enemies and the men they send. {house_men, friends: [names],
-## sent, men}.
+## The reckoning with `name`: its men in the field, with its allies' (each
+## house tied to it by kin, marriage, fostering or sworn friendship sends
+## `ally_men_sent`, unless it is the band's friend, or a friend of the
+## band's is its own enemy and keeps it at home), the friends of the band
+## among its enemies and the men they send. {house_men, allies: [names],
+## allied, friends: [names], sent, men}.
 func reckoning_terms(rules: WorldRules, band: Band, name: String) -> Dictionary:
 	var h := house(name)
 	var friends: Array[String] = []
 	for e in enemies_of(name):
 		if standing(band, e) >= rules.standing_friend:
 			friends.append(e)
+	var allies: Array[String] = []
+	for a in allies_of(name):
+		if standing(band, a) >= rules.standing_friend:
+			continue
+		var held := false
+		for e in enemies_of(a):
+			if e != name and standing(band, e) >= rules.standing_friend:
+				held = true
+				break
+		if not held:
+			allies.append(a)
 	var house_men := h.strength if h != null else rules.house_fight_men
+	var allied := allies.size() * rules.ally_men_sent
 	var sent := friends.size() * rules.friend_men_sent
-	return {"house_men": house_men, "friends": friends, "sent": sent, "men": maxi(3, house_men - sent)}
+	return {"house_men": house_men, "allies": allies, "allied": allied, "friends": friends, "sent": sent,
+			"men": maxi(3, house_men + allied - sent)}
+
+
+## The burned hall's long arc: what the band could bring against the house
+## it has its vengeance on (its own fighting men, `band_men`, and the men
+## its friends among their enemies would send) against what that house
+## would bring with its allies. They answer for the burning (wergild
+## offered, a case at the Thing) only once the band's side is
+## `vengeance_backing_ratio` of theirs: {ours, theirs, ready}.
+func vengeance_backing(rules: WorldRules, band: Band, name: String, band_men: int) -> Dictionary:
+	var t := reckoning_terms(rules, band, name)
+	var theirs := int(t.house_men) + int(t.allied)
+	var ours := band_men + int(t.sent)
+	return {"ours": ours, "theirs": theirs, "ready": float(ours) >= float(theirs) * rules.vengeance_backing_ratio}
+
+
+## Whether a house lives abroad (outside Norway's own regions: the monks
+## of Iona, the Danish king's men): it offers no marriage or fostering and
+## is not brought to a reckoning as a Norse house is.
+func abroad(name: String) -> bool:
+	var h := house(name)
+	return h != null and not HOME_REGIONS.has(h.region)
+
+
+## A killing between two houses' men out in the world (WorldLife): a pair
+## with nothing between them takes a grudge; a grudge comes to a feud with
+## the killing on its ledger; a feud takes the killing.
+func record_killing(rules: WorldRules, band: Band, killer: String, dead: String, year: int) -> void:
+	if killer == dead or not houses.has(killer) or not houses.has(dead):
+		return
+	var p := pair(killer, dead)
+	if p.is_empty() or str(p.enmity) == "":
+		add_tie(killer, dead, "grudge", year)
+		return
+	if str(p.enmity) == "grudge":
+		add_tie(killer, dead, "feud", year)
+		p = pair(killer, dead)
+	_kill(rules, band, p, killer, dead)
 
 
 # --- The houses' own year ---------------------------------------------------------------
@@ -761,14 +814,14 @@ func asks(rng: SimRng, rules: WorldRules, world: World, band: Band, cal_year: in
 							h.head, at, e, tie_text(rules, name, _tie(name, e)).trim_prefix(e + ": "), who]})
 			break
 		if band.wife == "" and band.leader != null and band.leader.alive and standing(band, name) >= rules.standing_well_wisher \
-				and not (band.house_ties.get(name, []) as Array).has("marriage"):
+				and not (band.house_ties.get(name, []) as Array).has("marriage") and not abroad(name):
 			var bride: String = NorwayData.HOUSE_WOMEN[rng.fork("bride:" + name).randi_range(0, NorwayData.HOUSE_WOMEN.size() - 1)]
 			var enemies := enemies_of(name)
 			cands.append({"kind": "house", "ask": "marry", "house": name, "bride": bride, "options": [
 					{"id": "accept", "label": "Take her to wife"}, {"id": "decline", "label": "Decline with thanks"}],
 					"text": "%s offers %s, his daughter, to %s in marriage. His house would be yours by marriage%s." % [
 							h.head, bride, who, (", and so would its quarrels with %s" % ", ".join(enemies)) if not enemies.is_empty() else ""]})
-		if standing(band, name) >= rules.standing_well_wisher and not (band.house_ties.get(name, []) as Array).has("foster"):
+		if standing(band, name) >= rules.standing_well_wisher and not (band.house_ties.get(name, []) as Array).has("foster") and not abroad(name):
 			cands.append({"kind": "house", "ask": "foster", "house": name, "options": [
 					{"id": "accept", "label": "Foster the boy"}, {"id": "decline", "label": "Decline"}],
 					"text": "%s asks %s to foster his youngest son. To foster a man's son is to have his house in your debt." % [h.head, who]})
@@ -779,6 +832,11 @@ func asks(rng: SimRng, rules: WorldRules, world: World, band: Band, cal_year: in
 		if not houses.has(fam) or not wronged or int(f.get("offered", -1)) == cal_year:
 			continue
 		var ask := roundi(Feud.wergild(rules, f.get("rank", rules.default_victim_rank)) * rules.compensation_share)
+		if fam == band.vengeance:
+			# The burners pay for a burning only when they must, and dearly.
+			if not bool(vengeance_backing(rules, band, fam, band.fighters().size()).ready):
+				continue
+			ask = roundi(Feud.wergild(rules, f.get("rank", rules.default_victim_rank)) * rules.vengeance_wergild_mult)
 		cands.append({"kind": "house", "ask": "compensation", "house": fam, "ounces": ask, "feud": f, "options": [
 				{"id": "take", "label": "Take %d oz" % ask}, {"id": "blood", "label": "Take blood instead"}],
 				"text": "%s offer %d oz of wergild to end the feud over %s. Silver, or blood?" % [Journey._cap(fam), ask, cause]})

@@ -89,6 +89,12 @@ var verses_heard := {}
 ## and the margin made on it not yet counted as a trader's deed.
 var bought := {}
 var trade_margin := 0
+## Goods carried for other men for a share (félag): [{partner, good,
+## units, to, share, year, from}]; they take cargo room like the band's own.
+var felag: Array[Dictionary] = []
+## What the band has seen of prices (Knowledge.see_prices): place id ->
+## {day, year, goods: {Good: [buy, sell]}}.
+var prices_seen := {}
 ## The band's own shouts (CustomShout) and the learned shape it drills in
 ## winter ("" for none; Winter.default_plan reads it).
 var custom_shouts: Array[CustomShout] = []
@@ -212,6 +218,13 @@ func add_feud(against: String, cause: String, place_id := "") -> bool:
 	feuds.append({"against": against, "family": against, "cause": cause, "year": year, "settled": false,
 			"place": place_id, "level": 1})
 	return true
+
+
+func felag_units() -> int:
+	var t := 0
+	for f in felag:
+		t += int(f.units)
+	return t
 
 
 func cargo_units() -> int:

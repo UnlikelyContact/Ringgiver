@@ -166,10 +166,11 @@ func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attackin
 ## you, your scout seeing them first makes an ambush yours; failing that,
 ## `caught_chance` makes it theirs.
 func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attacking: bool, stat_center := -1,
-		at_sea := false, cornered := false) -> FightOffer:
+		at_sea := false, cornered := false, ground := "") -> FightOffer:
 	tally.battles += 1
 	var o := FightOffer.new()
 	o.kind = kind
+	o.ground = ground
 	o.enemy_size = maxi(1, enemy_size)
 	o.enemy_tier = enemy_tier
 	o.attacking = attacking
@@ -277,7 +278,44 @@ func build_fight(offer: FightOffer, choice: int) -> Dictionary:
 	var name := offer.scenario_for(choice)
 	var pick := {"doctrine": offer.doctrine}
 	var built: Dictionary
-	if offer.at_sea:
+	var template := ""
+	if offer.ground != "" and name != "ambush" and name != "ambushed":
+		# The ground the map gives (FightOffer.ground): the field is built
+		# from where the band stands.
+		var held := choice == FightOffer.Choice.WAIT_FOR_THEM
+		match offer.ground:
+			"sea":
+				# Aboard: they close, and it is fought out on the strand by the
+				# ships, the side that came on making for the other's.
+				template = "meadow"
+				pick.objective = Objective.Kind.REACH_THE_SHIPS
+				pick.attacker = 0 if offer.attacking else 1
+			"strand":
+				template = "meadow"
+				pick.objective = -1
+			"farm":
+				template = "farmstead"
+				if held:
+					pick.objective = Objective.Kind.THE_HALL
+					pick.attacker = 1
+				else:
+					pick.objective = -1
+			"hills":
+				template = "hillside"
+				if held:
+					pick.objective = Objective.Kind.HOLD_GROUND  # the high bank is yours
+					pick.attacker = 1
+				else:
+					pick.objective = -1
+			"open":
+				if held:
+					template = "river"
+					pick.objective = Objective.Kind.HOLD_GROUND
+					pick.attacker = 1
+				else:
+					pick.objective = -1
+		built = Scenario.build("equal_green", seed_in, combat_rules, true, fighters.size(), template, {"ours": ours, "theirs": enemy}, pick)
+	elif offer.at_sea:
 		# A deck is flat and narrow: the symmetric field, no ground.
 		built = Scenario.build("equal_green", seed_in, combat_rules, false, fighters.size(), "", {"ours": ours, "theirs": enemy}, pick)
 	else:
@@ -317,22 +355,23 @@ func build_duel(opponent: Warrior, seed_in: int) -> Dictionary:
 
 
 ## The burned hall: the night the saga begins, the leader and his men
-## getting out of the ring of the jarl's men (Scenario.build_escape). The
+## getting out of the ring of the jarl's men (Scenario.build_escape), led
+## by `leader_name` (the burning house's head, from Journey.begin). The
 ## band's men as side 0, the jarl's men drawn here so their ids never meet
 ## the band's. Returns the same dictionary as `build_fight`, with `escape`
 ## true and `seed_value`; nobody's AI is set on side 0 (the player fights
 ## it, or `Journey.skip_escape` gives it one). `conclude_fight` takes it
 ## with a null offer.
-func build_escape() -> Dictionary:
+func build_escape(leader_name := "") -> Dictionary:
 	tally.battles += 1
 	var fighters := band.fighters(rules)
 	var seed_in := rng.fork("escape").seed_value
 	var ours: Array[Warrior] = []
 	for m in fighters:
 		ours.append(m.to_warrior(0, rules, combat_rules.javelins_per_man))
-	var theirs := BandFactory.make_mixed_band(SimRng.new(seed_in).fork("burners"), 1, combat_rules.escape_enemy_shields,
+	var theirs := BandFactory.make_mixed_band(SimRng.new(seed_in).fork("burners"), 1, combat_rules.escape_enemy_shields + combat_rules.escape_flankers,
 			combat_rules.escape_enemy_spears, 0, CombatTypes.Tier.GREEN, combat_rules, CombatTypes.Armor.NONE, 3, ENEMY_FIRST_ID)
-	var built := Scenario.build_escape(seed_in, combat_rules, {"ours": ours, "theirs": theirs})
+	var built := Scenario.build_escape(seed_in, combat_rules, {"ours": ours, "theirs": theirs, "leader_name": leader_name})
 	built.fighters = fighters
 	built.choice = FightOffer.Choice.TAKE_THE_FIELD
 	built.odds = float(fighters.size()) / maxf(1.0, float(theirs.size()))
@@ -506,6 +545,10 @@ func _apply_report(plan: WinterPlan, report: WinterReport) -> void:
 				pot.append(clampi(rules.cap_mean + mr.randi_range(-rules.cap_spread, rules.cap_spread), 1, 10))
 			var house: String = ev.marriage_offer
 			Family.marry(rules, band, "a daughter of %s" % house, pot, mr.randi_range(1, rules.household_skill_max), house, log)
+			# A house of the web: the marriage ties the band to it (Families).
+			if world != null and world.families != null and world.families.houses.has(house):
+				Families._band_tie(band, house, "marriage")
+				world.families.shift(world_rules, band, house, world_rules.standing_marriage)
 
 
 func _thaw() -> void:
