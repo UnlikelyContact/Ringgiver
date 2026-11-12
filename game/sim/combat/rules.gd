@@ -598,7 +598,7 @@ var wing_quit_morale := 3.5
 ## under this, by temper (a rash man waits too long, a steady one goes
 ## early); it gives ground for `wing_fallback_rounds` rounds while he
 ## rallies it, then stands again, and not again for `wing_fallback_rest`.
-var wing_pressed := [5.0, 4.0, 6.0, 5.0]
+var wing_pressed := [6.0, 5.0, 7.0, 6.0]
 var wing_fallback_rounds := 2
 var wing_fallback_rest := 4
 ## "Go round their flank": the rest go when the enemy is within
@@ -619,7 +619,7 @@ var wing_guard_rash := 5
 ## line in contact, up to `wing_hold_cap`; acting on his word, out of
 ## their leader's sight, without a cap.
 var wing_heart := 1
-var wing_heart_cap := 6
+var wing_heart_cap := 8
 ## A wing pressing men who waver takes this much heart a round from each
 ## enemy at arm's length of its men.
 var wing_press_dread := -1

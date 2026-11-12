@@ -582,9 +582,10 @@ func describe() -> String:
 
 
 ## The word a sensible leader gives his named men for the fight before
-## him (the stand-in player's, and the sheet's first choice): against a
-## leader who will come on, hold the line; against one who stands, press
-## when they waver; against a cunning one, who goes round, guard the
-## bowmen ... (see battles-2.md for the measured table it rests on).
-static func sensible_word(doctrine: int, attacking: bool, _temper: int = Temper.PLAIN) -> Word:
-	return Word.PRESS
+## him (the stand-in player's, and the sheet's first choice), from the
+## measured table in battles-2.md: going at them, hold the line (the wing
+## stands hard while the wall comes on); waiting for them or meeting them
+## as they come, fall back on me (a wing that gives ground and rallies
+## outlasts one that breaks).
+static func sensible_word(_doctrine: int, attacking: bool, _temper: int = Temper.PLAIN) -> Word:
+	return Word.HOLD_LINE if attacking else Word.FALL_BACK

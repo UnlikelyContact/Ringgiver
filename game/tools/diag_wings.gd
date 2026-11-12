@@ -30,8 +30,12 @@ func _init() -> void:
 			["guard the archers", Wing.Word.GUARD_ARCHERS], ["chosen", -2]]
 	var only := args[6] if args.size() > 6 else ""
 	for row in rows:
-		if only != "" and not str(row[0]).begins_with(only):
-			continue
+		if only != "":
+			var keep := false
+			for o in only.split(","):
+				keep = keep or str(row[0]).begins_with(o)
+			if not keep:
+				continue
 		var wins := [0, 0, 0]
 		var rounds := 0
 		var lt_down := 0

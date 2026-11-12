@@ -2718,7 +2718,12 @@ func _wing_lines(ctx: Dictionary, result: BattleResult) -> void:
 			_say("Men speak of how %s led the %s: %s." % [lt.display_name, wing.hand_name(), Wing.WORD_NAMES[wing.word]])
 	if b.sector != null:
 		var s: Sector = b.sector
-		_say("At %s %s." % [s.battle_name, s.reason.trim_prefix("the day at %s " % s.battle_name)])
+		var lead := "the day at %s " % s.battle_name
+		if s.reason.begins_with(lead):
+			_say("At %s the day %s; the band %s its part of the line." % [s.battle_name, s.reason.trim_prefix(lead),
+					"held" if s.own_share(b) >= 0.0 else "could not hold"])
+		elif s.reason != "":
+			_say(Journey._cap(s.reason) + ".")
 
 
 ## The burning, before the fire: whether to let the women, the children
