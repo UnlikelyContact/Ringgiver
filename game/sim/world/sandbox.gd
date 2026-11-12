@@ -13,6 +13,7 @@ const RAID_KINDS := [WorldTypes.PlaceKind.FARMSTEAD, WorldTypes.PlaceKind.HALL, 
 static func setup(c: Campaign, wr: WorldRules, home_id: String) -> World:
 	var world := World.build_norway(wr, c.cal.year)
 	Faction.load_all(world)
+	world.families = Families.build(wr, world, c.rng.fork("families").seed_value)
 	c.world = world
 	c.world_rules = wr
 	c.fight_policy = Callable(Sandbox, "choose_fight")
@@ -443,6 +444,9 @@ static func year_end(c: Campaign, log: PackedStringArray) -> void:
 	Market.yearly_drift(rng.fork("market"), c.world_rules, c.world, log)
 	for ev in FactionAI.yearly(rng.fork("factions"), c.world_rules, c.world, c.band, log):
 		c.tally.faction_events = c.tally.get("faction_events", 0) + 1
+	# The houses live their own year; the tidings are kept on Families.
+	if c.world.families != null:
+		c.world.families.year_end(rng.fork("families"), c.world_rules, c.world, c.band)
 	for p in c.world.places.values():
 		p.alertness = maxi(0, p.alertness - c.world_rules.alertness_decay_per_year)
 		p.captives_sold = 0

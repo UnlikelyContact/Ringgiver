@@ -22,15 +22,43 @@ static func has_dispute(rules: WorldRules, world: World, place: Place) -> bool:
 	return SimRng.new(world.salt).fork("dispute:%s:%d" % [place.id, world.year]).randf() < rules.counsel_dispute_chance
 
 
+## The two houses in the dispute here: the place's own family and the
+## other side, drawn from the place and the year: a house it has a grudge
+## or a feud with when there is one, else a house it is tied to, else a
+## neighbour. [family, other]; the other is "" when the world has no houses.
+static func dispute_parties(world: World, place: Place) -> Array[String]:
+	var out: Array[String] = [place.family, ""]
+	var fs: Families = world.families
+	if fs == null or not fs.houses.has(place.family):
+		return out
+	var r := SimRng.new(world.salt).fork("dispute_with:%s:%d" % [place.id, world.year])
+	var pool: Array[String] = fs.enemies_of(place.family)
+	if pool.is_empty():
+		for t in fs.ties_of(place.family):
+			pool.append(str(t.other))
+	if pool.is_empty():
+		var me: House = fs.house(place.family)
+		var here: Place = world.place(me.seat)
+		for n in fs.names():
+			var h: House = fs.house(n)
+			var p: Place = world.place(h.seat)
+			if n != place.family and p != null and here != null and p.pos.distance_to(here.pos) <= Families.NEIGHBOUR_LEAGUES:
+				pool.append(n)
+	if not pool.is_empty():
+		out[1] = pool[r.randi_range(0, pool.size() - 1)]
+	return out
+
+
 ## Whether there is a dispute here the leader has not yet given counsel in
 ## this year.
 static func can_counsel(rules: WorldRules, world: World, band: Band, place: Place) -> bool:
 	return has_dispute(rules, world, place) and int(band.counselled.get(place.id, -1)) != world.year
 
 
-## The leader gives counsel in a dispute of the place's family: his Wits +
-## 2d6 + his `law` gift against `counsel_difficulty` (a Thing site is
-## harder and pays double). Returns {ok, roll, need, fee, text}.
+## The leader gives counsel in a dispute of the place's family with
+## another house (`dispute_parties`): his Wits + 2d6 + his `law` gift
+## against `counsel_difficulty` (a Thing site is harder and pays double).
+## Returns {ok, roll, need, fee, text, houses, winner?, loser?}.
 static func counsel(rng: SimRng, rules: WorldRules, world: World, band: Band, place: Place, log: PackedStringArray) -> Dictionary:
 	var out := {"ok": false, "roll": 0, "need": 0, "fee": 0, "text": ""}
 	if not can_counsel(rules, world, band, place) or band.leader == null:
@@ -42,19 +70,42 @@ static func counsel(rng: SimRng, rules: WorldRules, world: World, band: Band, pl
 	out.roll = roll
 	out.need = need
 	var who := band.leader.display_name
+	var sides := dispute_parties(world, place)
+	out["houses"] = sides
 	if roll >= need:
 		var fee := roundi(float(rules.counsel_fee + place.wealth / rules.counsel_wealth_per_oz) \
 				* float(band.gift("counsel_fee", 1.0)) * (2.0 if at_thing else 1.0))
 		band.silver += fee
 		band.honor = clampi(band.honor + rules.counsel_honor, 0, 100)
-		band.friends[place.family] = world.year
 		if place.faction_id != "":
 			FactionAI.shift(world, place.faction_id, FactionAI.BAND, rules.counsel_relation)
 		Way.add_deed(band, Way.Id.LAWMAN, rules.deed_counsel)
 		out.ok = true
 		out.fee = fee
-		out.text = "%s's counsel settles a dispute of %s at %s (%d against %d): they give %d oz and their friendship." % [
-				who, place.family, place.display_name, roll, need, fee]
+		if sides[1] != "" and world.families != null:
+			# Two houses ask the law-wise man to judge between them: the one he
+			# finds for is his friend for it; the other resents him a little. A
+			# grudge is ended by it, a feud brought to a settlement.
+			var fs: Families = world.families
+			var for_first := rng.randf() < 0.5
+			var winner: String = sides[0] if for_first else sides[1]
+			var loser: String = sides[1] if for_first else sides[0]
+			var was := Families.standing(band, loser)
+			fs.shift(rules, band, winner, rules.standing_counsel)
+			fs.shift(rules, band, loser, rules.standing_counsel_loser)
+			# Kin of the winner are pleased for him, but not about losing.
+			if Families.standing(band, loser) > was + rules.standing_counsel_loser:
+				Families.set_standing(band, loser, was + rules.standing_counsel_loser)
+			fs.settle_between(winner, loser)
+			out["winner"] = winner
+			out["loser"] = loser
+			out.text = "%s judges between %s and %s at %s (%d against %d) and finds for %s. They pay %d oz between them; %s will remember it, and so will %s." % [
+					who, sides[0], sides[1], place.display_name, roll, need, winner, fee, winner, loser]
+		else:
+			if world.families != null:
+				world.families.shift(rules, band, place.family, rules.standing_counsel)
+			out.text = "%s's counsel settles a dispute of %s at %s (%d against %d): they give %d oz and their friendship." % [
+					who, place.family, place.display_name, roll, need, fee]
 		band.log("%s gave counsel to %s, and it held" % [who, place.family])
 	elif need - roll >= rules.counsel_bad_miss:
 		band.honor = clampi(band.honor - rules.counsel_bad_honor, 0, 100)
@@ -95,6 +146,8 @@ static func verse(rng: SimRng, rules: WorldRules, world: World, band: Band, plac
 		band.silver += ring
 		band.fame = clampi(band.fame + rules.verse_fame * int(band.gift("verse_fame", 1)), 0, 100)
 		FactionAI.shift(world, f.id, FactionAI.BAND, rules.verse_relation)
+		if world.families != null:
+			world.families.shift(rules, band, place.family, rules.standing_verse)
 		Way.add_deed(band, Way.Id.SKALD, rules.deed_verse)
 		out.ok = true
 		out.ring = ring
@@ -177,7 +230,8 @@ static func after_champion(rules: WorldRules, world: World, band: Band, place: P
 		band.silver += fee
 		band.honor = clampi(band.honor + rules.champion_honor, 0, 100)
 		band.fame = clampi(band.fame + rules.champion_fame, 0, 100)
-		band.friends[place.family] = world.year
+		if world.families != null:
+			world.families.shift(rules, band, place.family, rules.standing_champion)
 		Way.add_deed(band, Way.Id.BERSERK, rules.deed_champion)
 		out.silver = fee
 		out.text = "%s blooded the berserk on the island. %s give %d oz, and will not forget it." % [who, Journey._cap(place.family), fee]
@@ -200,6 +254,8 @@ static func challenge(rules: WorldRules, world: World, band: Band, place: Place,
 		band.honor = clampi(band.honor - int(terms.honor_cost), 0, 100)
 		if place.faction_id != "":
 			FactionAI.shift(world, place.faction_id, FactionAI.BAND, -rules.holmgang_relation_hit)
+		if world.families != null:
+			world.families.shift(rules, band, place.family, rules.standing_holmgang_overbearing)
 		log.append("%s calls %s to the island for what they own: an overbearing thing, and men say so." % [
 				band.leader.display_name, place.family])
 		if band.honor <= rules.holmgang_outlaw_honor and band.outlawry == WorldTypes.Outlawry.NONE:
@@ -215,7 +271,7 @@ static func challenge(rules: WorldRules, world: World, band: Band, place: Place,
 ## loss costs the ransom. A man beaten or cowed for his goods without
 ## cause may take up a feud (`rng`, `holmgang_feud_chance`). Returns
 ## {silver, feud, text}.
-static func after_holmgang(rules: WorldRules, _world: World, band: Band, place: Place, terms: Dictionary,
+static func after_holmgang(rules: WorldRules, world: World, band: Band, place: Place, terms: Dictionary,
 		outcome: int, yielded: bool, log: PackedStringArray, rng: SimRng = null) -> Dictionary:
 	var out := {"silver": 0, "feud": false, "text": ""}
 	var who: String = band.leader.display_name if band.leader != null else "the leader"
@@ -227,6 +283,8 @@ static func after_holmgang(rules: WorldRules, _world: World, band: Band, place: 
 		Way.add_deed(band, Way.Id.BERSERK, rules.deed_duel_yielded if yielded else rules.deed_duel)
 		if not yielded:
 			band.fame = clampi(band.fame + rules.holmgang_win_fame, 0, 100)
+		if not terms.feud and world != null and world.families != null:
+			world.families.shift(rules, band, place.family, rules.standing_holmgang_lost_to)
 		if terms.feud:
 			var f := Feud.find(band, terms.family)
 			if not f.is_empty():

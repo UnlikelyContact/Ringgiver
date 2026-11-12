@@ -57,6 +57,32 @@ static func _answer(j: Journey, d: Dictionary, bent: int) -> String:
 			if bent == Way.Id.TRADER and d.options[0].get("enabled", true):
 				return "buy"
 			return "rob" if bent == Way.Id.VIKING and band.fighters(j.c.rules).size() >= 8 else "pass"
+		"house":
+			return _answer_house(j, d, bent)
+	return str(d.options[0].id)
+
+
+## The houses' asks, as a man of his bent would answer them: the fighting
+## ways stand with a house when they have the men, the law-wise man speaks
+## for it at the Thing, the skald and the trader carry an offer of peace; a
+## marriage or a fosterling is taken; wergild is taken, unless a fighting
+## man with a band behind him would rather have blood.
+static func _answer_house(j: Journey, d: Dictionary, bent: int) -> String:
+	var men := j.c.band.fighters(j.c.rules).size()
+	var fighting := bent == Way.Id.VIKING or bent == Way.Id.BERSERK or bent == Way.Id.KINGS_MAN
+	match str(d.ask):
+		"help":
+			if fighting and men >= 5:
+				return "stand"
+			if bent == Way.Id.LAWMAN:
+				return "speak"
+			if bent == Way.Id.SKALD or bent == Way.Id.TRADER:
+				return "carry"
+			return "refuse"
+		"marry", "foster":
+			return "accept"
+		"compensation":
+			return "blood" if fighting and men >= 6 else "take"
 	return str(d.options[0].id)
 
 
@@ -108,11 +134,14 @@ static func _act(j: Journey, bent: int) -> void:
 	if ids.has("champion") and fighter:
 		j.act("champion")
 		return
-	# A feud to plead when at a Thing; work in hand to finish.
+	# A feud to plead when at a Thing, or a house he promised to speak for;
+	# work in hand to finish.
 	for id in ids:
-		if str(id).begins_with("case:"):
+		if str(id).begins_with("case:") or str(id).begins_with("speak:"):
 			j.act(id)
 			return
+	if _houses(j, bent, ids):
+		return
 	if not j.contract.is_empty() and j.days_to(str(j.contract.to_place)) > 0:
 		if j.sail(str(j.contract.to_place)) or not j.decisions.is_empty():
 			return
@@ -202,6 +231,51 @@ static func _act(j: Journey, bent: int) -> void:
 	j.act("listen")
 
 
+## What he does among the houses: rest the hurt and take men his friends
+## lend, give a gift where it is worth it, pay wergild he can well afford,
+## go to the Thing he promised, and seek the reckoning with the house he
+## is at feud with once his friends make the odds good. True when he did
+## something (the turn is spent).
+static func _houses(j: Journey, bent: int, ids: Dictionary) -> bool:
+	var c := j.c
+	var band := c.band
+	var wr := c.world_rules
+	var fs := c.world.families
+	if fs == null:
+		return false
+	for id in ["heal", "men"]:
+		if ids.has(id):
+			j.act(id)
+			return true
+	var here := j.here()
+	if ids.has("reckoning"):
+		var t := fs.reckoning_terms(wr, band, here.family)
+		if int(t.men) <= band.fighters(c.rules).size() * wr.raid_odds_max:
+			j.act("reckoning")
+			return true
+	if ids.has("wergild") and here.family != band.vengeance \
+			and band.silver >= 2 * Feud.offer_settlement(wr, band, here.family):
+		j.act("wergild")
+		return true
+	var giver := bent == Way.Id.LAWMAN or bent == Way.Id.KINGS_MAN or bent == Way.Id.SKALD or bent == Way.Id.TRADER
+	if giver and ids.has("gift") and band.silver >= 60 and Families.standing(band, here.family) < wr.standing_friend \
+			and Families.gift_worth(wr, band, here.family, c.cal.year) >= wr.standing_gift:
+		j.act("gift")
+		return true
+	if not band.pledges.is_empty():
+		var thing := _nearest(j, func(q: Place) -> bool: return q.kind == WorldTypes.PlaceKind.THING_SITE)
+		if thing != "" and _go(j, thing):
+			return true
+	var tried: Dictionary = band.favours.get(band.vengeance, {})
+	if band.vengeance != "" and fs.house(band.vengeance) != null and int(tried.get("reckoning", -1)) != c.cal.year:
+		var t2 := fs.reckoning_terms(wr, band, band.vengeance)
+		var seat := fs.house(band.vengeance).seat
+		if int(t2.men) <= band.fighters(c.rules).size() * wr.raid_odds_max and seat != band.location \
+				and j.days_to(seat) >= 0 and j.days_to(seat) + 10 <= j.days_left() and _go(j, seat):
+			return true
+	return false
+
+
 ## Sets off for a place. True when he is on his way (or there, or stopped
 ## by something to answer): the turn is spent.
 static func _go(j: Journey, to: String) -> bool:
@@ -217,6 +291,9 @@ static func _raidable(j: Journey, p: Place) -> bool:
 	if not Journey.RAID_KINDS.has(p.kind) or p.id == c.band.home or p.wealth < c.world_rules.raid_min_wealth:
 		return false
 	if int(c.band.raided.get(p.id, -1)) == c.cal.year:
+		return false
+	# He does not raid his own friends and kin.
+	if Families.is_friend(c.world_rules, c.band, p.family):
 		return false
 	var a := Raiding.assess(c.world_rules, c.world, p, c.band)
 	return a.defenders <= c.band.fighters(c.rules).size() * c.world_rules.raid_odds_max

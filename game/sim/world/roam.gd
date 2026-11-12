@@ -12,8 +12,13 @@ extends RefCounted
 ## Another party on the map.
 class Party:
 	extends RefCounted
-	var kind := ""  # merchant | raiders | outlaws | levy
+	var kind := ""  # merchant | raiders | outlaws | levy | avengers
 	var name := ""
+	## The house the party's men belong to ("" for none), and how it stands
+	## toward the band (Families.party_mood): 1 leaves it be, -1 hunts it
+	## whatever the odds, 0 goes for it when it likes the odds.
+	var family := ""
+	var mood := 0
 	var pos := Vector2.ZERO
 	var men := 6
 	var tier: CombatTypes.Tier = CombatTypes.Tier.GREEN
@@ -204,6 +209,7 @@ func populate(rng: SimRng, rules: WorldRules, world: World, outlawed: bool) -> v
 		r.tier = Encounters.rival_tier(rules, world.region_alertness.get(region, 0))
 		r.speed = rules.raider_speed
 		r.pos = MapGrid.centre(grid.place_cell[r.home])
+		r.family = world.place(r.home).family
 		_new_route(r, rng, coast)
 		parties.append(r)
 	for i in rules.roam_outlaws:
@@ -235,6 +241,29 @@ func populate(rng: SimRng, rules: WorldRules, world: World, outlawed: bool) -> v
 			l.pos = MapGrid.centre(grid.place_cell[l.home])
 			_new_route(l, rng, coast)
 			parties.append(l)
+
+
+## Men of a house sent after the band (a feud with it): they put out from
+## the house's seat by sea when the band has a ship, else on foot, and
+## hunt it whatever the odds. Returns the party, or null when the seat is
+## not on the map or within sight of the band.
+func add_avengers(rules: WorldRules, world: World, family: String, seat: String, men: int, sails: bool) -> Party:
+	var p: Place = world.place(seat)
+	if p == null or not grid.place_cell.has(seat) or p.pos.distance_to(pos) < rules.sight_leagues:
+		return null
+	var a := Party.new()
+	a.kind = "avengers"
+	a.family = family
+	a.mood = -1
+	a.name = "men of %s" % family
+	a.home = seat
+	a.men = men
+	a.tier = rules.avenger_tier
+	a.sails = sails
+	a.speed = rules.raider_speed if sails else rules.outlaw_speed
+	a.pos = MapGrid.centre(grid.place_cell[seat])
+	parties.append(a)
+	return a
 
 
 ## A ship's next voyage: from where she lies to another of `places`.
@@ -271,15 +300,20 @@ func step_parties(dt: float, rng: SimRng, rules: WorldRules, world: World, band_
 	var places: Array[String] = []
 	for p in parties:
 		var d := p.pos.distance_to(pos)
-		var free := clock >= p.rest_until and band_place == ""
+		# A house's men leave a band they think well of alone.
+		var free := clock >= p.rest_until and band_place == "" and p.mood <= 0
+		# A house's men hunt a blood-enemy whatever the odds.
+		var odds_ok := p.mood < 0
 		p.chasing = false
 		match p.kind:
 			"raiders":
-				p.chasing = free and band_shore and d <= rules.raider_sight and p.men >= band_men
+				p.chasing = free and band_shore and d <= rules.raider_sight and (p.men >= band_men or odds_ok)
 			"levy":
 				p.chasing = free and band_shore and d <= rules.raider_sight * 1.5
 			"outlaws":
 				p.chasing = free and not band_wet and d <= rules.outlaw_sight and p.men >= band_men
+			"avengers":
+				p.chasing = free and (band_shore if p.sails else not band_wet) and d <= rules.raider_sight * 1.5
 		if p.chasing:
 			_chase(p, dt)
 		elif p.sails:

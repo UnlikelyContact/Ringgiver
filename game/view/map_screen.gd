@@ -110,6 +110,11 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	ways_btn.custom_minimum_size = Vector2(150, 36)
 	ways_btn.pressed.connect(_show_ways)
 	row.add_child(ways_btn)
+	var houses_btn := Button.new()
+	houses_btn.text = "Families"
+	houses_btn.custom_minimum_size = Vector2(110, 36)
+	houses_btn.pressed.connect(_show_families)
+	row.add_child(houses_btn)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -273,8 +278,7 @@ func _fill_place() -> void:
 	about += "."
 	if p.id == band.home:
 		about += " You wintered here."
-	if band.friends.has(p.family):
-		about += " They are your friends."
+	about += _house_line(p)
 	if not Feud.find(band, p.family).is_empty():
 		about += " There is a feud between you."
 	place_box.add_child(_text(about, 13, Palette.DIM))
@@ -397,7 +401,7 @@ func _fill_modal() -> void:
 		return
 	modal.visible = true
 	modal.add_child(box)
-	var titles := {"fight": "A fight offers", "merchant": "A sail on the sea", "spine": "Word comes", "demand": "A feud"}
+	var titles := {"fight": "A fight offers", "merchant": "A sail on the sea", "spine": "Word comes", "demand": "A feud", "house": "A house sends word"}
 	box.add_child(_text(str(titles.get(d.kind, "A choice")), 24, Palette.GOLD))
 	var body := _text(str(d.text).strip_edges(), 15, Palette.TEXT)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -535,6 +539,55 @@ func _show_ways() -> void:
 			var step: Dictionary = d.ranks[i]
 			list.add_child(_text("    %s: %s" % [step.name, step.text], 12, Palette.TEXT if i < r else Palette.DIM))
 	_close_side(box)
+
+
+## The families: every house with its head, its seat, how it stands toward
+## you and its ties and feuds, then this year's tidings of the houses.
+func _show_families() -> void:
+	var c := journey.c
+	var box := _open_side("The families")
+	var fs := c.world.families
+	if fs == null:
+		_close_side(box)
+		return
+	box.add_child(_text("How each house stands toward you, from blood-enemy to sworn friend. What you do to one house its kin and friends feel too, and its enemies the other way.", 13, Palette.DIM))
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 2)
+	scroll.add_child(list)
+	var told := fs.tidings_of()
+	if not told.is_empty():
+		list.add_child(_text("Tidings of the houses", 15, Palette.GOLD))
+		list.add_child(_text("\n".join(told), 12, Palette.TEXT))
+	for r in fs.report(c.world_rules, c.world, c.band):
+		if not r.known and int(r.standing) == 0 and str(r.feud) == "" and not r.western:
+			continue
+		list.add_child(_text("%s   %s (%+d)" % [r.name, str(r.step).capitalize(), int(r.standing)], 15,
+				Palette.GOLD if int(r.standing) >= 0 else Palette.TEXT))
+		var about := "%s holds %s; %s is his heir. A %s house, %d men, honor %d." % [r.head, r.seat_name, r.heir, r.temper, int(r.strength), int(r.honor)]
+		if not (r.your_ties as PackedStringArray).is_empty():
+			about += " Yours by %s." % " and ".join(r.your_ties)
+		if str(r.feud) != "":
+			about += " %s." % Journey._cap(str(r.feud))
+		list.add_child(_text(about, 12, Palette.TEXT))
+		if not (r.ties as PackedStringArray).is_empty():
+			list.add_child(_text("; ".join(r.ties), 12, Palette.DIM))
+	_close_side(box)
+
+
+## The ruling family of a place and how it stands toward you, for the
+## place panel.
+func _house_line(p: Place) -> String:
+	var fs := journey.c.world.families
+	if fs == null or not fs.houses.has(p.family):
+		return ""
+	var h := fs.house(p.family)
+	return " %s is head of it; they think of you as %s (%+d)." % [h.head,
+			Families.step_phrase(Families.step_of(journey.c.world_rules, journey.c.band, h.name)), Families.standing(journey.c.band, h.name)]
 
 
 # --- The map itself ------------------------------------------------------------------

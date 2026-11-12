@@ -318,7 +318,8 @@ var pass_years_interrupts := ["feud_attack", "summons", "spine", "son_of_age", "
 ## site is harder by `counsel_thing_harder` and pays double. Success: the
 ## fee (`counsel_fee` + the place's wealth over `counsel_wealth_per_oz`,
 ## times his `counsel_fee` gift), honor, the lord's goodwill and the
-## family's friendship (a supporter at the Thing, `friend_support` each).
+## family's standing (Families: `standing_counsel`, and the loser of the
+## dispute `standing_counsel_loser`).
 ## A miss by `counsel_bad_miss` or more costs honor. Once a year a place.
 ## A place has a dispute worth a stranger's counsel in this share of years
 ## (a Thing site always has cases).
@@ -332,7 +333,6 @@ var counsel_relation := 3
 var counsel_bad_miss := 4
 var counsel_bad_honor := 1
 var counsel_days := 3
-var friend_support := 1
 ## A verse before a lord: Wits + 2d6 + fame over `verse_fame_per_point` +
 ## the `verse` gift against this. Success: a ring worth `verse_ring` + the
 ## hall's wealth over `verse_wealth_per_oz` (times the `verse_gift` gift),
@@ -438,3 +438,159 @@ var passage_per_man_day := 0.5
 var guest_winter_per_man := 1
 ## Days the crew needs to mend one point of the ship's damage on a beach.
 var ship_mend_days := 4
+
+# --- Families: the houses, their ties and the band's standing (families.gd) ---
+## The band's standing with a house runs from -100 to 100 and is read in
+## steps: at or under `standing_blood_enemy` a blood-enemy, at or under
+## `standing_ill_wisher` an ill-wisher, under `standing_well_wisher` a
+## stranger, then a well-wisher, at `standing_friend` a friend and at
+## `standing_sworn` a sworn friend (kin, when the band is tied to the house
+## by blood or marriage).
+var standing_blood_enemy := -60
+var standing_ill_wisher := -20
+var standing_well_wisher := 20
+var standing_friend := 50
+var standing_sworn := 80
+## A change in standing with one house moves its tied houses by this share
+## of it, one step out along the web: friends and kin the same way, its
+## enemies the other way. A pair of houses can have several ties; the
+## shares add.
+var tie_spread := {"kin": 0.5, "marriage": 0.4, "friend": 0.4, "foster": 0.3, "debt": 0.15, "grudge": -0.2, "feud": -0.4}
+## What deeds do to the standing of the house concerned.
+var standing_counsel := 15
+## The house that loses a judgment resents the judge a little.
+var standing_counsel_loser := -5
+var standing_verse := 8
+var standing_champion := 20
+var standing_holmgang_overbearing := -20
+var standing_holmgang_lost_to := -8
+var standing_raid := -35
+var standing_strandhogg := -15
+## Trading at a house's market: a little each visit, while the standing is
+## under `standing_trade_cap` (repeat custom makes a well-wisher, no more).
+var standing_trade := 3
+var standing_trade_cap := 30
+var standing_contract := 10
+## Work that takes from a house (a debt collected, tribute gathered there).
+var standing_contract_against := -10
+var standing_case_against := -15
+var standing_case_for := 20
+## Each of a house's men killed in a fight.
+var standing_per_kill := -6
+## A house whose men were killed by a band it has no feud with takes one up
+## in this share of fights.
+var kill_feud_chance := 0.5
+## A feud between the band and a house that is settled, by silver, the
+## Thing or the island, lifts the standing by this much.
+var standing_settled := 15
+## An open feud with the band holds the house's standing at or under this.
+var standing_feud_cap := -25
+var standing_marriage := 30
+var standing_foster := 20
+var standing_refused := -5
+var standing_help_won := 25
+var standing_help_against := -25
+var standing_pledge_broken := -10
+## A gift of `gift_ounces` at a house's seat: `standing_gift`, halved for
+## every gift given that house this year already (the ring-giver's verb,
+## with diminishing returns).
+var gift_ounces := 10
+var standing_gift := 12
+## Days a deed among the families takes: a gift, asking for men, a rest.
+var gift_days := 1
+## Standing a house gives for the band at the Thing: a well-wisher brings
+## this many supporters, a friend more, a sworn friend or kin the most.
+var house_support := {"well-wisher": 1, "friend": 2, "sworn": 3}
+## The other side's tied houses bring this many each, unless the band is
+## their friend (they stay home); a debtor never stands against its
+## creditor. A house at feud with the other side stands with the band if
+## the band is no ill-wisher of it.
+var ally_support := 2
+var enemy_of_enemy_support := 2
+## Prices at a house's market: a friend lets the band off this much of the
+## middlemen's spread (all of it: the true price, as a trader deals); an
+## ill-wisher asks `foe_price` times the price and pays its inverse.
+var friend_spread_off := 0.1
+var foe_price := 1.2
+## Shelter, healing and men at a house's seat: a friend gives winter
+## lodging free; an ill-wisher shuts the door. A well-wisher or better lets
+## the hurt rest (`heal_days`, `heal_turns` of mending, once a year), and a
+## friend lends men (`men_lent` by step, once a year).
+var heal_days := 4
+var heal_turns := 2
+var men_lent := {"friend": 1, "sworn": 2}
+## Work is not offered at the seat of an ill-wisher.
+## A house's war-party on the map leaves a well-wisher alone and hunts a
+## blood-enemy whatever the odds. A house at feud with the band sends
+## `avenger_men` after it in `avenger_chance` of summers, at most
+## `avengers_max` parties.
+var avenger_men := 6
+var avengers_max := 1
+var avenger_chance := 0.5
+var avenger_tier: CombatTypes.Tier = CombatTypes.Tier.BLOODED
+## The reckoning: at the seat of the house the band is at feud with, every
+## friend of the band among that house's enemies sends this many men, and
+## the house brings its strength less theirs.
+var friend_men_sent := 3
+var reckoning_fame := 5
+## What the friends who sent men think of the band after: won, the better;
+## lost, the worse.
+var standing_reckoning_won := 10
+var standing_reckoning_lost := -5
+## The world without the band: each year an open feud between houses climbs
+## a step in `feud_climb_chance` (plus the tempers of both houses) or
+## cools; a grudge breaks into a killing in `grudge_to_feud`; a new grudge
+## comes up between neighbours in `new_grudge_chance`; houses marry in
+## `house_marriage_chance`; a head dies in `head_death_chance` (more past
+## `head_old_age`). At most `tidings_max` tidings a year.
+var feud_climb_chance := 0.35
+var temper_climb := {"proud": 0.15, "grasping": 0.1, "peaceable": -0.15, "steadfast": -0.05}
+var feud_cool_chance := 0.15
+var grudge_to_feud := 0.25
+var grudge_fade_chance := 0.1
+var new_grudge_chance := 0.5
+var house_marriage_chance := 0.4
+var head_death_chance := 0.04
+var head_old_age := 60
+var head_old_death_chance := 0.12
+## At most this many heads die in a year (the rest live on to the next).
+var deaths_max := 2
+var tidings_max := 6
+## Feud steps between houses, in order. A settlement made at the Thing
+## holds in `settlement_hold_chance` of years (plus tempers, the other
+## way); one that breaks goes back to killing, and a feud that climbs past
+## a second break ends in a burning.
+var house_feud_steps: Array[String] = ["an insult", "a killing", "a counter-killing", "a case at the Thing", "a settlement", "a burning"]
+var settlement_hold_chance := 0.6
+var burning_strength_loss := 0.5
+var burning_honor := 10
+var feud_honor_loss := 3
+## Asked by the houses: at most `asks_per_summer` in a spring, each in
+## `ask_chance`, only from houses whose seat the band knows and whose
+## standing is no worse than stranger.
+var asks_per_summer := 2
+var ask_chance := 0.6
+## Carrying an offer of settlement between two houses: the leader's Wits +
+## 2d6 against this.
+var peace_difficulty := 11
+var peace_honor := 2
+## Men a house sends against its enemy when the band stands with the other.
+var house_fight_men := 6
+var house_fight_tier: CombatTypes.Tier = CombatTypes.Tier.BLOODED
+var house_fight_stat := 3
+## Wergild offered to the band for its dead: the house pays
+## `compensation_share` of the dead man's wergild; taking blood instead is fought, and a win ends
+## the feud and is spoken of.
+var compensation_share := 0.75
+var compensation_fame := 3
+var blood_fame := 5
+## The origins' standing at the start (Origins key -> {place id: standing}):
+## the burned hall's kin in Sogn and the burners at Hardanger; the younger
+## son's own family; the freedman's old master.
+var origin_standing := {
+	"burned_hall": {"sogn_farms": 60, "hardanger": -80},
+	"younger_son": {"hardanger": 60},
+	"freedman": {"fitjar": 10},
+}
+## Origins' ties to a house by place id: kin by blood.
+var origin_kin := {"burned_hall": ["sogn_farms"], "younger_son": ["hardanger"]}

@@ -14,6 +14,8 @@ var year := 866
 ## A number of this world's own, so that what is drawn from a place and a
 ## year (a dispute at a farm) differs from one saga to the next.
 var salt := 0
+## The houses, their ties and the band's standing with them (Families).
+var families: Families = null
 
 
 static func build_norway(rules: WorldRules, p_year := 866) -> World:
@@ -43,6 +45,7 @@ static func build_norway(rules: WorldRules, p_year := 866) -> World:
 		w.add_lane(lane[0], lane[1], lane[2], lane[3])
 	for r in WorldTypes.Region.values():
 		w.region_alertness[r] = 0
+	w.families = Families.build(rules, w, 0)
 	return w
 
 

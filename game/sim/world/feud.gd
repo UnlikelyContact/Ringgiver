@@ -5,6 +5,14 @@ extends RefCounted
 ## (1-3), `settled`, plus `refusals` and `rank` (the dead man's) kept here.
 ## Ambushes are returned as battle requests for the sandbox loop.
 ## See world-architecture.md, Module M.
+##
+## The families are houses now (Families, House): a feud here is the band's
+## own with a house, and the band's standing with that house follows it
+## (Families.sync holds a house at feud with the band at
+## `standing_feud_cap` or under, and lifts it by `standing_settled` once the
+## feud is settled). Feuds between two houses, with their ledger of
+## killings and their steps from an insult to a burning, live in
+## Families.pairs.
 
 
 static func start(rules: WorldRules, band: Band, family: String, cause: String, place_id: String,
@@ -40,7 +48,9 @@ static func summer_events(rng: SimRng, rules: WorldRules, world: World, band: Ba
 				"kind": "feud_ambush", "attackers": rules.feud_ambush_men + hired, "tier": rules.feud_tier,
 				"text": text, "family": family, "hired_blades": hired}})
 			log.append(text)
-		if rng.randf() < rules.demand_chance:
+		# The house that wronged him (the burned hall) owes, it does not
+		# ask: no demand for silver comes from the men he has vengeance on.
+		if family != band.vengeance and rng.randf() < rules.demand_chance:
 			var ask := offer_settlement(rules, band, family)
 			var text := "%s demand %d oz of wergild to end the feud." % [family, ask]
 			out.append({"kind": "demand", "family": family, "ounces": ask, "text": text})
