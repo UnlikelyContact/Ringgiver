@@ -153,9 +153,10 @@ static func winter(j: Journey, bent: int) -> void:
 						j.winter_choose("take:%d" % i)
 					else:
 						count += 1
-	# More men than benches and thwarts: the least loyal go, never his
-	# second, his war-leader or a son of the house (Campaign.room).
-	var over := men.size() - c.room()
+	# More men than benches and thwarts, or than a man of his bent wants
+	# about him (the quiet years' recruits fill every bench): the least
+	# loyal go, never his second, his war-leader or a son of the house.
+	var over := maxi(men.size() - c.room(), men.size() + 1 - _band_wanted(bent))
 	if over > 0:
 		var sons := {}
 		for ch in band.sons:
