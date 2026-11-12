@@ -43,6 +43,8 @@ func test_years_pass_deterministically() -> void:
 	var b := _at_spring(5)
 	_no_spine(a)
 	_no_spine(b)
+	_no_houses(a)
+	_no_houses(b)
 	a.c.band.silver = 400
 	b.c.band.silver = 400
 	var ta := _let(a, 3)
@@ -63,6 +65,7 @@ func test_years_pass_deterministically() -> void:
 
 func test_years_stop_for_the_spine() -> void:
 	var j := _at_spring(5)
+	_no_houses(j)
 	var told := _let(j, 10)
 	# 867 is quiet; Harald takes the Trondelag in 868 and asks who stands where.
 	assert_eq(str(told.stopped), "spine")
@@ -144,6 +147,7 @@ func test_years_stop_for_each_interrupt() -> void:
 			fs.add_tie(friend, n, "feud", 866)
 			break
 	j.c.world_rules.ask_chance = 1.0
+	j.c.world_rules.asks_per_summer = 10  # the kin's call is not crowded out by fosterlings
 	var t5 := _let(j, 5)
 	assert_eq(str(t5.stopped), "house")
 

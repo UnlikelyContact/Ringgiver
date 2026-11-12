@@ -80,14 +80,15 @@ static func actions(j: Journey) -> Array[Dictionary]:
 		return out
 	var wr := j.c.world_rules
 	var band := j.c.band
-	var full := band.living_men().size() >= j.c.rules.recruit_cap
+	var full := band.living_men().size() >= j.c.room()
 	var list := _offers(j)
 	for i in list.size():
 		var o: Dictionary = list[i]
 		out.append({"id": "hire:%d" % i, "label": "Take %s into your band (%d oz)" % [(o.man as Man).display_name, int(o.price)],
 				"enabled": band.silver >= int(o.price) and not full,
-				"hint": "%s. %s; he wants %d oz each month of the summer.%s" % [Journey._cap(str(o.text)), CombatTypes.TIER_NAMES[(o.man as Man).tier].capitalize(),
-						int(o.wage), (" Men will think the less of you for taking him on (honor -%d)." % int(o.honor)) if int(o.honor) > 0 else ""]})
+				"hint": "%s. %s; he wants %d oz each month of the summer.%s%s" % [Journey._cap(str(o.text)), CombatTypes.TIER_NAMES[(o.man as Man).tier].capitalize(),
+						int(o.wage), (" Men will think the less of you for taking him on (honor -%d)." % int(o.honor)) if int(o.honor) > 0 else "",
+						(" You have no bench or oar for another man: %d is all your hall and hull will hold." % j.c.room()) if full else ""]})
 	# Captives: ransomed, freed, set to work (Thralls.actions, law-land).
 	return out
 
@@ -105,7 +106,7 @@ static func act(j: Journey, id: String) -> bool:
 		if i < 0 or i >= list.size():
 			return true
 		var o: Dictionary = list[i]
-		if band.silver < int(o.price) or band.living_men().size() >= j.c.rules.recruit_cap:
+		if band.silver < int(o.price) or band.living_men().size() >= j.c.room():
 			return true
 		var m: Man = o.man
 		band.silver -= int(o.price)

@@ -73,7 +73,7 @@ func test_sold_abroad_costs_standing_and_a_named_woman_honor() -> void:
 	var dublin := band.silver - silver
 	assert_true(dublin > 3 * wr.captive_price, "Dublin pays most: %d oz" % dublin)
 	assert_true(Families.standing(band, RAIDED) <= st + 3 * wr.sell_standing + wr.sell_named_standing, "their people sold abroad")
-	assert_eq(band.honor, honor - wr.sell_named_honor, "a named freeborn woman sold")
+	assert_eq(band.honor, honor - wr.sell_named_honor - ceili(3.0 / wr.sell_honor_heads), "a named freeborn woman sold, and a slaver's name")
 
 
 func test_kept_as_thralls_and_freed() -> void:

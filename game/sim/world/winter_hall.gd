@@ -71,6 +71,10 @@ var given := {}  # man id -> what he was given, in words
 # summer), or the candidate an old leader steps down for.
 var years := 0
 var step_down := ""
+## What the hall says to offers while the years pass (Years.OFFERS): ""
+## stops the years for each, "accept" takes fair wergild and friends'
+## daughters, "refuse" lets the offers lie.
+var years_offers := ""
 var _facts := {}
 # A fight at the hall played on the battle screen (Journey.fight): the
 # winter's living-through stops at the talk card that brought it and goes
@@ -97,7 +101,7 @@ static func open(j: Journey, p: Place) -> WinterHall:
 	h._lodge(j, p)
 	var r := c.rng.fork("hall:%d" % h.year)
 	# Who comes to the hall: the men fame draws, as the thaw drew them.
-	var room := c.rules.recruit_cap - band.living_men().size()
+	var room := c.room() - band.living_men().size()
 	for i in mini(Leader.recruits_drawn(c.rules, band), maxi(0, room)):
 		var m := Recruits.random(r.fork("cand:%d" % i), c.rules, band.next_id())
 		var ask := int(c.rules.recruit_ask.get(m.origin, 0))
@@ -192,15 +196,23 @@ static func _about(rules: CampaignRules, m: Man, ask: int) -> String:
 ## (FightOffer at the ground "hall"), fought on the battle screen
 ## (`_hall_fight`). A watchful scout may warn him in time to wait at the
 ## gate (`warned`).
+## What the benches expect at the least, given `n` men and the chest:
+## `miser_ounces` a man, but never more than `miser_chest_share` of it.
+static func miser_line(rules: CampaignRules, n: int, chest: int) -> int:
+	return mini(rules.miser_ounces * n, maxi(1, ceili(float(chest) * rules.miser_chest_share)))
+
+
 static func _hall_fight_card(c: Campaign, r: SimRng, card: Dictionary) -> void:
 	var scout := Scouting.pick_scout(c.band.fighters(c.rules))
 	var warned := scout != null and Scouting.spots_first(r, c.rules, scout.stat(CombatTypes.Stat.WITS), scout.tier)
 	card.warned = warned
 	var burning := str(card.kind) == "hall_burning"
 	var opts: Array = [
-		{"id": "meet", "label": "Out, and meet them in the yard", "hint": "Your line up the yard, between them and the walls."},
+		{"id": "meet", "label": "Out, and meet them in the yard", "hint": "Your line up the yard, between them and the walls." + (
+				" Burners seldom close with a band that comes out to meet them." if burning else "")},
 		{"id": "bar", "label": "Bar the door and hold the walls" if burning else "Bar the door and hold the yard",
-				"hint": "Your line before the door, the hall at your backs: nowhere to give ground."}]
+				"hint": "Your line before the door, the hall at your backs: nowhere to give ground." + (
+				" The gable ends are open to their torches unless you send men to them: against as many as you it is a fair hope, against more it is a death." if burning else "")}]
 	if warned:
 		opts.append({"id": "wait", "label": "Lie in wait at the gate", "hint": "Your scout saw them coming: catch them strung out."})
 	card.options = opts
@@ -549,7 +561,7 @@ func choose(j: Journey, id: String) -> void:
 			"spring":
 				if arg == "" or _spring_places(j).any(func(d: Dictionary) -> bool: return str(d.id) == arg):
 					spring_to = arg if arg != "" else place_id
-			"years", "stepdown":
+			"years", "stepdown", "offers":
 				Years.choose(j, self, key, arg)
 		return
 	match key:
@@ -685,7 +697,7 @@ func resolve(j: Journey) -> void:
 		away.append(m)
 		lines.append("%s went home to his kin for the winter." % m.display_name)
 	for cd in candidates:
-		if not cd.taken or band.living_men().size() >= rules.recruit_cap:
+		if not cd.taken or band.living_men().size() >= c.room():
 			continue
 		var m: Man = cd.man
 		var ask := mini(int(cd.ask), band.silver)
@@ -828,7 +840,7 @@ func _after_talk(j: Journey, ev: Dictionary, choice := "meet", warned := false) 
 	band.honor = clampi(band.honor + int(ev.get("honor", 0)), 0, 100)
 	if ev.get("lawful", false):
 		Way.add_deed(band, Way.Id.LAWMAN, c.world_rules.deed_settle)
-	if ev.get("recruit_request", false) and band.living_men().size() < c.rules.recruit_cap:
+	if ev.get("recruit_request", false) and band.living_men().size() < c.room():
 		var rr := c.rng.fork("outlaw:%d" % year)
 		var m := Recruits.make(rr, c.rules, CampaignTypes.Origin.OUTLAW, 24,
 				Recruits.NAMES[rr.fork("name").randi_range(0, Recruits.NAMES.size() - 1)], band.next_id())
@@ -876,7 +888,7 @@ func _give(j: Journey, lines: PackedStringArray) -> void:
 		if great_deed(rules, m):
 			Loyalty.adjust(m, rules.loyalty_deed_honoured)
 	for m in men:
-		if great_deed(rules, m) and not given.has(m.id):
+		if great_deed(rules, m) and not given.has(m.id) and chest >= rules.miser_chest:
 			Loyalty.adjust(m, -rules.loyalty_passed_over)
 			lines.append("%s did great things this summer and was given nothing for it; he takes it ill." % m.display_name)
 	var n := maxi(1, men.size())
@@ -886,7 +898,7 @@ func _give(j: Journey, lines: PackedStringArray) -> void:
 		lines.append("At Yule %s gave %d oz in rings and arms down the benches, and is called open-handed for it." % [who, total])
 		band.log("%s gave rings down the benches at Yule" % who)
 		_facts["hand"] = "open"
-	elif not men.is_empty() and total < rules.miser_ounces * n and chest >= rules.miser_chest:
+	elif not men.is_empty() and total < miser_line(rules, n, chest) and chest >= rules.miser_chest:
 		for m in men:
 			Loyalty.adjust(m, -rules.loyalty_miser)
 		band.honor = clampi(band.honor - rules.honor_miser, 0, 100)
@@ -1189,8 +1201,8 @@ func _state_gifts(j: Journey, s: Dictionary) -> void:
 	var total := gifts_total(j)
 	if total >= rules.open_hand_ounces * n:
 		s.notes.append("%d oz given: the hall will call you open-handed (fame %+d)." % [total, rules.fame_open_hand])
-	elif total < rules.miser_ounces * n and c.band.silver >= rules.miser_chest:
-		s.notes.append("Next to nothing given from a full chest: every man cools by %d, and men will say so." % rules.loyalty_miser)
+	elif total < miser_line(rules, n, c.band.silver) and c.band.silver >= rules.miser_chest:
+		s.notes.append("Next to nothing given from a full chest: every man cools by %d, and men will say so. %d oz would do." % [rules.loyalty_miser, miser_line(rules, n, c.band.silver)])
 	else:
 		s.notes.append("%d oz given; %d a man would have them call you open-handed." % [total, rules.open_hand_ounces])
 

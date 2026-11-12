@@ -22,6 +22,10 @@ var ship_price := {
 	WorldTypes.ShipKind.SNEKKJA: 170, WorldTypes.ShipKind.LONGSHIP: 320,
 }
 var ship_trade_in := 0.5
+## A longship (forty at her oars, the band's ceiling: Campaign.room) is
+## built only for a man of this rank or better: a great band is a lord's,
+## not a pedlar's (docs/design/notes/balance.md).
+var longship_rank := WorldTypes.Rank.HERSIR
 ## Leagues a day under sail and oar; a band on foot makes `foot_speed`
 ## over easy ground, less in the hills (MapGrid.COST).
 var ship_speed := {
@@ -116,7 +120,7 @@ var source_supply_spread := 3
 var no_ship_cargo := 2
 var farm_food_price := 1
 var captive_price := 15
-var captive_glut := 0.1
+var captive_glut := 0.15
 var slave_markets := ["hedeby", "birka", "dublin"]
 var defenders_base := {
 	WorldTypes.PlaceKind.FARMSTEAD: 3, WorldTypes.PlaceKind.HALL: 8, WorldTypes.PlaceKind.TOWN: 12,
@@ -455,6 +459,13 @@ var standing_blood_enemy := -60
 var standing_ill_wisher := -20
 var standing_well_wisher := 20
 var standing_friend := 50
+## Memory fades at the extremes (docs/design/notes/balance.md): each year
+## a house's regard above `standing_fade_from` (or below its negative)
+## moves `standing_fade` of the way back toward it, so a friend stays a
+## friend and a foe a foe but nobody is pinned at the end of the scale
+## and a deed there still counts.
+var standing_fade_from := 60
+var standing_fade := 0.2
 var standing_sworn := 80
 ## A change in standing with one house moves its tied houses by this share
 ## of it, one step out along the web: friends and kin the same way, its
@@ -604,6 +615,18 @@ var origin_kin := {"burned_hall": ["sogn_farms"], "younger_son": ["hardanger"]}
 ## A lord's hall takes the band in as his men for the winter, lodging and
 ## board, when his realm thinks this well of it (FactionAI.relation).
 var lords_hall_relation := 40
+## The king's man's road to his vengeance (docs/design/notes/balance.md):
+## a hersir or better whom a king thinks `king_justice_relation` of may ask
+## him for justice against the house he has his vengeance on, at one of
+## the king's halls once a summer. The king summons them and makes them
+## pay `king_justice_ounces` (the king keeps `king_justice_share`); the
+## feud is ended, and the favour is spent (`king_justice_cost` regard).
+var king_justice_relation := 50
+var king_justice_rank := WorldTypes.Rank.HERSIR
+var king_justice_ounces := 60
+var king_justice_share := 0.5
+var king_justice_cost := 15
+var king_justice_days := 10
 ## At the thaw the band may go this many days by land to begin its summer
 ## somewhere else; its ship, if it has one with it, stays where it lay.
 var spring_days := 6
@@ -995,6 +1018,24 @@ var sell_named_standing := -20
 var sell_named_honor := 3
 ## Dublin pays more for captives than any other market.
 var captive_price_dublin := 18
+## Slaving pays, but it is not the best living (docs/design/notes/
+## balance.md). A market's want of people is a stock like any good's: each
+## head sold lowers the next one's price by `captive_glut` (Market) and
+## the glut mends a head every `captive_mend_days`, so a market buys a
+## few a season, not every captive of the summer. Captives held are a
+## burden: every `captive_load` of them take a load of the band's room,
+## each slips away on a day with `captive_flight_day` (twice that when
+## there are more than `captives_per_guard` of them to a man), and more
+## captives than men slow the march by `captive_slow` each over, to at
+## least `captive_slow_floor` of the pace. Every `sell_honor_heads` heads
+## sold, honor -1: men know where a slaver's silver comes from.
+var captive_mend_days := 15
+var captive_load := 2
+var captive_flight_day := 0.006
+var captives_per_guard := 2
+var captive_slow := 0.03
+var captive_slow_floor := 0.7
+var sell_honor_heads := 4
 ## Thralls eat this much of the store a winter, and each is a hand.
 var thrall_food := 2
 ## Unrest among the thralls, 0..10: rises with their number past the

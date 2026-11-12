@@ -489,8 +489,11 @@ var deck_men_per_column := 2.0
 var deck_min_length := 9
 var deck_max_length := 16
 ## Each of the two gangways (at the bow and amidships) is this many hexes
-## wide: the front a boarding party has.
-var deck_gangway := 3
+## wide: the front a boarding party has. Two (docs/design/notes/balance.md):
+## boarding a defended deck with half as many men again is about even (21
+## of 40, AI against AI; 31 at three wide), at even numbers it is a forlorn
+## hope (2 of 40; 8 at three).
+var deck_gangway := 2
 ## A man overboard drowns this often; a man in mail far more often, one in
 ## leather a little more (CombatTypes.Armor). Otherwise he swims and is
 ## hauled out.

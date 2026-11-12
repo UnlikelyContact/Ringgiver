@@ -450,7 +450,7 @@ static func answer(j: Journey, d: Dictionary, id: String) -> bool:
 						band.cargo[g] = int(band.cargo.get(g, 0)) + n
 				var lines := "%s takes what the fight left" % who
 				var room := band.ship == null or not roam.afloat() or band.fighters().size() < band.ship.crew_capacity(wr)
-				if bool(lv.get("survivor", false)) and band.living_men().size() < j.c.rules.recruit_cap and room:
+				if bool(lv.get("survivor", false)) and band.living_men().size() < j.c.room() and room:
 					var m := Recruits.random(j._fork("survivor"), j.c.rules, band.next_id())
 					band.add_man(m)
 					j.c._arm_new_men()
