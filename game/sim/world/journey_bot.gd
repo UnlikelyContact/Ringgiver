@@ -13,10 +13,6 @@ extends RefCounted
 ## arc completed); off, he always goes on.
 static var let_years := 0
 static var ends := false
-## The raider keeps his captives bound for the slave markets; off, he
-## ransoms them to their kin like anyone else (for measuring one living
-## against the other, docs/design/notes/balance.md).
-static var slaver := true
 
 
 ## Plays until the year turns (or the saga ends). Returns the steps taken.
@@ -202,6 +198,14 @@ static func _band_wanted(bent: int) -> int:
 		Way.Id.LAWMAN:
 			return 16
 	return 14
+
+
+## Whether the raider keeps his captives bound for the slave markets; a
+## tool may set `life["bot_ransom"]` on a saga to have him ransom them to
+## their kin like anyone else (to measure one living against the other,
+## docs/design/notes/balance.md).
+static func slaver(j: Journey) -> bool:
+	return not bool(j.life.get("bot_ransom", false))
 
 
 ## Points go down his own path first, then wherever they will.
@@ -854,7 +858,7 @@ static func _hire(j: Journey, bent: int, ids: Dictionary) -> bool:
 ## else lets them be ransomed where he can, the law-wise man and the
 ## skald set them free.
 static func _captives(j: Journey, bent: int, ids: Dictionary) -> bool:
-	if j.c.band.captives <= 0 or (bent == Way.Id.VIKING and slaver):
+	if j.c.band.captives <= 0 or (bent == Way.Id.VIKING and slaver(j)):
 		return false
 	if (bent == Way.Id.LAWMAN or bent == Way.Id.SKALD) and ids.has("free"):
 		j.act("free")

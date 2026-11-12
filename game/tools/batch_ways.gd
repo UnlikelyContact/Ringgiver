@@ -27,7 +27,7 @@ func _init() -> void:
 	var verbose := args.size() > 5 and args[5] == "log"
 	# "ransom" as the sixth word: the raider ransoms his captives instead of
 	# selling them (JourneyBot.slaver).
-	JourneyBot.slaver = not (args.size() > 5 and args[5] == "ransom")
+	var ransom := args.size() > 5 and args[5] == "ransom"
 	var origin := args[4] if args.size() > 4 else "younger_son"
 	print("== %d sagas x %d years a bent, from the %s, seed %d" % [n, years, origin, seed_in])
 	for way in Way.Id.values():
@@ -68,6 +68,8 @@ func _init() -> void:
 			y_fights.append(0)
 		for i in n:
 			var j := Journey.begin(seed_in + i, origin, "Egil")
+			if ransom:
+				j.life["bot_ransom"] = true
 			var start: int = j.c.band.silver
 			var start_worth := worth(j)
 			var y := 0

@@ -571,7 +571,7 @@ static func bot(j: Journey, d: Dictionary, bent: int) -> String:
 			ids[str(o.id)] = true
 	match str(d.step):
 		"captives":
-			if bent == Way.Id.VIKING and JourneyBot.slaver:
+			if bent == Way.Id.VIKING and JourneyBot.slaver(j):
 				return "bound"
 			if ids.has("thralls") and j.c.band.thralls.size() < 6:
 				return "thralls"

@@ -26,7 +26,7 @@ every loss). Those were fixed in the bot first; then the rules.
   and the fights' outcome ladder (routed them / drove them off / won the
   field / both drew off / withdrew / driven off / routed / lost the
   field, a saga). A sixth word `ransom` makes the raider ransom his
-  captives instead of selling them (`JourneyBot.slaver`).
+  captives instead of selling them (`JourneyBot.slaver`, `life["bot_ransom"]`).
 - `tools/batch_generations.gd -- 4 40 1 3 <bent> burned_hall` for the
   Viking, the trader and the law-wise man: now with a sample every five
   years (men, silver, luck, land, Iceland, outlawry) and what the hall's
@@ -639,7 +639,7 @@ repetitive or exploitable, most of it before the fixes above:
 - `WorldRules.standing_fade_from` 60, `standing_fade` 0.2.
 - `CombatRules.deck_gangway` 2 (was 3).
 - `Way` (berserk) `escort_pay` 1.2 / 1.35 / 1.5; a guard he leads is a berserk's deed (`TradeRoad.check_escort`).
-- `JourneyBot.slaver`; `Journey.trace_acts`, `Journey.acts`.
+- `JourneyBot.slaver(j)` (a saga's `life["bot_ransom"]`); `Journey.trace_acts`, `Journey.acts`.
 
 ## Tests
 
