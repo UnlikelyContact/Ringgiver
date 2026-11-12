@@ -166,6 +166,8 @@ func _build() -> void:
 
 func _press(id: String) -> void:
 	journey.winter_choose(id)
+	if map != null and map.get("host") != null and map.host.has_method("autosave"):
+		map.host.autosave()  # each step of the winter is a beat (view/game.gd)
 	if not journey.in_winter():
 		queue_free()
 		if map != null and map.has_method("refresh"):

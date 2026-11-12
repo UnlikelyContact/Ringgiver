@@ -28,6 +28,22 @@ var _rebuild := false
 ## The last saga that came to an end (Chronicle.saga's values), for the
 ## title's "Read the last saga"; kept in the config between visits.
 var last_saga := {}
+## Saving (sim/save/, docs/design/notes/save.md): the saga goes to the
+## autosave at its natural beats (`autosave`: arriving, a decision, a deed,
+## a winter step, a fight begun or over), every TRAVEL_SAVE_MS at most while
+## the band is under way (`autosave_travel`), and when the window loses the
+## player (closed, hidden, put behind another). Never while the battle
+## screen is up: a saga saved in a fight resumes at the fight's start, the
+## save made as it began. Tools turn it off, or point SaveStore.dir away.
+var autosave_on := true
+## The least time between two autosaves; a beat inside it is saved when it
+## has passed.
+const SAVE_GAP_MS := 1500
+const TRAVEL_SAVE_MS := 20000
+var _save_due := false
+var _last_save_ms := -1000000
+## What went wrong with the last save, or "".
+var last_save_error := ""
 
 
 func _ready() -> void:
@@ -43,7 +59,144 @@ func _ready() -> void:
 	UiTheme.motion = not fixed_seed  # a repeatable run (the tools) takes its stills at once
 	layer = CanvasLayer.new()
 	add_child(layer)
+	if not use_config:
+		autosave_on = false
 	show_title()
+
+
+func _process(_delta: float) -> void:
+	if _save_due and Time.get_ticks_msec() - _last_save_ms >= SAVE_GAP_MS:
+		save_now()
+
+
+## The window is losing the player: what he has is saved at once. On the
+## web a closed tab may not wait for it, which is why the beats save too.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, \
+				NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+			if journey != null and battle_node == null and autosave_on:
+				save_now()
+
+
+# --- Saving and loading (sim/save/save_store.gd, view/saves_modal.gd) --------------
+
+## A natural beat: the saga is saved as soon as the gap allows.
+func autosave() -> void:
+	if journey != null and autosave_on:
+		_save_due = true
+
+
+## The band under way: saved now and then, not at every day.
+func autosave_travel() -> void:
+	if Time.get_ticks_msec() - _last_save_ms >= TRAVEL_SAVE_MS:
+		autosave()
+
+
+## Writes the saga to `slot` now. The autosave is not written while the
+## battle screen is up. Returns "" or what went wrong.
+func save_now(slot := SaveStore.AUTO) -> String:
+	if slot == SaveStore.AUTO:
+		_save_due = false
+		if not autosave_on or journey == null or battle_node != null:
+			return ""
+	if journey == null:
+		return "there is no saga to save"
+	var err := SaveStore.write(slot, journey, view_state())
+	_last_save_ms = Time.get_ticks_msec()
+	last_save_error = err
+	if err != "":
+		push_warning("Saving the saga: " + err)
+	return err
+
+
+## What the screens keep beside the saga: the hints read, and where the
+## map looked and what was picked on it. The settings stay in the config.
+func view_state() -> Dictionary:
+	var v := {}
+	if hints != null:
+		v["hints"] = hints.seen.keys()
+	if map != null and is_instance_valid(map):
+		v["map"] = map.view_state()
+	return v
+
+
+## Loads the saga in `slot` and goes on with it where it was: the map as it
+## was looked at, the hints already read; a winter in its step, a fight
+## at its start. Returns "" or what is wrong with the save.
+func load_saga(slot: String) -> String:
+	var r := SaveStore.read(slot)
+	if r.has("error"):
+		return str(r.error)
+	_drop_battle()
+	journey = r.journey
+	hints = Hints.new(journey)
+	var v: Dictionary = r.view
+	for id in v.get("hints", []):
+		hints.seen[str(id)] = true
+	_last_save_ms = Time.get_ticks_msec()
+	if slot != SaveStore.AUTO and autosave_on:
+		save_now()  # the saga taken up is the one the autosave keeps now
+	show_map()
+	var mv: Variant = v.get("map", {})
+	if map != null and mv is Dictionary and not (mv as Dictionary).is_empty():
+		map.restore_view(mv)
+	return ""
+
+
+## The autosave a "Continue" would take up: the last, or the one before it
+## when the last cannot be read; "" when there is no saga to go on with.
+func continue_slot() -> String:
+	for slot in [SaveStore.AUTO, SaveStore.BACKUP]:
+		var h := SaveStore.head(slot)
+		if h.is_empty():
+			if slot == SaveStore.AUTO:
+				return ""  # no autosave: the one before belongs to an older saga
+			continue
+		if h.has("error"):
+			continue
+		return "" if bool((h.get("summary", {}) as Dictionary).get("over", false)) else slot
+	return ""
+
+
+func continue_saga(slot: String) -> void:
+	var err := load_saga(slot)
+	if err != "":
+		_note_on_title("The saga could not be taken up: %s." % err)
+
+
+func _note_on_title(text: String) -> void:
+	if screen == null:
+		return
+	var m := UiModal.new()
+	m.max_width = 560.0
+	screen.add_child(m)
+	m.open("The saga")
+	m.body.add_child(UiTheme.label(text))
+	m.add_button("Back", func() -> void: m.queue_free(), "PrimaryButton", 160.0)
+
+
+## A new beginning would take the autosave's place: asked first, while a
+## saga is there to be lost.
+func _ask_before_new(then: Callable) -> void:
+	var slot := continue_slot()
+	if slot == "" or screen == null:
+		then.call()
+		return
+	var h := SaveStore.head(slot)
+	var m := UiModal.new()
+	m.name = "BeginAnew"
+	m.max_width = 640.0
+	screen.add_child(m)
+	m.open("Begin a new saga?")
+	m.body.add_child(UiTheme.label("Your saga is kept in the autosave: %s. A new saga is saved over it; the one before is kept a little while, then it is gone. To keep it, put it in a slot under Sagas first." % SaveStore.summary_line(h.get("summary", {})), "SagaLabel"))
+	m.add_button("Begin anew", func() -> void:
+		m.queue_free()
+		then.call(), "PrimaryButton", 200.0)
+	m.add_button("Sagas", func() -> void:
+		m.queue_free()
+		SavesModal.open(screen, self), "", 150.0)
+	m.add_button("Back", func() -> void: m.queue_free(), "", 120.0)
 
 
 func _swap(c: Control) -> void:
@@ -106,7 +259,27 @@ func show_title() -> void:
 	box.add_child(band)
 	box.add_child(_centred("A saga of Norway in the days of Harald Fairhair", "SmallLabel"))
 	box.add_child(UiTheme.gap(UiTheme.S3))
-	var begin := UiTheme.primary("Begin a saga", show_name, 340.0)
+	# A saga to go on with comes first, and says where it stands.
+	var cont := continue_slot() if autosave_on else ""
+	var bad := SaveStore.head(SaveStore.AUTO) if autosave_on else {}
+	if cont != "":
+		ring.custom_minimum_size.y = 96
+		var go_on := UiTheme.primary("Continue the saga", func() -> void: continue_saga(cont), 340.0)
+		go_on.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		go_on.name = "Continue"
+		box.add_child(go_on)
+		var line := _centred(SaveStore.summary_line(SaveStore.head(cont).get("summary", {})), "SmallLabel")
+		line.name = "ContinueLine"
+		box.add_child(line)
+	if bad.has("error"):
+		var warn := _centred("The last save could not be read: %s." % bad.error, "SmallLabel")
+		warn.add_theme_color_override("font_color", Palette.UI_BLOOD.lightened(0.2))
+		box.add_child(warn)
+	var begin: Button
+	if cont != "":
+		begin = UiTheme.secondary("Begin a saga", func() -> void: _ask_before_new(show_name), 340.0)
+	else:
+		begin = UiTheme.primary("Begin a saga", show_name, 340.0)
 	begin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	begin.name = "Begin"
 	box.add_child(begin)
@@ -114,7 +287,7 @@ func show_title() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", UiTheme.S3)
 	box.add_child(row)
-	var other := UiTheme.secondary("Another beginning", show_origins, 220.0)
+	var other := UiTheme.secondary("Another beginning", func() -> void: _ask_before_new(show_origins), 220.0)
 	other.tooltip_text = "Begin as a younger son or a freedman, on the map"
 	row.add_child(other)
 	var skirmish := UiTheme.secondary("A single fight", start_skirmish, 220.0)
@@ -125,6 +298,11 @@ func show_title() -> void:
 		read.name = "ReadLastSaga"
 		read.tooltip_text = "The saga that ended last, told from its beginning"
 		row.add_child(read)
+	if autosave_on:
+		var sagas := UiTheme.secondary("Sagas", func() -> void: SavesModal.open(screen, self), 140.0)
+		sagas.name = "Sagas"
+		sagas.tooltip_text = "The sagas kept: load, keep in a slot, copy to another device"
+		row.add_child(sagas)
 	var stamp := UiTheme.label("build " + UiTheme.build_stamp(), "KeyLabel", false)
 	stamp.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	stamp.grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -404,6 +582,7 @@ func show_map() -> void:
 func start_battle() -> void:
 	if journey == null or journey.fight.is_empty():
 		return
+	save_now()  # the fight's start: what a saga saved in the fight resumes at
 	layer.visible = false
 	battle_node = preload("res://view/main.tscn").instantiate()
 	battle_node.host = self
@@ -425,6 +604,7 @@ func fight_over(result: BattleResult) -> PackedStringArray:
 ## Back to the map from the battle screen.
 func leave_battle() -> void:
 	_drop_battle()
+	autosave()
 	layer.visible = true
 	if map != null:
 		map.refresh()
