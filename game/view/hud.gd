@@ -354,6 +354,15 @@ func _on_finished(result: BattleResult) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	box.add_child(row)
+	if main.get("host") != null:
+		# A fight of the saga: back to the map.
+		var on := Button.new()
+		on.text = "Go on"
+		on.custom_minimum_size = Vector2(160, 44)
+		on.pressed.connect(func() -> void: main.host.leave_battle())
+		row.add_child(on)
+		_refresh()
+		return
 	var again := Button.new()
 	again.text = "Fight again" if not main.get("saga_over") else "A new band"
 	again.custom_minimum_size = Vector2(160, 44)

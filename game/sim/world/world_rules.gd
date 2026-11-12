@@ -373,5 +373,8 @@ var champion_wealth_per_oz := 4
 var champion_honor := 4
 var champion_fame := 3
 var deed_champion := 2
+## A man knows the coast this many days' sail about his home when the saga
+## begins.
+var known_days_start := 5
 ## Days the crew needs to mend one point of the ship's damage on a beach.
 var ship_mend_days := 4

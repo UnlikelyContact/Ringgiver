@@ -34,11 +34,38 @@ var saga_over := false
 var custom_shouts: Array = []
 
 
+## The saga this fight belongs to (view/game.gd), or null for the skirmish
+## prototype. Hosted, the fight is one the campaign built (`start_hosted`),
+## what it leaves behind is the campaign's to apply (`host.fight_over`),
+## and leaving the field goes back to the map (`host.leave_battle`).
+var host: Node = null
+
+
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.BG)
+	if host != null:
+		return  # the host starts the fight it has built
 	if not fixed_seed:
 		seed_in = randi_range(1, 99999)
 	start(scenario, seed_in)
+
+
+## Shows a fight the campaign has built (Campaign.build_fight / build_duel):
+## the battle, the men and the ground as they are. `shouts` are the band's
+## own (CustomShout).
+func start_hosted(built: Dictionary, shouts: Array) -> void:
+	scenario = "hosted"
+	for c in get_children():
+		c.queue_free()
+	battle = built.battle
+	field_name = built.field_name
+	field_title = built.title
+	theirs = built.theirs
+	doctrine = built.doctrine
+	custom_shouts = shouts
+	var ours: Array = built.ours
+	player = ours[0]
+	_show_battle()
 
 
 const HUD_TOP := 46.0  # the top bar, in design pixels
@@ -142,7 +169,11 @@ func start(p_scenario: String, p_seed: int) -> void:
 	theirs = field.theirs
 	doctrine = field.doctrine
 	player = ours[0]
+	_show_battle()
 
+
+## The camera, the field and the HUD for `battle`.
+func _show_battle() -> void:
 	camera = Camera2D.new()
 	camera.zoom = Vector2(2.0, 2.0)
 	add_child(camera)
@@ -162,6 +193,9 @@ func start(p_scenario: String, p_seed: int) -> void:
 ## lines for the result panel. Your death ends the saga; the next "Fight
 ## again" gathers a new band.
 func after_fight(result: BattleResult) -> PackedStringArray:
+	if host != null:
+		after_lines = host.fight_over(result)
+		return after_lines
 	var ours: Array[Warrior] = []
 	for w in battle.warriors:
 		if w.side == 0:

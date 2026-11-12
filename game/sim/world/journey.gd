@@ -38,6 +38,8 @@ var _n := 0
 var _offers := {}  # place id -> {day, list}: the work on offer, rolled once a visit
 var _traded_at := ""  # the place whose market the band has paid its days at
 var _legs := 0
+var _voyage_days := 0
+var _voyage_from := ""
 
 
 ## A new saga: a man of the given way (Way.Id) and name, at home in
@@ -52,6 +54,11 @@ static func begin(seed_in: int, way: int, leader_name: String, home := "hardange
 	var d := Way.def(way)
 	var band := j.c.band
 	band.ship = Ship.make(d.ship)
+	# Every man knows the coast a few days about his own home.
+	var near := Voyage.distances(j.c.world, home)
+	for id in near:
+		if int(near[id]) <= wr.known_days_start:
+			band.known_places[id] = true
 	if band.gift("knows_markets", false):
 		# The trader knows the coast from Hålogaland to Hedeby.
 		for p in j.c.world.places.values():
@@ -306,10 +313,30 @@ func sail(to: String) -> void:
 	_settle()
 
 
+## One lane of the voyage toward `destination`: the ship stops wherever
+## something is met, so what must be answered is answered where it
+## happens, and `_settle` sails the next lane after.
 func _voyage() -> void:
 	_legs += 1
 	var to := destination
-	var vr := Voyage.sail(_fork("leg"), c.world_rules, c.world, c.band, c.cal, to, said)
+	var from := c.band.location
+	var route := Voyage.plan(c.world, from, to, c.band.known_places)
+	var next: String = route[1] if route.size() > 1 else to
+	if _legs == 1:
+		_voyage_days = 0
+		_voyage_from = from
+	# The lane's own log is kept back: only what was met is told, and the
+	# landfall once, at the end.
+	var leg_log := PackedStringArray()
+	var vr := Voyage.sail(_fork("leg"), c.world_rules, c.world, c.band, c.cal, next, leg_log)
+	_voyage_days += vr.days
+	for line in leg_log:
+		if not (line.begins_with("The band sails from") or line.begins_with("The band makes land at")):
+			_say(line)
+	if vr.arrived and next != to:
+		vr.arrived = false  # a lane done, the voyage not: on to the next
+		if vr.encounters.is_empty():
+			vr.reason = "lane"
 	for enc in vr.encounters:
 		if enc.has("battle_required"):
 			var br: Dictionary = enc.battle_required
@@ -326,10 +353,18 @@ func _voyage() -> void:
 				{"id": "pass", "label": "Sail on"}]})
 	if vr.arrived:
 		destination = ""
+		_say("%s makes land at %s, %d days out of %s." % [c.band.leader.display_name, c.world.place(to).display_name,
+				_voyage_days, c.world.place(_voyage_from).display_name])
 		Knowledge.reveal(c.world, c.band, to, said)
-	elif vr.wrecked or vr.reason != "battle" and vr.reason != "" or _legs >= 8:
-		destination = ""  # wrecked, too late in the year, no way known: the voyage ends where it is
-	elif vr.encounters.is_empty():
+	elif vr.reason == "lane" or vr.reason == "battle" or (vr.reason == "" and not vr.encounters.is_empty()):
+		pass  # the voyage goes on, once what was met is answered
+	else:
+		# Wrecked, too late in the year, the ship unfit, no way known: the
+		# voyage ends where it is.
+		destination = ""
+		if c.band.location != _voyage_from:
+			_say("The voyage ends at %s." % here().display_name)
+	if _legs >= 40:
 		destination = ""
 
 
@@ -352,13 +387,13 @@ func actions() -> Array[Dictionary]:
 		out.append({"id": "raid", "label": "Raid %s" % p.display_name, "enabled": fresh,
 				"hint": ("About %d %s defenders%s; near %d oz to take. %s will not forget it." % [a.defenders, CombatTypes.TIER_NAMES[a.tier],
 						" (the beacons are lit)" if a.beacons else "", roundi(a.expected_plunder * float(band.gift("raid_plunder", 1.0))),
-						p.family.capitalize() if p.family != "" else "They"]) if fresh else "You have been here this year: what is left is hidden or fled."})
+						_cap(p.family) if p.family != "" else "They"]) if fresh else "You have been here this year: what is left is hidden or fled."})
 		if p.kind == WorldTypes.PlaceKind.FARMSTEAD:
 			out.append({"id": "strandhogg", "label": "Strandhögg", "hint": "A quick shore raid for cattle and stores: %d rations and a little silver, no battle." % wr.strandhogg_food})
 	if not closed:
 		var i := 0
 		for o in _work_here():
-			var label := "%s (%d oz)" % [str(o.text).capitalize(), roundi(float(o.pay) * float(band.gift("contract_pay", 1.0)))]
+			var label := "%s (%d oz)" % [_cap(str(o.text)), roundi(float(o.pay) * float(band.gift("contract_pay", 1.0)))]
 			out.append({"id": "work:%d" % i, "label": label, "hint": "A lord's work: about %d days." % int(o.get("days", 10)),
 					"enabled": contract.is_empty()})
 			i += 1
@@ -594,7 +629,7 @@ func _market_days() -> void:
 ## the next thing a person must answer.
 func _settle() -> void:
 	var guard := 0
-	while guard < 12:
+	while guard < 80:
 		guard += 1
 		if c.over:
 			decisions.clear()
@@ -646,7 +681,10 @@ func _winter() -> void:
 	for i in range(chron, c.band.chronicle.size()):
 		winter_report.append(c.band.chronicle[i])
 	for i in range(mark, c.log.size()):
-		winter_report.append(c.log[i])
+		var line := c.log[i]
+		if line.contains(" effort in ") or line.contains(" drills "):
+			continue  # the drill yard's bookkeeping is not the winter's story
+		winter_report.append(line)
 	_say("Winter of %d passes." % c.cal.year)
 	if c.over:
 		_say("The saga of %s ends here: %s." % [Way.title(c.band), c.over_reason])
@@ -677,6 +715,11 @@ func status() -> Dictionary:
 		"feuds": band.unsettled_feuds().size(), "work": str(contract.get("text", "")),
 		"outlaw": Outlawry.is_outlawed(band, c.cal),
 	}
+
+
+## The line with its first letter raised, the rest as it is.
+static func _cap(s: String) -> String:
+	return s if s == "" else s[0].to_upper() + s.substr(1)
 
 
 func _say(line: String) -> void:

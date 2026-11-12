@@ -702,7 +702,11 @@ func run_round() -> void:
 				_finish(-1, "both men are blooded: the holmgang is nobody's", BattleResult.End.FIRST_BLOOD)
 			else:
 				var loser := 0 if hurt[0] > hurt[1] else 1
-				_finish(1 - loser, "side %d is blooded: the holmgang is over" % loser, BattleResult.End.FIRST_BLOOD)
+				var who := "side %d" % loser
+				for w in warriors:
+					if w.side == loser:
+						who = w.display_name
+				_finish(1 - loser, "%s is blooded: the holmgang is over" % who, BattleResult.End.FIRST_BLOOD)
 			return
 	for side in 2:
 		var standing := 0

@@ -180,7 +180,7 @@ static func after_champion(rules: WorldRules, world: World, band: Band, place: P
 		band.friends[place.family] = world.year
 		Way.add_deed(band, Way.Id.BERSERK, rules.deed_champion)
 		out.silver = fee
-		out.text = "%s blooded the berserk on the island. %s give %d oz, and will not forget it." % [who, place.family.capitalize(), fee]
+		out.text = "%s blooded the berserk on the island. %s give %d oz, and will not forget it." % [who, Journey._cap(place.family), fee]
 		band.log("%s stood in a farmer's place against a berserk at %s, and won" % [who, place.display_name])
 	elif outcome == 0:
 		var ransom := mini(band.silver, rules.holmgang_ransom)

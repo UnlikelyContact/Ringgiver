@@ -133,6 +133,83 @@ fight (field, objective, role, enemy, doctrine, outcome) and takes
 and to try tunables, and `log` for the whole log with the field drawn
 after every round.
 
+## Ways of life and the player's summer (`way.gd`, `callings.gd`, `journey.gd`, 12 Nov 2026)
+
+`Way` (campaign): `Id` {VIKING, TRADER, LAWMAN, BERSERK, SKALD,
+KINGS_MAN}, `DEFS` (name, model, blurb, origin, followers, silver, ship,
+the leader's stat changes, `gifts`, epithet). `Way.apply(band, way)` sets
+`Band.way`, `Band.gifts` and the leader's stats (and the trait "berserk"
+for the fury); `Campaign.start_as(way, name)` is `start` + `apply`.
+World modules read an edge through `Band.gift(name, default)`:
+`raid_plunder` (Raiding.after_raid), `trade_edge` (Market.buy_price /
+sell_price, cancelling `market_spread`), `law` (Thing.procedure,
+Callings.counsel), `counsel_fee`, `foresight` (Campaign.offer_fight: the
+scout reads as Wits 10 and seasoned, `they_know_first` never), `fury`,
+`dread` (Callings.holmgang_yields), `verse`, `verse_gift`, `contract_pay`
+and `rank_progress` (Contracts.complete), `lords_favour` and
+`knows_markets` (Journey.begin). `Way.add_deed(band, way, points)` counts
+on `Band.deeds`; `renowned_for`, `epithet` and `title` name the man once
+a way has `EPITHET_DEEDS` (6). Deed points are WorldRules `deed_*`.
+
+`Callings` (world): `has_dispute` / `can_counsel` / `counsel`; `can_verse`
+/ `verse_need` / `verse`; `can_challenge` / `holmgang_terms` /
+`holmgang_opponent` / `holmgang_yields` / `challenge` / `after_holmgang`;
+`can_champion` / `bully` / `after_champion`. Once a year a place each
+(`Band.counselled`, `versed`, `challenged`, `championed`, `raided`);
+disputes and bullies are drawn from the place, the year and `World.salt`.
+Friends (`Band.friends`) count `friend_support` each in
+`Thing.gather_support`.
+
+Combat: `Warrior.fury` / `in_fury(rules)`; `condition_penalty` returns
+`-fury_bonus` in the fury and wound + fatigue + `fury_spent_penalty` out
+of it; `Morale.round_update` takes `morale_fury_near` from a man with an
+enemy in the fury beside him. `Battle.duel`: the end check finishes at
+first blood (`duel_first_blood`, WOUNDED) with `End.FIRST_BLOOD`.
+`Scenario.build_duel(seed, rules, ours, theirs)`: one man each on a bare
+9 by 8 field, three rows apart.
+
+`Campaign.resolve_offer` is now `settle_choice` + `fade` or `build_fight`
++ `battle.run()` + `conclude_fight`; `build_duel(opponent, seed)` builds
+a holmgang for the same `conclude_fight` (no flat plunder, no luck).
+`_arm_new_men` gives each new man a place in the line (shield, spear or
+bow, whichever the band is shortest of against `Scenario.band_split`).
+On the map a won fight pays `plunder_per_win_world` (10), not 30.
+
+`Journey` (world) is the player in place of `Sandbox.summer`.
+`Journey.begin(seed, way, name, home)` makes the campaign, the world
+(`Sandbox.setup`), the way's ship and knowledge, and calls
+`begin_summer` (spine events and feud events become decisions).
+`decisions` is a queue of {kind: spine | demand | merchant | fight, text,
+options: [{id, label, enabled}]}; `answer(id)` answers the first. A
+fight is a `FightOffer` with a context (sea, rob, raid, contract, spine,
+feud, thing, duel, champion); answered, it is either told quickly
+(`quick`) or left in `fight` {offer, built, ctx} with side 0's AI cleared
+(`Battle.clear_ai`) for the battle screen, which calls
+`fight_done(result)`; `_after_fight` then does what the fight was for
+(plunder, the lord's pay, the bounty, the stake). `sail(to)` goes lane by
+lane (`_voyage`), stopping for what is met; `actions()` lists what the
+place allows as {id, label, hint, enabled} and `act(id)` does it;
+`market()`, `buy`, `sell` are the trading; `_settle` goes on with what
+was interrupted (the voyage, work that waits at a place, the closing
+season, the winter) up to the next thing a person must answer. `_winter`
+runs `Campaign.winter` and keeps its lines in `winter_report`, then the
+next spring begins. `status()` is what the screen shows. `JourneyBot.
+play_year(j)` is a stand-in player for each way; `tools/batch_ways.gd
+[sagas] [years] [seed] [way|all] [log]` reports what became of them.
+
+The view: `view/game.tscn` (`game.gd`) is the main scene: the title
+(Begin a saga, A single fight), `show_ways` (six cards and a name),
+`begin_saga`, `show_map` (`MapScreen`), `start_battle` (instantiates
+`main.tscn` with `host` set and calls `main.start_hosted(built,
+shouts)`), `fight_over(result)` (the HUD's aftermath lines come from
+`Journey.fight_done`), `leave_battle`. `MapScreen` draws the known
+places, the lanes between them and rough shores on a `MapCanvas` (tap a
+place to pick it), the status, the place and its deeds and market on the
+right, the last lines of `Journey.said` below, and modals for the
+decision, the winter report, the saga's end and the roster ("Your men").
+`tools/screenshot_game.gd <out> [way|title|ways] [seed] [commands]`
+renders any of it.
+
 ## Drill and custom shouts (`formation_template.gd`, `custom_shout.gd`, 11 Nov 2026)
 
 `FormationTemplate.learned` marks a shape the band must drill: `wedge()`

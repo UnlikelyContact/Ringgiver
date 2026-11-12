@@ -1294,6 +1294,94 @@ band's familiarity beside the Form button. Measured: forming the boar's
 snout over thirty fights, undrilled men hesitated 84 times, drilled men
 28.
 
+**Ways of life (12 Nov 2026).** The player chooses how he lives, and the
+sagas give the ways: the raider, the trader (Ohthere), the law-wise man
+who wins by counsel and at the Thing (Njáll), the berserk, the skald
+(Egil), the king's man (Thorolf Kveldulfsson). Two rules hold it
+together. *A way is where you start and what you are best at, never a
+wall*: every deed is open to every man, and your way gives an edge in
+its own. *The saga names you by what you do*: deeds are counted in each
+way, and at six the man gets the name ("Egil the Law-Wise"); a law-wise
+man who mostly raids is called the Viking.
+
+| Way | Starts with | His edge |
+|---|---|---|
+| Viking | 9 men, a karve, 20 oz | Raids take half as much silver again |
+| Trader | 5 men, a knarr (hold of 40), 120 oz | Deals at the true price where a stranger pays the middlemen a tenth each way; knows the coast from Hålogaland to Hedeby |
+| Law-wise man | 4 men, 60 oz, Wits +3 | Two better at every pleading and counsel, paid double for it; his scouts count true and he is never caught on the march |
+| Berserk | 2 men, 10 oz, Might +2, Nerve +2 | The fury in a fight; one man in three pays rather than meet him on the island; no lord trusts him at first |
+| Skald | 3 men, 30 oz, Wits +2 | Three better at a verse, and double the ring for it |
+| King's man | 6 men, 40 oz | A lord's work pays a quarter more and counts double toward rank; his own lord favours him |
+
+The deeds beyond raiding, trading and a lord's work, all new:
+
+- *Counsel.* A place has a dispute about one year in three (a Thing site
+  always has cases, harder and paying double). The leader's Wits + 2d6
+  against 11: a fee, honor, the lord's goodwill, and the family's
+  friendship, which is a supporter at the Thing ever after. A bad miss
+  costs honor. This is the Njáll loop: no fights, honor near 90 after
+  five years, and friends who decide his cases.
+- *A verse before a lord.* Wits + 2d6 + a point for every 25 fame against
+  11: a ring, fame, the lord's goodwill. A lord who has heard a man wants
+  better next time (two harder each time), so a skald must keep finding
+  new halls.
+- *The holmgang.* The leader alone against the place's best man on a
+  small bare field, over at first blood (the open question "holmgang
+  rules" is answered, for now, as a variant of normal combat). The stake
+  is half a farm's wealth or three tenths of a hall's. With a feud behind
+  it the challenge is lawful and a win ends the feud; without, it is
+  overbearing: it costs honor, the family may take up a feud, and a man
+  whose honor is already low is outlawed for it. The loser pays a ransom
+  to leave the island.
+- *Standing in a farmer's place.* One year in four a berserk has called a
+  farmer out for his land; meet him yourself (a seasoned man with the
+  fury on him) for a fee, honor, fame and the family's friendship. This
+  is what the saga heroes do to berserks, and it is the honest half of
+  the duellist's living.
+- *The fury.* A berserk strikes two better while half his breath or more
+  is left and feels no wound; spent, he is one worse than a plain man;
+  enemies at arm's length of him lose heart each round. "Berserkers are
+  a rare trait, not a class" still holds: the trait is on the man, and
+  the player may be that man.
+
+The summer is now played on the map (`Journey`, the screen `MapScreen`):
+sail where you will, and at each place do what it allows: raid,
+strandhögg, a lord's work, counsel, a verse, a challenge, a case at the
+Thing, the market, mend the ship, wait and listen, winter. Whatever is
+met is answered where it is met; every fight is offered first (the
+scout, the choices) and then fought on the battle screen with your own
+men, or told quickly. The winter is told as a report for now. A stand-in
+player for each way (`JourneyBot`, `tools/batch_ways.gd`) plays twelve
+sagas of five years: every way lives and is named for its own deeds,
+except the berserk, whose player turns to raiding once his honor is
+spent and is named the Viking for it, which is the rule working.
+
+| Way | Silver a year | Fame at 5 years | Honor | Fights in 5 years |
+|---|---|---|---|---|
+| Viking | +284 oz | 76 | 42 | 66 |
+| Trader | +242 oz | 35 | 37 | 27 |
+| Law-wise man | +152 oz | 22 | 91 | 9 |
+| Berserk | +164 oz | 71 | 14 | 69 |
+| Skald | +109 oz | 50 | 44 | 12 |
+| King's man | +265 oz | 100 | 46 | 39 |
+
+Found and fixed on the way: the sandbox counted a raid's plunder twice;
+the leader's luck read the odds upside down (wins over fewer men counted
+as wins against the odds, which is where the runaway fame came from);
+selling to a market and buying back made silver. New rules: a
+middleman's tenth at markets, a place's wealth mends a third of the way
+back each year, a place can be raided once a year, leaving a fight at
+long odds costs no honor, a map fight pays what it was fought for and
+not a flat 30 oz, and the raider's prey is on the map (the monastery on
+Iona, the Northumbrian coast).
+
+Open: the king's man reaches fame 100 in five years (a lord's work gives
+too much); the law-wise man still stands in the wall himself when it
+comes to a fight (Njáll's sons did his fighting: a war-leader to name);
+other ways the sagas give (the settler, the outlaw who is made not
+chosen, the chieftain) have no start yet; the winter is a report, not a
+screen; there is no saving.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art
@@ -1304,6 +1392,8 @@ snout over thirty fights, undrilled men hesitated 84 times, drilled men
 - [ ] Save policy: ironman by default (the saga is what happened), with
   reloads as an option, or free saving
 - [ ] Holmgang rules: full duel mini-game or a variant of normal combat
+  (for now, 12 Nov 2026: a variant, two men on a bare field to first
+  blood; see "Ways of life")
 - [ ] Multiplayer: in scope later, or single-player only
 - [ ] Conditional orders: which ones veterans unlock, and how they're given
 - [ ] Shieldmaidens: how they appear (origin, recruitment event, or both)
