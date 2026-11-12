@@ -883,6 +883,32 @@ func marry_into(rules: WorldRules, crules: CampaignRules, rng: SimRng, band: Ban
 	Family.marry(crules, band, "%s, daughter of %s" % [bride, house(name).head], pot, rng.randi_range(1, crules.household_skill_max), name, log)
 	_band_tie(band, name, "marriage")
 	shift(rules, band, name, rules.standing_marriage)
+	# A marriage into a house brings matches for the band's men too: those
+	# who want a wife are nearer it (law-land).
+	for m in band.living_men():
+		if m.ambition == CampaignTypes.Ambition.WIFE:
+			Loyalty.ambition_progress(crules, band, m, rules.ambition_wife, log)
+
+
+## A new house in the web (Iceland's settlers, the band's freedmen): its
+## head, seat and temper; no ties. Returns it, or the house of that name.
+func add_house(name: String, head: String, seat: String, region: WorldTypes.Region, strength: int, wealth: int,
+		temper: String, honor := 55) -> House:
+	if houses.has(name):
+		return houses[name]
+	var h := House.new()
+	h.name = name
+	h.head = head
+	h.heir = _new_name(SimRng.new(name.hash()), head)
+	h.seat = seat
+	h.holdings.append(seat)
+	h.region = region
+	h.strength = strength
+	h.wealth = wealth
+	h.temper = temper
+	h.honor = honor
+	houses[name] = h
+	return h
 
 
 func foster_for(rules: WorldRules, band: Band, name: String, log: PackedStringArray) -> void:

@@ -45,7 +45,7 @@ var home := ""  # place id of the hall
 var hall_at := ""
 var known_places := {}  # place id -> true
 var captives := 0
-var land := 0  # units of farmland held; yields food and silver each winter
+var land := 0  # units of farmland held; yields food and silver each winter (Landtake.thaw_yield)
 var rank: WorldTypes.Rank = WorldTypes.Rank.KARL
 var rank_progress := 0
 var outlawry: WorldTypes.Outlawry = WorldTypes.Outlawry.NONE
@@ -107,6 +107,22 @@ var prices_seen := {}
 ## winter ("" for none; Winter.default_plan reads it).
 var custom_shouts: Array[CustomShout] = []
 var drilling := ""
+## Law, land and the unfree (docs/design/notes/law-land.md). The band's
+## own land, each piece {at: place id, name, units, how, year} (`land` is
+## their sum, for the yield); the men left at home to keep it; the unfree
+## who work it {name, from, year} and their unrest (0..10); the freedmen
+## who stay on it {name, year}; men of the band in slavers' hands {man,
+## at, year, price}; whether the band has taken land in Iceland; what the
+## law and the omens remember (Outlawry, ThingPlay, Omens: plain keys).
+var holdings: Array[Dictionary] = []
+var keepers: Array[Man] = []
+var thralls: Array[Dictionary] = []
+var unrest := 0
+var freedmen: Array[Dictionary] = []
+var taken: Array[Dictionary] = []
+var settled_iceland := false
+var law := {}
+var foretold := {}
 var _bonds := {}  # "lo:hi" -> int
 var _bond_kinds := {}  # "lo:hi" -> CampaignTypes.BondKind
 var _next_id := 1

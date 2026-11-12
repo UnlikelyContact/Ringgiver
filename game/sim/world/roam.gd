@@ -448,6 +448,10 @@ func step_parties(dt: float, rng: SimRng, rules: WorldRules, world: World, band_
 				p.chasing = free and not band_wet and d <= rules.outlaw_sight and (p.men >= band_men or odds_ok)
 			"avengers":
 				p.chasing = free and (band_shore if p.sails else not band_wet) and d <= rules.raider_sight * 1.5
+			"hunters":
+				# Bounty hunters track an outlaw wherever he goes in the realm
+				# (Outlawry: they go home when he leaves it).
+				p.chasing = free and (band_shore if p.sails else not band_wet)
 			"kings_ships":
 				# They hail a band at sea once a summer for the king's due.
 				p.chasing = free and band_wet and d <= rules.raider_sight and p.mood == 0

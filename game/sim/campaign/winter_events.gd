@@ -48,8 +48,8 @@ static func pick_kind(rng: SimRng, rules: CampaignRules, band: Band) -> String:
 			continue
 		if kind == "sickness" and men < 1:
 			continue
-		# Unrest among thralls needs thralls: captives kept, or land worked.
-		if kind == "thrall_unrest" and band.captives <= 0 and band.land <= 0:
+		# Unrest among thralls needs thralls: captives kept, or thralls at home.
+		if kind == "thrall_unrest" and band.captives <= 0 and band.thralls.is_empty():
 			continue
 		kinds.append(kind)
 		weights.append(w)

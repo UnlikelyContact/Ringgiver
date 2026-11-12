@@ -151,6 +151,17 @@ func test_years_stop_for_each_interrupt() -> void:
 ## Sitting at home is not a way to grow rich: a year let pass brings in no
 ## more than the land yields, and the band that sits out its summers ends
 ## poorer than the one that plays them.
+## What the band is worth: the chest, the land at what it sells for, and
+## the hull (a saga that plays its summers turns silver into both).
+func _worth(j: Journey) -> int:
+	var wr := j.c.world_rules
+	var band := j.c.band
+	var w := band.silver + band.land * int(wr.land_price)
+	if band.ship != null:
+		w += int(wr.ship_price.get(band.ship.kind, 0))
+	return w
+
+
 func test_passing_years_is_not_richer() -> void:
 	var gain_sit := 0
 	var gain_play := 0
@@ -166,16 +177,16 @@ func test_passing_years_is_not_richer() -> void:
 		var play := _at_spring(s)
 		var sit := _at_spring(s)
 		_no_spine(sit)
-		var start := play.c.band.silver
+		var start := _worth(play)
 		play.winter_choose("next")
 		for y in 3:
 			JourneyBot.play_year(play, Way.Id.VIKING)
 		_let(sit, 3)
 		while sit.c.cal.year < play.c.cal.year and not sit.c.over:
 			JourneyBot.play_year(sit, Way.Id.VIKING)
-		gain_play += play.c.band.silver - start
-		gain_sit += sit.c.band.silver - start
-	print("    years: playing gained %d oz, sitting at home %d oz (three sagas, four years)" % [gain_play, gain_sit])
+		gain_play += _worth(play) - start
+		gain_sit += _worth(sit) - start
+	print("    years: playing gained %d oz of worth, sitting at home %d (three sagas, four years)" % [gain_play, gain_sit])
 	# The sitter is often called out of his hall after a year and plays the
 	# rest, so the two run close: sitting must not come out clearly ahead.
 	assert_true(gain_sit <= gain_play * 1.1 + 30, "sitting at home is not richer")

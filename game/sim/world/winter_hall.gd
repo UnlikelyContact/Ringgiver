@@ -112,12 +112,18 @@ static func open(j: Journey, p: Place) -> WinterHall:
 	for kind in WinterEvents.draw(r.fork("draw"), c.rules, band, maxi(0, n), band.ship != null, guarded):
 		if kind == "marriage_offer" and c.world.families != null:
 			continue  # the houses offer their daughters by name (`_house_cards`)
+		if kind == "thrall_unrest" and not band.thralls.is_empty():
+			h.talk.append(Thralls.unrest_card(j))  # thralls at home: flight, a killing (law-land)
+			continue
 		var card := WinterEvents.card(r.fork("card:" + kind), c.rules, band, kind)
 		if not card.is_empty():
 			if kind in WinterEvents.FEUD_KINDS:
 				_hall_fight_card(c, r.fork("warned:" + kind), card)
 			h.talk.append(card)
 	h.talk.append_array(Family.hall_cards(c))
+	var seer := Omens.volva_card(j, r.fork("volva"))
+	if not seer.is_empty():
+		h.talk.append(seer)
 	h.talk.append(_vow_card(c))
 	h._facts = h._year_facts(c)
 	h._defaults(j)
@@ -301,12 +307,14 @@ func default_choice(j: Journey, card: Dictionary) -> String:
 			return "accept"
 		"quarrel":
 			return "settle" if j.c.band.silver >= 2 * j.c.rules.settle_quarrel_ounces + 20 else "for_a"
-		"thrall_unrest":
+		"thrall_unrest", "thralls":
 			return "let"
 		"household":
 			return str(card.get("default", opts[opts.size() - 1].id))
 		"feud_attack", "hall_burning":
 			return "wait" if card.get("warned", false) else "meet"
+		"volva":
+			return "feast" if j.c.band.silver >= 20 else "away"
 	for o in opts:
 		if j.c.band.silver + int(o.get("silver", 0)) >= 0:
 			return str(o.id)
@@ -768,6 +776,10 @@ func _talk(j: Journey) -> void:
 				var told: PackedStringArray = _held.lines
 				told.append_array(Family.answer_card(c, card, choice, c.log))
 				_held.lines = told
+			"volva":
+				Omens.resolve_volva(j, card, choice)
+			"thralls":
+				Thralls.resolve_unrest(j, card, choice)
 			_:
 				var ev := WinterEvents.resolve(r.fork("talk:" + str(card.kind)), rules, band, c.cal, card, choice, band.ship, c.log)
 				_after_talk(j, ev, choice, bool(card.get("warned", false)))
@@ -1275,7 +1287,7 @@ func _state_talk(j: Journey, s: Dictionary) -> void:
 				hints.append(str(o.hint))
 		var title: String = {"vow": "The Yule cup", "house": "A house sends word", "quarrel": "A quarrel", "skald": "A skald",
 				"trader": "A trader", "sickness": "Sickness", "storm": "A storm", "envoy": "An envoy", "outlaw_shelter": "An outlaw at the door",
-				"thrall_unrest": "The stores", "feud_attack": "Spears in the snow", "hall_burning": "Fire in the night", "marriage_offer": "A marriage",
+				"thrall_unrest": "The stores", "thralls": "The thralls", "volva": "A seer", "feud_attack": "Spears in the snow", "hall_burning": "Fire in the night", "marriage_offer": "A marriage",
 				"household": "The household"}.get(str(card.kind), "In the hall")
 		s.rows.append(_row(str(title), str(card.text) + ((" " + " ".join(hints)) if not hints.is_empty() else ""), "", btns))
 

@@ -257,6 +257,7 @@ static func _promote(c: Campaign, log: PackedStringArray) -> void:
 			c.band.rank = r
 			c.band.log("%s is now reckoned a %s" % [c.band.leader.display_name, WorldTypes.RANK_NAMES[r]])
 			log.append("%s is now a %s" % [c.band.leader.display_name, WorldTypes.RANK_NAMES[r]])
+			Landtake.on_rank(c, r, log)  # a hersir is given land, and owes his lord
 
 
 # --- Spine and feuds at the start of summer ---------------------------------
@@ -393,6 +394,7 @@ static func _consider_emigration(c: Campaign, rng: SimRng, log: PackedStringArra
 		return false
 	c.band.home = "iceland"
 	c.band.land += wr.iceland_land_claim
+	c.band.settled_iceland = true
 	c.band.known_places["iceland"] = true
 	if c.band.outlawry != WorldTypes.Outlawry.NONE:
 		Outlawry.lift(c.band, log)
@@ -448,6 +450,7 @@ static func year_end(c: Campaign, log: PackedStringArray) -> void:
 	# The houses live their own year; the tidings are kept on Families.
 	if c.world.families != null:
 		c.world.families.year_end(rng.fork("families"), c.world_rules, c.world, c.band)
+	Landtake.year_end(c)  # Iceland's settlers come
 	for p in c.world.places.values():
 		p.alertness = maxi(0, p.alertness - c.world_rules.alertness_decay_per_year)
 		p.captives_sold = 0

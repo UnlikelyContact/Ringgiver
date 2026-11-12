@@ -578,7 +578,7 @@ func _draw_parties(font: Font, k: float) -> void:
 		var afloat := grid.is_sea(MapGrid.cell_of(party.pos))
 		# Who would harm the band: raiders and outlaws unless their house
 		# wishes it well, and any party sent after it (mood -1).
-		var hostile: bool = party.mood < 0 or (party.mood == 0 and party.kind in ["raiders", "levy", "outlaws", "ship_thieves"])
+		var hostile: bool = party.mood < 0 or (party.mood == 0 and party.kind in ["raiders", "levy", "outlaws", "ship_thieves", "hunters"])
 		if party.kind == "wreck":
 			hostile = false
 		var on_ship: bool = party.sails and afloat
@@ -607,6 +607,13 @@ func _draw_parties(font: Font, k: float) -> void:
 			"ship_thieves":
 				tag = "your ship, taken" if party.name == "" else party.name
 				MapIcons.ship(self, at, pk, facing, Color("2e2620"), Palette.UNDYED, Palette.BLOOD)
+			"hunters":
+				# Men out for the price on an outlaw's head.
+				tag = "men after your head, %d" % party.men
+				if on_ship:
+					MapIcons.ship(self, at, pk, facing, Color("2e2620"), Color("5d5f62"), Palette.BLOOD)
+				else:
+					MapIcons.token(self, at, pk, Color("3a3330"), Palette.BLOOD)
 			"house_men", "avengers":
 				tag = "%s, %d" % [party.name if party.name != "" else ("men of %s" % party.family), party.men]
 				if on_ship:
