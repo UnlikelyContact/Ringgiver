@@ -82,9 +82,9 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	left.add_theme_constant_override("separation", 1)
 	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	strip.add_child(left)
-	_line_round = _rich(16)
+	_line_round = _rich(UiTheme.fs(16))
 	left.add_child(_line_round)
-	_line_walls = _rich(15)
+	_line_walls = _rich(UiTheme.fs(16))
 	left.add_child(_line_walls)
 	status = UiTheme.label("", "SmallLabel", false)
 	status.visible = false  # the strip's words, as one line, for anyone who reads it
@@ -151,9 +151,16 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 		view.pulse_seconds = v
 		view.clock = v
 		_refresh())
+	# Where the player leaves it is where the next fight starts (Settings).
+	pulse_slider.drag_ended.connect(func(_changed: bool) -> void:
+		if tutorial == null:
+			Settings.set_value("battle_pulse", pulse_slider.value))
 	buttons_row.add_child(pulse_slider)
+	var gear := Settings.gear(func() -> void: Settings.open(root_control, self), 48.0)
+	gear.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	buttons_row.add_child(gear)  # not one of the tutorial's controls: always open
 	next_btn = UiTheme.primary("Next round", _on_next, 176.0)
-	next_btn.add_theme_font_size_override("font_size", 19)
+	next_btn.add_theme_font_size_override("font_size", UiTheme.fs(19))
 	controls["next"] = next_btn
 
 	var stamp := UiTheme.label("build " + _build_stamp(), "KeyLabel", false)
@@ -213,7 +220,7 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	log_label.scroll_active = false
 	log_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	log_label.add_theme_color_override("default_color", Palette.UI_MUTED)
-	log_label.add_theme_font_size_override("normal_font_size", UiTheme.SMALL)
+	log_label.add_theme_font_size_override("normal_font_size", UiTheme.fs(UiTheme.SMALL))
 	_log_panel.add_child(log_label)
 	# The oldest lines fade into the dark at the top: a veil over them,
 	# drawn once a resize.
@@ -322,6 +329,8 @@ func _on_shout(s: CombatTypes.Shout) -> void:
 		return
 	view.pending_shout = CombatTypes.Shout.NONE if view.pending_shout == s else s
 	view.pending_custom = null
+	if view.pending_shout == s:
+		Audio.shout(s)
 	for k in shout_buttons:
 		(shout_buttons[k] as Button).button_pressed = (k == view.pending_shout)
 	for cb in custom_buttons:
@@ -448,6 +457,8 @@ func _on_finished(result: BattleResult) -> void:
 	if tutorial != null:
 		tutorial.finished()
 	var outcome := result.outcome(0)
+	Audio.result(outcome)
+	Audio.close(false)
 	result_panel.open(OUTCOME_TITLES[outcome])
 	result_panel.title_label.add_theme_color_override("font_color", _outcome_color(outcome))
 	var box := result_panel.body
@@ -502,7 +513,7 @@ func _counts(r: BattleResult) -> Control:
 		grid.add_child(k)
 	for side in 2:
 		var who := UiTheme.label("Yours" if side == 0 else "Theirs", "StrongLabel", false)
-		who.add_theme_color_override("font_color", Palette.UI_OURS if side == 0 else Palette.UI_THEIRS)
+		who.add_theme_color_override("font_color", Palette.ui_side(side))
 		who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(who)
 		for n in [r.started[side], r.downed[side], r.broken[side], r.fled[side], r.dead[side]]:
@@ -695,7 +706,7 @@ func _refresh() -> void:
 	_line_round.text = top
 	arms_bits.append(stance)
 	_line_walls.text = "[color=#%s][b]Our wall %d/%d[/b][/color] [color=#%s]%s[/color]    [color=#%s][b]Theirs %d/%d[/b][/color]" % [
-			COLORS.ours, mine[0], mine[1], COLORS.muted, ", ".join(arms_bits), COLORS.theirs, theirs[0], theirs[1]]
+			Palette.ui_side(0).to_html(false), mine[0], mine[1], COLORS.muted, ", ".join(arms_bits), Palette.ui_side(1).to_html(false), theirs[0], theirs[1]]
 	status.text = "Round %d  wall %d/%d  theirs %d/%d" % [b.round, mine[0], mine[1], theirs[0], theirs[1]]
 	var known := ""
 	if view.player != null and view.player.formation != null and view.player.formation.learned:
@@ -735,3 +746,25 @@ func _refresh() -> void:
 		pulse_label.text = "EVERY %.1fs" % view.pulse_seconds
 		next_btn.text = "Resume" if view.paused else "Pause"
 	_layout_top()
+
+
+# --- The settings (view/settings.gd), opened from the top row ----------------------
+
+## A setting changed while the settings are open over the fight: the pace
+## and the pausing follow at once; the colours redraw.
+func settings_changed(key: String) -> void:
+	match key:
+		"battle_pulse":
+			if tutorial == null:
+				pulse_slider.value = Settings.battle_pulse
+		"auto_pause":
+			view.auto_pause = Settings.auto_pause
+		"colour_safe":
+			for t in view.tokens.values():
+				(t as CanvasItem).queue_redraw()
+			view.queue_redraw()
+			_refresh()
+
+
+func settings_closed() -> void:
+	pass

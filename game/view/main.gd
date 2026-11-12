@@ -46,6 +46,11 @@ var teach := false
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.BG)
+	if not Settings.loaded:
+		# The fight on its own (main.tscn run alone): the player's settings,
+		# unless a tool is running it.
+		Settings.persist = not fixed_seed
+		Settings.load_file()
 	if host != null:
 		return  # the host starts the fight it has built
 	if not fixed_seed:
@@ -198,6 +203,14 @@ func _show_battle() -> void:
 	view = BattleView.new()
 	add_child(view)
 	view.setup(battle, player, camera)
+	# The player's pace for a fight (view/settings.gd); the taught escape
+	# keeps to turn by turn, as the tutorial asks.
+	if not teach:
+		view.pulse_seconds = Settings.battle_pulse
+		view.clock = view.pulse_seconds
+	view.auto_pause = Settings.auto_pause
+	Audio.scene("battle_night" if view.is_night() else "battle")
+	Audio.close(false)
 	var z0 := fit_zoom()
 	camera.zoom = Vector2(z0, z0)
 	camera.position = focus_point(z0)

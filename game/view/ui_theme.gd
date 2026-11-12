@@ -28,10 +28,11 @@ const HEADING := 20
 ## Everything that is read.
 const BODY := 17
 ## What is said aside: hints under a row, a place's description. The least
-## size that is read on a phone; nothing smaller but the stat keys.
-const SMALL := 14
+## size that is read on a phone (about 11.6 screen pixels at 390 high);
+## nothing smaller but the stat keys.
+const SMALL := 16
 ## The keys over a stat's value (SILVER, FOOD), in spaced capitals.
-const KEY := 12
+const KEY := 13
 
 # --- Spacing: a 4-pixel grid --------------------------------------------------
 
@@ -53,6 +54,15 @@ const RADIUS := 3
 ## Whether screens and modals fade in. The tools turn it off, so their
 ## stills are taken on what has arrived.
 static var motion := true
+## The player asked for less motion (Settings): nothing fades in.
+static var reduce_motion := false
+## Every size of type is multiplied by this (Settings: normal 1, large
+## Settings.LARGE). Change it with `set_text_scale`, which rebuilds the
+## theme in place so every screen follows.
+static var text_scale := 1.0
+## The player asked for colours kinder to colour-blind eyes (Settings):
+## the standing colours run from dark red to light blue, not red to green.
+static var colour_safe := false
 static var _theme: Theme = null
 static var _fonts := {}
 
@@ -62,6 +72,23 @@ static func theme() -> Theme:
 	if _theme == null:
 		_theme = _build()
 	return _theme
+
+
+## A type size in design pixels at the player's text scale. Use it for any
+## size set on a node rather than through the theme.
+static func fs(px: int) -> int:
+	return int(round(px * text_scale))
+
+
+## Sets the text scale and rebuilds the one theme in place: every control
+## that has it is told and resizes its words.
+static func set_text_scale(k: float) -> void:
+	if is_equal_approx(k, text_scale):
+		return
+	text_scale = k
+	if _theme != null:
+		_theme.clear()
+		_fill(_theme)
 
 
 ## Puts the theme on `root`: everything under it inherits.
@@ -159,8 +186,13 @@ static func _button_set(t: Theme, type: String, normal: StyleBox, hover: StyleBo
 
 static func _build() -> Theme:
 	var t := Theme.new()
+	_fill(t)
+	return t
+
+
+static func _fill(t: Theme) -> void:
 	t.default_font = font("body")
-	t.default_font_size = BODY
+	t.default_font_size = fs(BODY)
 	var focus := box(Color(0, 0, 0, 0), Color(Palette.UI_GOLD, 0.55), 1, RADIUS + 1, 0, 0)
 	focus.draw_center = false
 	focus.expand_margin_left = 2
@@ -171,27 +203,27 @@ static func _build() -> Theme:
 	# Labels.
 	t.set_color("font_color", "Label", Palette.UI_TEXT)
 	t.set_color("font_shadow_color", "Label", Color(0, 0, 0, 0))
-	t.set_font_size("font_size", "Label", BODY)
+	t.set_font_size("font_size", "Label", fs(BODY))
 	t.set_constant("line_spacing", "Label", 2)
-	_label_type(t, "DisplayLabel", DISPLAY, Palette.UI_GOLD, font("display"))
+	_label_type(t, "DisplayLabel", fs(DISPLAY), Palette.UI_GOLD, font("display"))
 	t.set_color("font_outline_color", "DisplayLabel", Color("0b0806"))
 	t.set_constant("outline_size", "DisplayLabel", 6)
-	_label_type(t, "TitleLabel", TITLE, Palette.UI_GOLD, font("bold"))
-	_label_type(t, "HeadingLabel", HEADING, Palette.UI_GOLD, font("bold"))
-	_label_type(t, "BodyLabel", BODY, Palette.UI_TEXT, font("body"))
-	_label_type(t, "StrongLabel", BODY, Palette.UI_TEXT, font("bold"))
-	_label_type(t, "SmallLabel", SMALL, Palette.UI_MUTED, font("body"))
-	_label_type(t, "KeyLabel", KEY, Palette.UI_MUTED, font("caps"))
-	_label_type(t, "ValueLabel", 18, Palette.UI_TEXT, font("bold"))
-	_label_type(t, "SagaLabel", 21, Palette.UI_TEXT, font("body"))
+	_label_type(t, "TitleLabel", fs(TITLE), Palette.UI_GOLD, font("bold"))
+	_label_type(t, "HeadingLabel", fs(HEADING), Palette.UI_GOLD, font("bold"))
+	_label_type(t, "BodyLabel", fs(BODY), Palette.UI_TEXT, font("body"))
+	_label_type(t, "StrongLabel", fs(BODY), Palette.UI_TEXT, font("bold"))
+	_label_type(t, "SmallLabel", fs(SMALL), Palette.UI_MUTED, font("body"))
+	_label_type(t, "KeyLabel", fs(KEY), Palette.UI_MUTED, font("caps"))
+	_label_type(t, "ValueLabel", fs(18), Palette.UI_TEXT, font("bold"))
+	_label_type(t, "SagaLabel", fs(21), Palette.UI_TEXT, font("body"))
 	t.set_constant("line_spacing", "SagaLabel", 6)
-	_label_type(t, "InkLabel", BODY, Palette.UI_INK, font("body"))
-	_label_type(t, "InkSmallLabel", SMALL, Palette.UI_INK_MUTED, font("body"))
-	_label_type(t, "InkHeadingLabel", HEADING, Palette.UI_INK, font("bold"))
-	_label_type(t, "DangerLabel", BODY, Palette.UI_BLOOD, font("bold"))
+	_label_type(t, "InkLabel", fs(BODY), Palette.UI_INK, font("body"))
+	_label_type(t, "InkSmallLabel", fs(SMALL), Palette.UI_INK_MUTED, font("body"))
+	_label_type(t, "InkHeadingLabel", fs(HEADING), Palette.UI_INK, font("bold"))
+	_label_type(t, "DangerLabel", fs(BODY), Palette.UI_BLOOD, font("bold"))
 	t.set_color("default_color", "RichTextLabel", Palette.UI_MUTED)
-	t.set_font_size("normal_font_size", "RichTextLabel", SMALL)
-	t.set_font_size("bold_font_size", "RichTextLabel", SMALL)
+	t.set_font_size("normal_font_size", "RichTextLabel", fs(SMALL))
+	t.set_font_size("bold_font_size", "RichTextLabel", fs(SMALL))
 	t.set_font("bold_font", "RichTextLabel", font("bold"))
 
 	# Panels: wood with a gold rule (the default), and the variations.
@@ -217,7 +249,7 @@ static func _build() -> Theme:
 	var sec_h := box(Palette.UI_WOOD_HOVER, Palette.UI_GOLD_DEEP, 1, RADIUS, S4, S2)
 	var sec_p := _pressed(box(Palette.UI_WELL, Palette.UI_GOLD, 1, RADIUS, S4, S2))
 	var sec_d := box(Color(Palette.UI_WOOD_RAISED, 0.45), Palette.UI_RULE_DIM.darkened(0.3), 1, RADIUS, S4, S2)
-	_button_set(t, "Button", sec, sec_h, sec_p, sec_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, BODY, font("bold"))
+	_button_set(t, "Button", sec, sec_h, sec_p, sec_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, fs(BODY), font("bold"))
 	t.set_constant("h_separation", "Button", S2)
 	t.set_constant("outline_size", "Button", 0)
 	# The primary: tarnished gold, dark letters; one to a screen.
@@ -232,13 +264,13 @@ static func _build() -> Theme:
 	var pri_p := _pressed(box(Palette.UI_GOLD_DEEP.darkened(0.25), Palette.UI_GOLD, 1, RADIUS, S5, S2))
 	var pri_d := box(Color(Palette.UI_GOLD_DEEP, 0.3), Color(Palette.UI_GOLD, 0.25), 1, RADIUS, S5, S2)
 	_variation(t, "PrimaryButton", "Button")
-	_button_set(t, "PrimaryButton", pri, pri_h, pri_p, pri_d, focus, Color("1c140b"), Color("120c06"), Color("1c140b"), Color(Palette.UI_INK, 0.6), 19, font("bold"))
+	_button_set(t, "PrimaryButton", pri, pri_h, pri_p, pri_d, focus, Color("1c140b"), Color("120c06"), Color("1c140b"), Color(Palette.UI_INK, 0.6), fs(19), font("bold"))
 	# The quiet: no face until touched (Back, Close).
 	var quiet := _empty(S3, S2)
 	_variation(t, "QuietButton", "Button")
 	_button_set(t, "QuietButton", quiet, box(Color(Palette.UI_RULE, 0.15), Color(0, 0, 0, 0), 0, RADIUS, S3, S2),
 			_pressed(box(Color(Palette.UI_RULE, 0.28), Color(0, 0, 0, 0), 0, RADIUS, S3, S2)), quiet, focus,
-			Palette.UI_MUTED, Palette.UI_GOLD, Palette.UI_GOLD, Palette.UI_FAINT, BODY, font("bold"))
+			Palette.UI_MUTED, Palette.UI_GOLD, Palette.UI_GOLD, Palette.UI_FAINT, fs(BODY), font("bold"))
 	# A row in a list: a title and a hint, the whole row pressed.
 	var row := box(Color(Palette.UI_WOOD_RAISED, 0.55), Color(Palette.UI_RULE_DIM, 0.8), 1, RADIUS, S3, S2)
 	row.border_width_left = 3
@@ -253,7 +285,7 @@ static func _build() -> Theme:
 	row_d.bg_color = Color(Palette.UI_WELL, 0.6)
 	row_d.border_color = Color(Palette.UI_RULE_DIM, 0.5)
 	_variation(t, "RowButton", "Button")
-	_button_set(t, "RowButton", row, row_h, row_p, row_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, BODY, font("bold"))
+	_button_set(t, "RowButton", row, row_h, row_p, row_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, fs(BODY), font("bold"))
 	# The battle's commands: dark iron, the shout given marked in gold.
 	var cmd := box(Color(Palette.UI_NIGHT, 0.94), Palette.UI_RULE_DIM, 1, RADIUS, S1, S1)
 	var cmd_h := box(Color(Palette.UI_WOOD_HOVER, 0.95), Palette.UI_RULE, 1, RADIUS, S1, S1)
@@ -261,7 +293,7 @@ static func _build() -> Theme:
 	cmd_p.border_width_top = 4
 	var cmd_d := box(Color(Palette.UI_NIGHT, 0.92), Color(Palette.UI_RULE_DIM, 0.4), 1, RADIUS, S1, S1)
 	_variation(t, "CommandButton", "Button")
-	_button_set(t, "CommandButton", cmd, cmd_h, cmd_p, cmd_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Color(Palette.UI_FAINT, 0.8), 16, font("bold"))
+	_button_set(t, "CommandButton", cmd, cmd_h, cmd_p, cmd_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Color(Palette.UI_FAINT, 0.8), fs(16), font("bold"))
 	# Small controls laid over the map or the field (the time cluster, the
 	# battle's top row).
 	var tool := box(Color(Palette.UI_NIGHT, 0.86), Palette.UI_RULE_DIM, 1, RADIUS, S2, S1)
@@ -269,13 +301,13 @@ static func _build() -> Theme:
 	var tool_p := _pressed(box(Color("4a3a1c"), Palette.UI_GOLD, 1, RADIUS, S2, S1))
 	var tool_d := box(Color(Palette.UI_NIGHT, 0.6), Color(Palette.UI_RULE_DIM, 0.4), 1, RADIUS, S2, S1)
 	_variation(t, "ToolButton", "Button")
-	_button_set(t, "ToolButton", tool, tool_h, tool_p, tool_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, 15, font("bold"))
+	_button_set(t, "ToolButton", tool, tool_h, tool_p, tool_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, fs(15), font("bold"))
 	# A card to choose (another beginning): a raised panel, gold when chosen.
 	var card := box(Palette.UI_WOOD, Palette.UI_RULE_DIM, 1, RADIUS, S4, S3)
 	var card_h := box(Palette.UI_WOOD_RAISED, Palette.UI_RULE, 1, RADIUS, S4, S3)
 	var card_p := box(Color("2e2518"), Palette.UI_GOLD, 2, RADIUS, S4, S3)
 	_variation(t, "CardButton", "Button")
-	_button_set(t, "CardButton", card, card_h, card_p, card, focus, Palette.UI_TEXT, Palette.UI_TEXT, Palette.UI_TEXT, Palette.UI_FAINT, BODY, font("body"))
+	_button_set(t, "CardButton", card, card_h, card_p, card, focus, Palette.UI_TEXT, Palette.UI_TEXT, Palette.UI_TEXT, Palette.UI_FAINT, fs(BODY), font("body"))
 
 	# Text entry.
 	var edit := box(Palette.UI_WELL, Palette.UI_RULE_DIM, 1, RADIUS, S3, S2)
@@ -290,7 +322,7 @@ static func _build() -> Theme:
 	t.set_color("font_placeholder_color", "LineEdit", Palette.UI_FAINT)
 	t.set_color("caret_color", "LineEdit", Palette.UI_GOLD)
 	t.set_color("selection_color", "LineEdit", Color(Palette.UI_GOLD, 0.35))
-	t.set_font_size("font_size", "LineEdit", 20)
+	t.set_font_size("font_size", "LineEdit", fs(20))
 	t.set_font("font", "LineEdit", font("bold"))
 
 	# Scroll bars: a thin bronze grip in a dark groove.
@@ -319,7 +351,7 @@ static func _build() -> Theme:
 	# The summer's bar, and any other.
 	t.set_stylebox("background", "ProgressBar", box(Palette.UI_WELL, Palette.UI_RULE_DIM, 1, 3, 0, 0))
 	t.set_stylebox("fill", "ProgressBar", box(Palette.UI_GOLD_DEEP, Color(0, 0, 0, 0), 0, 3, 0, 0))
-	t.set_font_size("font_size", "ProgressBar", KEY)
+	t.set_font_size("font_size", "ProgressBar", fs(KEY))
 
 	# A tick box (let the saga tell it).
 	var cb := _empty(S1, S2)
@@ -334,7 +366,7 @@ static func _build() -> Theme:
 	t.set_color("font_pressed_color", "CheckBox", Palette.UI_GOLD)
 	t.set_color("font_hover_pressed_color", "CheckBox", Palette.UI_GOLD)
 	t.set_color("font_focus_color", "CheckBox", Palette.UI_TEXT)
-	t.set_font_size("font_size", "CheckBox", 16)
+	t.set_font_size("font_size", "CheckBox", fs(17))
 	t.set_constant("h_separation", "CheckBox", S3)
 
 	# Rules between sections.
@@ -353,13 +385,13 @@ static func _build() -> Theme:
 	# Tooltips (desktop) and the drill yard's pickers.
 	t.set_stylebox("panel", "TooltipPanel", box(Palette.UI_WELL, Palette.UI_RULE, 1, RADIUS, S2, S1))
 	t.set_color("font_color", "TooltipLabel", Palette.UI_TEXT)
-	t.set_font_size("font_size", "TooltipLabel", SMALL)
+	t.set_font_size("font_size", "TooltipLabel", fs(SMALL))
 	t.set_stylebox("panel", "PopupMenu", box(Palette.UI_WELL, Palette.UI_RULE, 1, RADIUS, S1, S1))
 	t.set_stylebox("hover", "PopupMenu", box(Palette.UI_WOOD_HOVER, Color(0, 0, 0, 0), 0, RADIUS, S2, S1))
 	t.set_color("font_color", "PopupMenu", Palette.UI_TEXT)
 	t.set_color("font_hover_color", "PopupMenu", Palette.UI_GOLD)
-	t.set_font_size("font_size", "PopupMenu", BODY)
-	_button_set(t, "OptionButton", sec, sec_h, sec_p, sec_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, BODY, font("bold"))
+	t.set_font_size("font_size", "PopupMenu", fs(BODY))
+	_button_set(t, "OptionButton", sec, sec_h, sec_p, sec_d, focus, Palette.UI_TEXT, Color.WHITE, Palette.UI_GOLD, Palette.UI_FAINT, fs(BODY), font("bold"))
 
 	# Containers keep to the grid.
 	t.set_constant("separation", "VBoxContainer", S2)
@@ -368,7 +400,6 @@ static func _build() -> Theme:
 	t.set_constant("v_separation", "HFlowContainer", S2)
 	t.set_constant("h_separation", "GridContainer", S3)
 	t.set_constant("v_separation", "GridContainer", S1)
-	return t
 
 
 static func _variation(t: Theme, name: String, base: String) -> void:
@@ -543,7 +574,7 @@ static func chip(text: String, color := Palette.UI_GOLD) -> PanelContainer:
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var l := label(text, "KeyLabel", false)
 	l.add_theme_color_override("font_color", color.lightened(0.25))
-	l.add_theme_font_size_override("font_size", 13)
+	l.add_theme_font_size_override("font_size", fs(14))
 	p.add_child(l)
 	return p
 
@@ -586,7 +617,7 @@ static func list_row(title: String, hint := "", on := Callable(), enabled := tru
 		col.add_child(h)
 	# The button's own size follows its children's.
 	m.minimum_size_changed.connect(func() -> void:
-		b.custom_minimum_size.y = maxf(ROW, m.get_combined_minimum_size().y))
+		b.custom_minimum_size.y = maxf(float(b.get_meta("min_h", ROW)), m.get_combined_minimum_size().y))
 	b.set_meta("title", t)
 	return b
 
@@ -649,7 +680,7 @@ static func gap(h := S3, w := 0) -> Control:
 
 ## Fades `c` in over `seconds`: a screen arriving.
 static func fade_in(c: CanvasItem, seconds := 0.22) -> void:
-	if not motion or seconds <= 0.0 or not c.is_inside_tree():
+	if not motion or reduce_motion or seconds <= 0.0 or not c.is_inside_tree():
 		return
 	c.modulate.a = 0.0
 	var tw := c.create_tween()
@@ -661,6 +692,11 @@ static func fade_in(c: CanvasItem, seconds := 0.22) -> void:
 ## is Families.standing (about -100 to 100).
 static func standing_color(standing: int) -> Color:
 	var t := clampf(standing / 100.0, -1.0, 1.0)
+	if colour_safe:
+		# Dark red to light blue: they differ in lightness as well as hue.
+		if t < 0.0:
+			return Palette.UI_MUTED.lerp(Palette.UI_BLOOD.darkened(0.1), -t)
+		return Palette.UI_MUTED.lerp(Palette.UI_SAFE_FRIEND, minf(1.0, t * 1.4))
 	if t < 0.0:
 		return Palette.UI_MUTED.lerp(Palette.UI_BLOOD.lightened(0.15), -t)
 	return Palette.UI_MUTED.lerp(Palette.UI_FRIEND, minf(1.0, t * 1.4))

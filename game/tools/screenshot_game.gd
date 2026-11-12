@@ -24,7 +24,59 @@
 ## result panel, to the map). On the map: hintok dismisses the hint on the
 ## card, learned opens the "?" list, seen:<id,id> marks hints as read;
 ## map goes on from the told escape's card (after "skip") to the map.
+##
+## The shell (docs/design/notes/shell.md): `settings` opens the settings
+## over whatever screen is up (the title, the map, the battle); `man:<n>`
+## opens the n-th man's card in Your men (0 is the leader); `large` turns
+## on the large words, `safe` the colours for colour-blind eyes, `numbers`
+## a man's numbers, before the next command; `scroll:<px>` scrolls the
+## side panel down, `place:<px>` the place's list in the right-hand panel. `what` "settings" is the
+## title with the settings open.
 extends SceneTree
+
+
+## The shell's commands, on whatever screen is up. True when `cmd` was one.
+func _shell(game: Node, cmd: String) -> bool:
+	match cmd:
+		"large":
+			Settings.set_value("large_text", true)
+			if game.map != null:
+				game.show_map()
+				await process_frame
+			return true
+		"safe":
+			Settings.set_value("colour_safe", true)
+			return true
+		"numbers":
+			Settings.set_value("show_numbers", true)
+			return true
+		"settings":
+			var over: Control = game.screen
+			var who: Node = game
+			if game.battle_node != null and game.battle_node.hud != null:
+				over = game.battle_node.hud.root_control
+				who = game.battle_node.hud
+			elif game.map != null:
+				over = game.map
+			Settings.open(over, who)
+			return true
+	if cmd.begins_with("scroll:") and game.map != null:
+		# Down the side panel (a long card), by design pixels.
+		await process_frame
+		(game.map as MapScreen).side_panel.scroll.scroll_vertical = int(cmd.trim_prefix("scroll:"))
+		return true
+	if cmd.begins_with("place:") and game.map != null:
+		# Down the place's list in the side panel (the market under the deeds).
+		await process_frame
+		((game.map as MapScreen).place_box.get_parent() as ScrollContainer).scroll_vertical = int(cmd.trim_prefix("place:"))
+		return true
+	if cmd.begins_with("man:") and game.map != null:
+		var map: MapScreen = game.map
+		var people := MenPanel.people(map.journey.c.band)
+		var n := clampi(int(cmd.trim_prefix("man:")), 0, people.size() - 1)
+		MenPanel.new(map).show_man(people[n])
+		return true
+	return false
 
 
 func _init() -> void:
@@ -34,11 +86,18 @@ func _init() -> void:
 	var seed_in := int(args[2]) if args.size() > 2 else 7
 	var game: Node = load("res://view/game.tscn").instantiate()
 	game.fixed_seed = true
+	Settings.persist = false
 	game.seed_in = seed_in
 	game.use_config = false
 	get_root().add_child(game)
 	await process_frame
-	if what == "origins":
+	if what == "settings":
+		for i in range(3, args.size()):
+			await _shell(game, args[i])
+		game.show_title()
+		await process_frame
+		await _shell(game, "settings")
+	elif what == "origins":
 		game.show_origins()
 	elif what == "begin":
 		game.show_name()
@@ -49,6 +108,9 @@ func _init() -> void:
 		await process_frame
 		for i in range(3, args.size()):
 			var cmd := args[i]
+			if await _shell(game, cmd):
+				await process_frame
+				continue
 			if game.battle_node != null:
 				var hud = game.battle_node.hud
 				var view: BattleView = game.battle_node.view
@@ -137,6 +199,10 @@ func _init() -> void:
 		map.paused = true  # the tool moves the band itself
 		for i in range(3, args.size()):
 			var cmd := args[i]
+			if await _shell(game, cmd):
+				await process_frame
+				map = game.map  # "large" builds the map again
+				continue
 			if cmd == "quick":
 				j.quick = true
 				map._quick = true
