@@ -266,8 +266,16 @@ these numbers, and the web build has no threads to give it. If the phone
 proves slow, the first thing to try is saving the places' unchanging
 fields as a diff from `Sandbox.setup` (as the rules are).
 
-The matrix: see the report of this package for the counts of the last
-run (5 seeds x 3 origins x 6 bents x 17 points, a year on each).
+The matrix, on the final code merged with main (the saga's fights in):
+5 seeds x 3 origins x 6 bents x 11 points (start, sea, decision,
+fight_offer, battle, winter:1, winter:3, grave_ale:1, ended, years, gen2),
+a year on from each: **982 OK, 0 DIFF**, 8 never came to the point (a
+battle the freedman or a berserk never took within the guard), about 9
+minutes in three processes. An earlier run of all 17 points on the code
+before the log trim (470 checks) was also all OK. The bugs the matrix
+found while building: floats drifting in the last digit through
+`var_to_str` (now exact bits when needed) and the band's metadata (the
+saga's chapters) not saved at all.
 
 ## Web persistence
 
