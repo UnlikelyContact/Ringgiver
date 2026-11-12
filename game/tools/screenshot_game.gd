@@ -27,6 +27,19 @@
 ## result panel, to the map). On the map: hintok dismisses the hint on the
 ## card, learned opens the "?" list, seen:<id,id> marks hints as read;
 ## map goes on from the told escape's card (after "skip") to the map.
+## The first fight (docs/design/notes/first-fight.md), on the escape's
+## battle screen: tut:<n> and tutto:<step> also tap the hex or man the
+## banner marks; skipfight presses Skip the fight; ref opens the "?" card
+## of the shouts; apart sends one of your men two or three hexes off (To Me);
+## through carries the band past the ring (Withdraw), chaser puts one of
+## them at your heels (Fall Back); down
+## fells your man (carried out); rescue and cap end it by the saga's
+## rescue or the round cap; ui:<model>:<n> plays n presses of a stand-in
+## player (tests/escape_players.gd) through the HUD's own buttons and the
+## board's tap, and prints any press the banner asked for that the HUD
+## would not take. On the map: offer puts a fight offer up (the offer's
+## hint), fightnow starts a fight with raiders on the battle screen, and
+## there bhint:<id> brings battle hint <id> (Hints.BATTLE_ORDER) to the card.
 ##
 ## The shell (docs/design/notes/shell.md): `settings` opens the settings
 ## over whatever screen is up (the title, the map, the battle); `man:<n>`
@@ -78,7 +91,10 @@ func _shell(game: Node, cmd: String) -> bool:
 				who = game.battle_node.hud
 			elif game.map != null:
 				over = game.map
-			Settings.open(over, who)
+			if who.has_method("_open_settings"):
+				who._open_settings()  # the battle's own gear (the first fight's skip)
+			else:
+				Settings.open(over, who)
 			return true
 	if cmd.begins_with("scroll:") and game.map != null:
 		# Down the side panel (a long card), by design pixels.
@@ -156,10 +172,88 @@ func _init() -> void:
 							view.step()
 						elif want == "withdraw":
 							hud._on_withdraw()
+						elif want == "tap" and tut.point != BattleGrid.NO_CELL:
+							view._tap(Iso.to_screen(tut.point))
 						else:
 							break
 						acts += 1
+						await _settle_view(view)
 					await process_frame
+				elif cmd == "skipfight":
+					hud.skip_fight()
+				elif cmd == "ref":
+					hud._show_reference()
+				elif cmd == "apart":
+					var b0 := view.battle
+					var lw0: Warrior = b0.sworn_leader(0)
+					for w in b0.side_warriors(0):
+						if w != lw0 and w.is_active():
+							# Two or three hexes off, with none of them at his arm's length.
+							for row in b0.grid.height:
+								var done := false
+								for col in b0.grid.width:
+									var to := BattleGrid.from_offset(col, row)
+									if b0.grid.is_free(to) and BattleGrid.chebyshev(to, lw0.pos) >= 2 and BattleGrid.chebyshev(to, lw0.pos) <= 3 and b0.grid.adjacent_warriors(to, 1).is_empty():
+										b0.grid.remove(w)
+										b0.grid.place(w, to)
+										done = true
+										break
+								if done:
+									break
+							break
+					view._compute_tighten()
+					for w in view.tokens:
+						(view.tokens[w] as Token).position = view._spot(w, w.pos)
+					tut.evaluate()
+					tut._show()
+				elif cmd == "through":
+					var b1 := view.battle
+					var col := 5
+					for w in b1.side_warriors(0):
+						if w.is_active():
+							b1.grid.remove(w)
+							b1.grid.place(w, BattleGrid.from_offset(col, 3))
+							col += 1
+					for w in b1.side_warriors(1):
+						if w.is_active() and b1.objective.dark_distance(w.pos) <= 3:
+							b1.grid.remove(w)
+							w.fled = true
+					view._compute_tighten()
+					for w in view.tokens:
+						(view.tokens[w] as Token).position = view._spot(w, w.pos)
+						(view.tokens[w] as Token).visible = not w.fled
+					tut.evaluate()
+					tut._show()
+				elif cmd == "chaser":
+					# One of them at your heels, below you: the way open but not
+					# out of reach (Fall Back).
+					var b2 := view.battle
+					var lw2: Warrior = b2.sworn_leader(0)
+					for w in b2.side_warriors(1):
+						if w.is_active() and not w.broken:
+							for c in b2.grid.neighbors(lw2.pos):
+								if b2.grid.is_free(c) and b2.objective.dark_distance(c) > b2.objective.dark_distance(lw2.pos):
+									b2.grid.remove(w)
+									b2.grid.place(w, c)
+									(view.tokens[w] as Token).position = view._spot(w, c)
+									break
+							break
+					tut.evaluate()
+					tut._show()
+				elif cmd == "down":
+					view.battle.sworn_leader(0).wound = CombatTypes.Wound.DOWN
+					view.step()
+					await _settle_view(view)
+				elif cmd == "rescue":
+					view.battle._first_fight_rescue(view.battle.sworn_leader(0))
+					hud._on_finished(view.battle.result)
+				elif cmd == "cap":
+					view.battle.round = view.battle.rules.escape_round_cap - 1
+					view.battle._ff_ordered = true
+					view.step()
+					await _settle_view(view)
+				elif cmd.begins_with("ui:"):
+					await _drive_ui(hud, view, cmd.split(":")[1], int(cmd.split(":")[2]))
 				elif cmd == "hurt":
 					# The first of your men takes a bruise, so the wound step
 					# can be seen on any seed.
@@ -360,6 +454,30 @@ func _init() -> void:
 			elif _law_land(j, map, cmd):
 				if cmd == "landmodal":
 					continue
+			elif cmd == "offer" or cmd == "fightnow":
+				# Raiders come down on the band: the offer (and its hint), or
+				# straight onto the battle screen.
+				j._offer_fight("raiders", CombatTypes.Tier.GREEN, maxi(4, j.c.band.fighters().size() + 2), false, 3, false, false,
+						{"kind": "world_fight", "what": "raiders"}, "Raiders come down on you out of the hills.", true)
+				map.refresh()
+				for k in 3:
+					await process_frame
+				game.hints.check()
+				if cmd == "fightnow":
+					j.answer(str(FightOffer.Choice.TAKE_THE_FIELD))
+					map.refresh()
+					await process_frame
+				continue
+			elif cmd.begins_with("bhint:") and game.battle_node != null:
+				var bh: BattleHints = game.battle_node.hud.battle_hints
+				var want_id := cmd.trim_prefix("bhint:")
+				for id in Hints.BATTLE_ORDER:
+					if id == want_id:
+						break
+					game.hints.seen[id] = true
+				bh.showing = want_id
+				bh.check()
+				continue
 			elif cmd.begins_with("rounds:") and game.battle_node != null:
 				# Fight the battle on screen: shield wall, then push.
 				await process_frame
@@ -412,6 +530,61 @@ func _init() -> void:
 	print("saved %s %dx%d" % [out, img.get_width(), img.get_height()])
 	quit(0)
 
+
+
+## Waits for the battle view to finish animating a round.
+func _settle_view(view: BattleView) -> void:
+	var guard := 0
+	while view.animating and guard < 200:
+		guard += 1
+		await process_frame
+
+
+## Plays `n` presses of stand-in player `model` (tests/escape_players.gd)
+## through the HUD's buttons and the board's tap, as a thumb would. Each
+## press the banner asks for is checked against the HUD: the control must be
+## there, shown and not disabled. Prints what it pressed and any mismatch.
+func _drive_ui(hud: Node, view: BattleView, model: String, n: int) -> void:
+	var players: GDScript = load("res://tests/escape_players.gd")
+	var tut: Tutorial = hud.tutorial
+	var b := view.battle
+	var lw: Warrior = b.sworn_leader(0)
+	var st := {"model": model, "b": b, "leader": lw, "t": tut, "pending": CombatTypes.Shout.NONE, "action": null, "advance": false,
+			"rng": SimRng.new(b.rules.escape_width).fork("ui:" + model), "idle": 0, "bad": 0, "impossible": 0, "texts": [],
+			"last_text": "", "last_progress": true, "last_obeyed": false, "pushed_last": false, "early_done": {}, "late_done": {}, "seq": 0}
+	var mismatches := 0
+	for i in n:
+		if b.is_over():
+			break
+		var asked := tut.control()
+		var c: Control = hud.controls.get(asked, null)
+		if c != null and (not c.is_visible_in_tree() or (c as Button).disabled):
+			mismatches += 1
+			print("UI MISMATCH round %d: the banner asks for %s but the HUD has it %s" % [b.round, asked, "hidden" if not c.is_visible_in_tree() else "disabled"])
+		var id: String = players._choose(st)
+		if id == "tap":
+			id = "tap:%d,%d" % [tut.point.x, tut.point.y] if tut.point != BattleGrid.NO_CELL else "next"
+		print("ui press %d: %s (asked %s) | %s" % [i, id, asked, tut.text()])
+		if id == "ack":
+			if tut.control() == "ack":
+				tut._go_on.pressed.emit()
+		elif id.begins_with("shout:"):
+			var s := int(id.trim_prefix("shout:")) as CombatTypes.Shout
+			(hud.shout_buttons[s] as Button).pressed.emit()
+			st.pending = view.pending_shout
+		elif id == "next":
+			st.pushed_last = view.pending_shout == CombatTypes.Shout.PUSH or (view.pending_shout == CombatTypes.Shout.NONE and b.standing_order(0) == CombatTypes.Shout.PUSH)
+			(hud.next_btn as Button).pressed.emit()
+			await _settle_view(view)
+			await process_frame
+			st.pending = CombatTypes.Shout.NONE
+		elif id == "withdraw":
+			(hud.withdraw_btn as Button).pressed.emit()
+		elif id.begins_with("tap:"):
+			var xy := id.trim_prefix("tap:").split(",")
+			view._tap(Iso.to_screen(Vector2i(int(xy[0]), int(xy[1]))))
+		await process_frame
+	print("ui %s: %d presses, round %d, over %s, mismatches %d" % [model, n, b.round, b.is_over(), mismatches])
 
 
 ## The law, the land and the unfree's commands (see the header). True when

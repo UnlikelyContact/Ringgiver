@@ -6,7 +6,8 @@ extends TestCase
 
 
 ## Plays the escape the way the tutorial asks, step by step: Go on, the
-## shout it names, Next round, Withdraw. Returns the director (free it).
+## shout it names, Next round, Withdraw, a tap on the hex or man it marks.
+## Returns the director (free it).
 static func follow_tutorial(b: Battle) -> Tutorial:
 	var t := Tutorial.new()
 	t.start(b)
@@ -27,6 +28,10 @@ static func follow_tutorial(b: Battle) -> Tutorial:
 		elif want == "withdraw":
 			b.withdraw(0)
 			t.evaluate()
+		elif want == "tap" and t.point != BattleGrid.NO_CELL:
+			var occ := b.grid.occupant(t.point)
+			b.set_player_action(0, Action.attack(occ) if occ != null else Action.move_to(t.point))
+			t.on_tap(t.point)
 		else:
 			break
 	return t
@@ -233,6 +238,7 @@ func test_the_director_teaches_one_control_at_a_time() -> void:
 	assert_eq(t.control(), "ack", "first, read who is who")
 	var none: Array[String] = ["none"]
 	assert_eq(t.allowed(), none, "nothing on the field to press yet")
+	assert_true(t.goal, "the dark is shown from the first")
 	t.acknowledge()
 	assert_eq(t.step, Tutorial.Step.WALL)
 	var wall := "shout:%d" % CombatTypes.Shout.SHIELD_WALL
@@ -247,50 +253,113 @@ func test_the_director_teaches_one_control_at_a_time() -> void:
 	b.run_round()
 	t.after_round()
 	assert_eq(t.step, Tutorial.Step.PUSH, "the wall is done: now the push")
-	assert_true(t.said != "", "and a line says what the wall did")
-	assert_eq(t.control(), "shout:%d" % CombatTypes.Shout.PUSH)
-	# A man of yours hurt between rounds: the wound is read, then on.
+	assert_eq(t.said, Tutorial.SAID_WALL, "and a line says what the wall did")
+	var push := "shout:%d" % CombatTypes.Shout.PUSH
+	assert_eq(t.control(), push)
+	var only_push: Array[String] = [push]
+	assert_eq(t.allowed(), only_push, "the first push is taught alone too")
+	assert_true(t.point != BattleGrid.NO_CELL and b.grid.occupant(t.point) != null and b.grid.occupant(t.point).side == 1,
+			"the man between you and the dark is marked")
 	t.pending = CombatTypes.Shout.PUSH
+	t.evaluate()
+	assert_true(t.text().contains("3 more"), "how many shoves the thin place will take: " + t.text())
 	b.set_shout(0, CombatTypes.Shout.PUSH)
-	(f.ours[1] as Warrior).wound = CombatTypes.Wound.BRUISED
 	b.run_round()
 	t.after_round()
-	assert_eq(t.step, Tutorial.Step.HURT)
-	assert_true(t.text().contains((f.ours[1] as Warrior).display_name), "names the man: " + t.text())
-	t.acknowledge()
-	assert_eq(t.step, Tutorial.Step.PUSH, "back to the push")
-	assert_eq(t.control(), "next", "the push stands: keep going")
-	var only_next: Array[String] = ["next"]
-	assert_eq(t.allowed(), only_next, "still only the round")
+	assert_true(t.allowed().is_empty(), "past the first push every control answers")
 	t.free()
 
 
-func test_the_director_waits_for_the_way_to_open_before_falling_back() -> void:
-	var f := Scenario.build_escape(2, CombatRules.new())
+## The director's choice is a pure function of the field (Tutorial.advise):
+## each of the field's states on a built escape, by hand.
+static func _advise(b: Battle, m := {}) -> Dictionary:
+	var memo := {"acked": true, "pending": CombatTypes.Shout.NONE, "tapped": BattleGrid.NO_CELL, "last_text": "",
+			"last_progress": true, "to_me_tried": false}
+	memo.merge(m, true)
+	return Tutorial.advise(b, memo)
+
+
+## The band (you first) at offset row `row` from column `col`, the burners
+## within `clear` hexes of the dark taken off the field.
+static func _band_at(f: Dictionary, row: int, col: int, clear: int) -> void:
 	var b: Battle = f.battle
-	var t := Tutorial.new()
-	t.start(b)
-	t.acknowledge()
-	b.set_shout(0, CombatTypes.Shout.SHIELD_WALL)
-	b.run_round()
-	t.after_round()
-	b.set_shout(0, CombatTypes.Shout.PUSH)
-	b.run_round()
-	t.after_round()
-	if t.step == Tutorial.Step.HURT:
-		t.acknowledge()
-	assert_eq(t.step == Tutorial.Step.FALL_BACK, b.objective.way_open(b), "fall back comes when they are behind you")
-	# Through the ring by hand: the next round's end brings the lesson.
-	var col := 4
 	for w in f.ours:
 		b.grid.remove(w)
-		b.grid.place(w, BattleGrid.from_offset(col, 2))
+	for w in f.ours:
+		b.grid.place(w, BattleGrid.from_offset(col, row))
 		col += 1
-	t.evaluate()
-	assert_eq(t.step, Tutorial.Step.FALL_BACK)
-	assert_eq(t.control(), "shout:%d" % CombatTypes.Shout.FALL_BACK)
-	assert_true(t.allowed().is_empty(), "past the first steps every control answers")
-	t.free()
+	for w in f.theirs:
+		if (w as Warrior).is_active() and b.objective.dark_distance((w as Warrior).pos) <= clear:
+			b.grid.remove(w)
+			(w as Warrior).fled = true
+
+
+func test_the_director_says_the_one_useful_thing_the_field_shows() -> void:
+	var rules := CombatRules.new()
+	# One of them between you and the dark: push, and he is marked.
+	var f := Scenario.build_escape(5, rules)
+	var b: Battle = f.battle
+	b.round = 1
+	var a := _advise(b)
+	assert_eq(a.step, Tutorial.Step.PUSH, "the ring stands between")
+	assert_eq(a.control, "shout:%d" % CombatTypes.Shout.PUSH)
+	var marked: Warrior = b.grid.occupant(a.point)
+	assert_true(marked != null and marked.side == 1 and b.objective.dark_distance(marked.pos) < b.objective.leader_distance(b),
+			"the man marked stands nearer the dark than you")
+	# A man alone: To Me, and he is marked.
+	var man: Warrior = f.ours[1]
+	b.grid.remove(man)
+	b.grid.place(man, BattleGrid.from_offset(4, 3))
+	a = _advise(b)
+	assert_eq(a.step, Tutorial.Step.TO_ME, "a man apart: call him in")
+	assert_eq(a.control, "shout:%d" % CombatTypes.Shout.TO_ME)
+	assert_eq(a.point, man.pos)
+	assert_true(a.text.contains(man.display_name), a.text)
+	a = _advise(b, {"pending": CombatTypes.Shout.TO_ME})
+	assert_eq(a.control, "next", "To Me waiting: the round")
+	a = _advise(b, {"to_me_tried": true})
+	assert_eq(a.step, Tutorial.Step.PUSH, "called once and still apart: the field's next need comes first")
+	# Through, out of reach: Withdraw.
+	f = Scenario.build_escape(5, rules)
+	b = f.battle
+	b.round = 3
+	_band_at(f, 3, 5, 3)
+	assert_true(b.can_withdraw(0))
+	a = _advise(b)
+	assert_eq(a.step, Tutorial.Step.WITHDRAW)
+	assert_eq(a.control, "withdraw")
+	assert_true(a.goal, "the dark pulses")
+	# Through, with one at your heels: fall back toward the dark.
+	var chaser: Warrior = null
+	for w in f.theirs:
+		if (w as Warrior).is_active():
+			chaser = w
+	b.grid.remove(chaser)
+	b.grid.place(chaser, BattleGrid.from_offset(5, 4))
+	assert_true(b.objective.way_open(b) and not b.can_withdraw(0), "the way open, but one at arm's length")
+	a = _advise(b)
+	assert_eq(a.step, Tutorial.Step.FALL_BACK)
+	assert_eq(a.control, "shout:%d" % CombatTypes.Shout.FALL_BACK)
+	assert_true(a.goal)
+	# The same words after a round that came to nothing are not said again.
+	a = _advise(b, {"pending": CombatTypes.Shout.FALL_BACK})
+	var fb_on: String = a.text
+	assert_eq(a.control, "next")
+	a = _advise(b, {"pending": CombatTypes.Shout.FALL_BACK, "last_text": fb_on, "last_progress": false})
+	assert_eq(a.step, Tutorial.Step.STEP_OUT, "the wall was held up: step out yourself")
+	assert_eq(a.control, "tap")
+	assert_true(a.text != fb_on)
+	assert_true(b.grid.is_free(a.point) and b.objective.dark_distance(a.point) < b.objective.leader_distance(b),
+			"the hex marked is free and nearer the dark")
+	# Down: what is happening, and nothing to press.
+	(f.ours[0] as Warrior).wound = CombatTypes.Wound.DOWN
+	a = _advise(b)
+	assert_eq(a.step, Tutorial.Step.CARRIED)
+	assert_eq(a.control, "")
+	assert_eq(a.text, Tutorial.TEXT_CARRIED)
+	for k in [Tutorial.TEXT_WHO, Tutorial.TEXT_WALL, Tutorial.TEXT_PUSH, Tutorial.TEXT_TO_ME, Tutorial.TEXT_FALL_BACK,
+			Tutorial.TEXT_STEP_OUT, Tutorial.TEXT_WITHDRAW, Tutorial.TEXT_CARRIED, Tutorial.TEXT_PUSH_RING]:
+		assert_true(not str(k).contains("!"), "plain words: " + str(k))
 
 
 func test_the_first_days_hints_come_in_order_and_once() -> void:
@@ -354,7 +423,9 @@ func test_the_ring_holds_but_at_the_thin_place() -> void:
 		var t := follow_tutorial(b)
 		t.free()
 		for w in j.fight.built.theirs:
-			if (w as Warrior).broken and not thin.has(w):
+			# Men who give way to the push run off the field (first-fight.md):
+			# by design, and not the ring breaking.
+			if (w as Warrior).broken and not (w as Warrior).fled and not thin.has(w):
 				broke += 1
 		if b.result.how == BattleResult.End.ROUT and b.result.winner == 0:
 			routed += 1
@@ -385,3 +456,207 @@ func test_the_ring_is_led_by_the_head_of_the_burning_house() -> void:
 	var leader: Warrior = j.fight.built.theirs[0]
 	assert_true(leader.is_leader)
 	assert_eq(leader.display_name, h.name.trim_suffix("'s kin"), "not the prototype's name")
+
+
+# --- The first fight made robust (docs/design/notes/first-fight.md) -----------
+
+const PLAYERS := preload("res://tests/escape_players.gd")
+
+
+## Stand-in first-timers of every kind, pressing the HUD's controls as the
+## HUD lets them: each gets out on his feet often enough, none is kept past
+## the round cap, and the banner never asks for what cannot be pressed, nor
+## repeats itself after a round, played as it asked, that came to nothing.
+func test_sloppy_first_timers_get_out() -> void:
+	var cap := CombatRules.new().escape_round_cap
+	for model in ["exact", "late", "early", "observed", "next_only", "back_after_push", "taps", "withdraw"]:
+		var m: Dictionary = PLAYERS.measure(model, 12)
+		var need := 11 if model == "exact" else 10
+		assert_true(m.out >= need, "%s: out on his feet %d of 12" % [model, m.out])
+		assert_true(m.worst <= cap, "%s: never past round %d (worst %d)" % [model, cap, m.worst])
+		assert_eq(m.impossible, 0, "%s: the banner never asks for a control that will not answer" % model)
+		assert_eq(m.stuck, 0, "%s: never stuck at a lock" % model)
+		assert_eq(m.died, 0, "%s: the leader never dies" % model)
+		if model != "taps":
+			assert_eq(m.bad, 0, "%s: never the same words after a round that came to nothing" % model)
+
+
+func test_doing_nothing_is_still_carried_off() -> void:
+	var m: Dictionary = PLAYERS.measure("nothing", 10)
+	assert_true(m.carried >= 9, "no order at all: carried off %d of 10" % m.carried)
+	assert_true(m.worst <= CombatRules.new().escape_round_cap)
+	assert_eq(m.died, 0)
+
+
+## The thin place gives to anyone who pushes: after `escape_give_rounds`
+## rounds of pushing, none of them stands nearer the dark within reach of
+## the leader, and the way is open soon after.
+func test_the_thin_place_gives_to_a_push() -> void:
+	var rules := CombatRules.new()
+	var opened := 0
+	for s in range(1, 11):
+		var j := Journey.begin(s, "burned_hall", "Egil", true)
+		var b: Battle = j.fight.built.battle
+		b.set_shout(0, CombatTypes.Shout.SHIELD_WALL)
+		b.run_round()
+		b.set_shout(0, CombatTypes.Shout.PUSH)
+		while not b.is_over() and b.first_fight_pushed() < rules.escape_give_rounds:
+			b.run_round()
+		var l := b.sworn_leader(0)
+		if b.is_over() or not l.is_active():
+			continue
+		var mine := b.objective.dark_distance(l.pos)
+		for w in b.active(1):
+			if not w.broken and b.objective.dark_distance(w.pos) < mine:
+				assert_true(BattleGrid.distance(w.pos, l.pos) > rules.escape_give_radius, "seed %d: %s gave way" % [s, w.display_name])
+		for k in 4:
+			if b.is_over() or b.objective.way_open(b):
+				break
+			b.run_round()
+		if b.is_over() or b.objective.way_open(b):
+			opened += 1
+	assert_true(opened >= 9, "the way open within four more rounds of pushing, %d of 10" % opened)
+
+
+## The saga's own rescue: a leader cut off from his men is dragged out by the
+## nearest of them, both hurt, and the escape is made.
+func test_a_leader_cut_off_is_dragged_out() -> void:
+	var rescued := 0
+	for s in range(1, 11):
+		var rules := CombatRules.new()
+		rules.escape_rescue_rounds = 1
+		var f := Scenario.build_escape(s, rules)
+		var b: Battle = f.battle
+		var l: Warrior = f.ours[0]
+		var men: Array = f.ours.slice(1)
+		b.set_shout(0, CombatTypes.Shout.SHIELD_WALL)  # he has given an order
+		# Him alone by the hall's left end, two of them on him; his men away right.
+		for w in f.ours:
+			b.grid.remove(w)
+		b.grid.place(l, BattleGrid.from_offset(1, 6))
+		b.grid.place(men[0], BattleGrid.from_offset(11, 3))
+		b.grid.place(men[1], BattleGrid.from_offset(12, 3))
+		var near := 0
+		for w in f.theirs:
+			if near < 1 and (w as Warrior).is_active():
+				for c in b.grid.neighbors(l.pos):
+					if b.grid.is_free(c):
+						b.grid.remove(w)
+						b.grid.place(w, c)
+						near += 1
+						break
+		b.run_round()
+		if not l.is_active():
+			continue  # felled outright: his men carry him off instead
+		assert_true(b.is_over(), "seed %d: the rescue ends it" % s)
+		assert_eq(b.objective.how_out, "rescued")
+		assert_true(b.result.escaped(0), "the escape is made")
+		var hurt := 0
+		for m in men:
+			if (m as Warrior).wound >= rules.escape_rescue_wound:
+				hurt += 1
+		assert_eq(hurt, 1, "the man who dragged him out is hurt")
+		assert_true(l.wound >= rules.escape_rescued_wound, "and so is he")
+		assert_true(b.result.log[b.result.log.size() - 1].contains("will") or " ".join(b.result.log).contains("drags"), "it is told")
+		rescued += 1
+	assert_true(rescued >= 6, "rescued %d of 10" % rescued)
+
+
+## The night has an end: a band that gave orders is told out at the round
+## cap; one that never did has its leader carried off.
+func test_the_round_cap_tells_the_escape() -> void:
+	var rules := CombatRules.new()
+	for s in range(1, 6):
+		var f := Scenario.build_escape(s, rules)
+		var b: Battle = f.battle
+		while not b.is_over() and b.round < 40:
+			b.set_shout(0, CombatTypes.Shout.HOLD)  # an order, but never the push
+			b.run_round()
+		assert_true(b.round <= rules.escape_round_cap, "seed %d: over by round %d (%d)" % [s, rules.escape_round_cap, b.round])
+		assert_true(b.result.escaped(0))
+		var told := b.objective.how_out
+		if b.round == rules.escape_round_cap and told == "told":
+			assert_true((f.ours[0] as Warrior).is_active(), "told out on his feet")
+	var g := Scenario.build_escape(3, rules)
+	var nb: Battle = g.battle
+	while not nb.is_over() and nb.round < 40:
+		nb.run_round()
+	assert_true(nb.round <= rules.escape_round_cap)
+	assert_true((g.ours[0] as Warrior).is_down(), "no order at all: carried off at the end")
+	assert_true(nb.result.escaped(0), "but the saga goes on")
+
+
+## The first fight only: the saga's later break-out from a burning hall and
+## the burning of another's keep the ordinary rules.
+func test_only_the_first_fight_bends() -> void:
+	var rules := CombatRules.new()
+	var f := Scenario.build_escape(4, rules)
+	assert_true((f.objective as Objective).first_fight)
+	var j := Journey.begin(4, "burned_hall", "Egil", true)
+	assert_true((j.fight.built.objective as Objective).first_fight, "the saga's own first fight")
+	var bo := Scenario.build_breakout(4, rules, {"ours": f.ours.duplicate(), "theirs": f.theirs.duplicate()})
+	assert_true(not (bo.objective as Objective).first_fight, "a later break-out is not")
+	var hb := Scenario.build_hall_burning(4, rules, {"ours": f.ours.duplicate(), "theirs": f.theirs.duplicate()})
+	assert_true(not (hb.objective as Objective).first_fight, "nor a burning")
+
+
+# --- The rest of the battle, taught in later fights ----------------------------
+
+func test_battle_hints_come_once_on_their_conditions() -> void:
+	var rules := CombatRules.new()
+	var j := Journey.begin(3, "younger_son", "Egil")
+	var h := Hints.new(j)
+	var b: Battle = Scenario.build("equal_green", 7, rules, true, 8).battle
+	b.objective = null  # an open fight: no clock
+	assert_eq(h.next_battle_hint(b), "b_form", "before the first round: the shape")
+	h.seen["b_form"] = true
+	assert_eq(h.next_battle_hint(b), "", "nothing else bears yet")
+	b.round = 1
+	assert_eq(h.next_battle_hint(b), "b_tap", "a round in: tapping the board")
+	h.seen["b_tap"] = true
+	assert_true(Hints.battle_due("b_advance", b), "apart, the wall formed: Advance")
+	# A man of yours off on his own: To Me.
+	var lone: Warrior = null
+	for w in b.side_warriors(0):
+		if not w.is_leader and w.role == CombatTypes.Role.SHIELD:
+			lone = w
+	assert_true(not Hints.battle_due("b_tome", b))
+	b.grid.remove(lone)
+	for row in b.grid.height:
+		var c := BattleGrid.from_offset(0, row)
+		if b.grid.is_free(c) and b.grid.adjacent_warriors(c, 1).is_empty() and BattleGrid.chebyshev(c, b.leader_of(0).pos) >= 3:
+			b.grid.place(lone, c)
+			break
+	assert_eq(h.next_battle_hint(b), "b_tome", "a man alone: To Me")
+	h.seen["b_tome"] = true
+	# Their hearts thin: Break Them, once they are met.
+	for w in b.active(1):
+		w.morale = rules.morale_break_threshold
+	assert_true(not Hints.battle_due("b_break", b), "not before the lines meet")
+	var foe: Warrior = b.active(1)[0]
+	var mine: Warrior = b.leader_of(0)
+	for c in b.grid.neighbors(mine.pos):
+		if b.grid.is_free(c):
+			b.grid.remove(foe)
+			b.grid.place(foe, c)
+			break
+	assert_true(Hints.battle_due("b_break", b), "their heart going, the lines met")
+	b.round = Hints.PULSE_ROUND
+	assert_true(Hints.battle_due("b_pulse", b))
+	# An objective's clock; and never in the burned hall.
+	var o: Battle = Scenario.build("hold", 7, rules, true, 8).battle
+	if o.objective != null:
+		assert_true(Hints.battle_due("b_clock", o), "a fight over something: its clock")
+	var e: Battle = Scenario.build_escape(7, rules).battle
+	for id in Hints.BATTLE_ORDER:
+		e.round = 5
+		assert_true(not Hints.battle_due(id, e), "%s: the burned hall teaches itself" % id)
+		assert_true(Hints.battle_text(id) != "" and not Hints.battle_text(id).contains("!"), "%s: one plain line" % id)
+		assert_true(Hints.battle_control(id) == "" or Hints.battle_control(id) in ["form", "advance", "wheel_l", "withdraw", "pulse"]
+				or Hints.battle_control(id).begins_with("shout:"), "%s names a control the HUD has" % id)
+	# Seen, never again; and listed with what has been learned.
+	for id in Hints.BATTLE_ORDER:
+		h.seen[id] = true
+	assert_eq(h.next_battle_hint(b), "")
+	assert_eq(h.learned_in_battle().size(), Hints.BATTLE_ORDER.size())
+	assert_true(Hints.battle_text("offer").contains("fade away"))

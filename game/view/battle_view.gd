@@ -9,6 +9,9 @@ signal battle_finished(result: BattleResult)
 signal auto_paused(reason: String)
 signal paused_changed(is_paused: bool)
 signal camera_moved()
+## The player tapped the board: his man will step to or strike at `cell`
+## next round, or (NO_CELL) acts with the line again. The tutorial listens.
+signal tapped(cell: Vector2i)
 
 var battle: Battle
 var rules: CombatRules
@@ -30,6 +33,12 @@ var animating := false
 var anim_scale := 1.0  # 0 for headless screenshots
 ## What happened to your man last round, for the HUD.
 var player_line := ""
+## The tutorial's marks on the board (view/tutorial.gd): the man or hex the
+## banner means, ringed and pulsing (NO_CELL for none), and whether the
+## objective's edge is where to go now (it pulses gold, with an arrow from
+## your man toward it).
+var guide_cell: Vector2i = BattleGrid.NO_CELL
+var guide_goal := false
 var _last_enemy_shout: CombatTypes.Shout = CombatTypes.Shout.NONE
 var _log_seen := 0
 var _by_name := {}
@@ -573,6 +582,7 @@ func _tap(local: Vector2) -> void:
 		pending_action = null  # back to acting with the line
 		pending_advance = false
 		queue_redraw()
+		tapped.emit(BattleGrid.NO_CELL)
 		return
 	if BattleGrid.chebyshev(cell, player.pos) != 1:
 		return
@@ -581,6 +591,7 @@ func _tap(local: Vector2) -> void:
 		pending_advance = true  # a tap ahead takes the wall forward, not the man
 		pending_action = null
 		queue_redraw()
+		tapped.emit(cell)
 		return
 	pending_advance = false
 	var occ := battle.grid.occupant(cell)
@@ -591,6 +602,7 @@ func _tap(local: Vector2) -> void:
 	else:
 		return
 	queue_redraw()
+	tapped.emit(cell)
 
 
 # --- Drawing ----------------------------------------------------------------
@@ -612,6 +624,7 @@ func _draw() -> void:
 	if is_night():
 		_draw_night()
 	draw_objective()
+	_draw_guide()
 	_draw_wall_slots()
 	_draw_shield_locks()
 	if player != null and player.is_active():
@@ -824,10 +837,16 @@ func draw_objective() -> void:
 	if obj == null or obj.cells.is_empty():
 		return
 	var col := Palette.objective_color(obj.kind)
+	var fill := 0.32
+	if guide_goal:
+		# Where to go now (the tutorial): the edge pulses gold.
+		var pulse := 0.5 + 0.5 * sin(_fire_time * 4.0)
+		col = col.lerp(Palette.GOLD, 0.6 + 0.4 * pulse)
+		fill = 0.25 + 0.3 * pulse
 	var left := Vector2(INF, 0)
 	for c in obj.cells:
 		var hexa := Iso.hexagon(c, 2.0)
-		draw_colored_polygon(hexa, Color(col, 0.32))
+		draw_colored_polygon(hexa, Color(col, fill))
 		draw_polyline(hexa + PackedVector2Array([hexa[0]]), Palette.OUTLINE, 5.0)
 		draw_polyline(hexa + PackedVector2Array([hexa[0]]), col, 3.0)
 		var p := Iso.to_screen(c)
@@ -842,6 +861,39 @@ func draw_objective() -> void:
 	var pos := Vector2(left.x - Iso.SIZE - w, left.y + size * 0.35)
 	draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, 6, Palette.OUTLINE)
 	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+
+
+## The tutorial's marks: a pulsing gold ring round the man or hex the
+## banner means, and, when the objective's edge is where to go, an arrow
+## from your man toward its nearest hex.
+func _draw_guide() -> void:
+	var pulse := 0.55 + 0.45 * sin(_fire_time * 5.0)
+	if guide_cell != BattleGrid.NO_CELL and battle.grid.in_bounds(guide_cell):
+		var at := Iso.to_screen(guide_cell)
+		draw_arc(at, Token.R + 9.0, 0, TAU, 32, Palette.OUTLINE, 6.0)
+		draw_arc(at, Token.R + 9.0, 0, TAU, 32, Color(Palette.GOLD, pulse), 3.5)
+		draw_arc(at, Token.R + 15.0, 0, TAU, 32, Color(Palette.GOLD, pulse * 0.4), 2.0)
+	var obj := battle.objective
+	if guide_goal and obj != null and not obj.cells.is_empty() and player != null and player.is_active():
+		# The nearest hex of the edge, and of those the one most nearly
+		# straight ahead up the field.
+		var best: Vector2i = obj.cells[0]
+		var here := BattleGrid.to_offset(player.pos)
+		for c in obj.cells:
+			var d := BattleGrid.distance(player.pos, c)
+			var bd := BattleGrid.distance(player.pos, best)
+			if d < bd or (d == bd and absi(BattleGrid.to_offset(c).x - here.x) < absi(BattleGrid.to_offset(best).x - here.x)):
+				best = c
+		if best == player.pos:
+			return
+		var from := Iso.to_screen(player.pos)
+		var to := Iso.to_screen(best)
+		var dir := (to - from).normalized()
+		var start := from + dir * (Token.R + 18.0)
+		var end := to - dir * Iso.SIZE * 0.4
+		if (end - start).dot(dir) > 8.0:
+			_arrow(start, end, Palette.OUTLINE, 7.0)
+			_arrow(start, end, Color(Palette.GOLD, 0.45 + 0.4 * pulse), 4.0)
 
 
 ## Faint outlines of the line's slots while the standing order is Shield Wall.
