@@ -604,7 +604,7 @@ static func answer(j: Journey, d: Dictionary, id: String) -> void:
 				var spent := mini(int(s.spent), band.silver)
 				band.silver -= spent
 				if spent > 0:
-					j._say("%s lays out %d oz, and %d men swear with him." % [band.leader.display_name, spent, spent / wr.ounces_per_supporter])
+					j._say("%s lays out %d oz, and %s swear with him." % [band.leader.display_name, spent, "a man" if spent / wr.ounces_per_supporter == 1 else "%d men" % (spent / wr.ounces_per_supporter)])
 				_preview(j)
 				_push(j, _law_decision(j))
 				return

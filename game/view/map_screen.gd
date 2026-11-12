@@ -349,7 +349,7 @@ func _status() -> void:
 		for ch in _rank_box.get_children():
 			ch.queue_free()
 		if s.outlaw:
-			_rank_box.add_child(UiTheme.chip("Outlaw", Palette.UI_BLOOD))
+			_rank_box.add_child(UiTheme.chip("Outlaw" if str(s.get("outlaw_kind", "")) == "full" else "Exile", Palette.UI_BLOOD))
 		if int(s.feuds) > 0:
 			_rank_box.add_child(UiTheme.chip("Feuds %d" % int(s.feuds), Palette.UI_BLOOD))
 		_rank_box.add_child(UiTheme.chip(str(s.rank).capitalize(), Palette.UI_GOLD))
@@ -359,6 +359,7 @@ func _status() -> void:
 	UiTheme.set_stat(_stats.fame, str(int(s.fame)))
 	UiTheme.set_stat(_stats.honor, str(int(s.honor)))
 	UiTheme.set_stat(_stats.luck, str(int(s.luck)))
+	(_stats.luck as Control).tooltip_text = "Luck: %s" % str(s.get("luck_words", ""))
 	var lines := PackedStringArray()
 	var ship := "No ship: you go on foot"
 	if str(s.ship) != "no ship":
@@ -445,6 +446,8 @@ func _fill_place() -> void:
 		return
 	# The market first, then the deeds.
 	place_box.add_child(UiTheme.secondary("What sells where, and men for hire", _show_trade))
+	if band.land > 0 or not band.thralls.is_empty() or Outlawry.is_outlawed(band, journey.c.cal) or not band.taken.is_empty():
+		place_box.add_child(UiTheme.secondary("Your land and household", _show_land))
 	var goods := journey.market()
 	if not goods.is_empty():
 		place_box.add_child(UiTheme.gap(UiTheme.S1))
@@ -535,8 +538,9 @@ func _fill_modal() -> void:
 		modal.visible = false
 		return
 	var titles := {"fight": "A fight offers", "merchant": "A sail on the sea", "spine": "Word comes", "demand": "A feud", "house": "A house sends word"}
-	modal.open(str(titles.get(d.kind, "A choice")))
-	modal.body.add_child(UiTheme.label(str(d.text).strip_edges(), "SagaLabel"))
+	modal.open(str(d.get("title", titles.get(d.kind, "A choice"))))
+	modal.body.add_child(UiTheme.label(str(d.text).strip_edges(), "BodyLabel" if d.has("detail") else "SagaLabel"))
+	_decision_detail(d)
 	if d.kind == "fight":
 		quick_box = CheckBox.new()
 		quick_box.text = "Let the saga tell it (do not fight it yourself)"
@@ -825,6 +829,83 @@ func _show_trade() -> void:
 		box.add_child(UiTheme.section("Men for hire here"))
 		for o in men:
 			box.add_child(UiTheme.label("%s, %d oz and %d a month, %s." % [o.text, int(o.price), int(o.wage), o.tier]))
+	_close_side(box)
+
+
+## The numbers a decision of the law, the land or the unfree turns on
+## (`detail`), and what each choice means (`hint`), small under its words.
+func _decision_detail(d: Dictionary) -> void:
+	if d.has("detail"):
+		modal.body.add_child(UiTheme.label(str(d.detail), "SmallLabel"))
+	var hints := PackedStringArray()
+	for o in d.options:
+		if str(o.get("hint", "")) != "":
+			hints.append("%s: %s" % [str(o.label), str(o.hint)])
+	if not hints.is_empty() and d.has("detail"):
+		var h := UiTheme.label("\n".join(hints), "SmallLabel")
+		h.add_theme_color_override("font_color", Palette.UI_MUTED)
+		modal.body.add_child(h)
+
+
+## The band's land and household (Landtake, Thralls, Outlawry): each
+## holding and how it is worked, the unfree and their mood, the keepers,
+## the freedmen, men held for sale, where the band stands with the law,
+## its luck in words. Plain values from the sim, read out.
+func _show_land() -> void:
+	var box := _open_side("Your land and household")
+	var band := journey.c.band
+	var wr := journey.c.world_rules
+	var world := journey.c.world
+	box.add_child(UiTheme.section("Land"))
+	if band.holdings.is_empty():
+		box.add_child(UiTheme.label("No land of your own yet. A house that thinks well of you may sell; a lord may give it to his hersir; the Thing may award it.", "SmallLabel"))
+	var w := Landtake.worked(wr, band)
+	for h in band.holdings:
+		var p: Place = world.place(str(h.at))
+		var title := "%s%s, %d %s" % [Journey._cap(p.display_name if p != null else str(h.at)), (" (%s)" % h.name) if str(h.get("name", "")) != "" else "",
+				int(h.units), "unit" if int(h.units) == 1 else "units"]
+		box.add_child(UiTheme.label(title, "StrongLabel"))
+		var odal := journey.c.cal.year - int(h.year) >= wr.odal_years
+		box.add_child(UiTheme.label("%s, %d.%s%s" % [Journey._cap(str(h.how)), int(h.year), " Odal land." if odal else "",
+				" Raiders harried it this year." if int(h.get("harried", -1)) == journey.c.cal.year else ""], "SmallLabel"))
+	if not band.holdings.is_empty():
+		box.add_child(UiTheme.label("Worked: %d of %d units (%d hands, %d a unit). A worked unit yields about %d rations and %d oz a winter; an untended one a quarter of it." % [
+				int(w.worked), int(w.units), Landtake.hands(wr, band), wr.land_hands_per_unit, wr.land_food_per_unit, wr.land_silver_per_unit]))
+	box.add_child(UiTheme.gap(UiTheme.S1))
+	box.add_child(UiTheme.section("The household"))
+	var lines := PackedStringArray()
+	lines.append("Wife: %s." % (band.wife if band.wife != "" else "none"))
+	var keepers := PackedStringArray()
+	for m in band.keepers:
+		keepers.append(m.display_name)
+	lines.append("Keepers at the farm: %s." % (", ".join(keepers) if not keepers.is_empty() else "none"))
+	var thralls := PackedStringArray()
+	for t in band.thralls:
+		thralls.append("%s (from %s)" % [t.name, t.from])
+	lines.append("Thralls: %s." % (", ".join(thralls) if not thralls.is_empty() else "none"))
+	if not band.thralls.is_empty():
+		lines.append("Their mood: %s (unrest %d of 10)." % ["quiet" if band.unrest < 2 else ("sullen" if band.unrest < 4 else ("near to running" if band.unrest < wr.unrest_revolt else "near to rising")), band.unrest])
+	var freed := PackedStringArray()
+	for f in band.freedmen:
+		freed.append(str(f.name))
+	lines.append("Freedmen on your land: %s." % (", ".join(freed) if not freed.is_empty() else "none"))
+	if band.captives > 0:
+		lines.append("Captives bound: %d." % band.captives)
+	for tk in band.taken:
+		lines.append("%s is held for sale at %s: %d oz to buy him back." % [(tk.man as Man).display_name, world.place(str(tk.at)).display_name, int(tk.price)])
+	box.add_child(UiTheme.label("\n".join(lines)))
+	box.add_child(UiTheme.gap(UiTheme.S1))
+	box.add_child(UiTheme.section("The law and the gods"))
+	var law := "No man's outlaw."
+	if Outlawry.is_outlawed(band, journey.c.cal):
+		if band.outlawry == WorldTypes.Outlawry.FULL:
+			law = "A full outlaw in Norway: any man may kill you there, and its halls and markets are shut to you. The price on your head is %d oz. The west, Frankia and Iceland are out of the law's reach." % Outlawry.bounty(wr, band)
+		else:
+			law = "Outlawed until %d: out of Norway before the winter, and stay away." % band.outlaw_until
+	box.add_child(UiTheme.label(law))
+	box.add_child(UiTheme.label("Luck: %s (%d)." % [Omens.luck_words(band.luck), band.luck]))
+	if not band.foretold.is_empty() and int(band.foretold.year) >= journey.c.cal.year:
+		box.add_child(UiTheme.label("The seer's word for %d: %s." % [int(band.foretold.year), "an early winter" if bool(band.foretold.early) else "a long summer"], "SmallLabel"))
 	_close_side(box)
 
 

@@ -225,6 +225,9 @@ static func act(j: Journey, id: String) -> bool:
 	var p := j.here()
 	match id:
 		"buy_land":
+			if p == null or j.c.world.families == null or not j.c.world.families.houses.has(p.family) \
+					or Families.support_step(wr, band, p.family) == "":
+				return true  # they will not sell (any more)
 			j.decisions.push_front(_buy_decision(j))
 		"claim_land":
 			var claim: Dictionary = band.law.get("claimable", {})

@@ -24,6 +24,15 @@
 ## result panel, to the map). On the map: hintok dismisses the hint on the
 ## card, learned opens the "?" list, seen:<id,id> marks hints as read;
 ## map goes on from the told escape's card (after "skip") to the map.
+##
+## Law, land and the unfree (docs/design/notes/law-land.md): at:<place>
+## (the band is there, with nothing to answer), setyear:<y>, men:<n>,
+## knarr, feud:<house> (a killing to plead), standoff and verdict:<ratio>
+## (the case in hand weighed so, and that step shown), outlaw:full|lesser,
+## hunters (they are out, near the band), land:<place>:<units>,
+## thralls:<n>, captives:<n>:<place> (the captives' decision after a raid
+## there), omen:<id> (raven, stumble, dream, fetch, eagle), seer (one comes
+## to the hall at winter), landmodal (your land and household).
 extends SceneTree
 
 
@@ -202,6 +211,9 @@ func _init() -> void:
 				map.selected = cmd.trim_prefix("select:")
 				map.refresh()
 				continue
+			elif _law_land(j, map, cmd):
+				if cmd == "landmodal":
+					continue
 			elif cmd.begins_with("rounds:") and game.battle_node != null:
 				# Fight the battle on screen: shield wall, then push.
 				await process_frame
@@ -236,3 +248,78 @@ func _init() -> void:
 	img.save_png(out)
 	print("saved %s %dx%d" % [out, img.get_width(), img.get_height()])
 	quit(0)
+
+
+
+## The law, the land and the unfree's commands (see the header). True when
+## `cmd` was one of them.
+func _law_land(j: Journey, map: MapScreen, cmd: String) -> bool:
+	var band := j.c.band
+	var wr := j.c.world_rules
+	var arg := cmd.get_slice(":", 1)
+	match cmd.get_slice(":", 0):
+		"at":
+			j.decisions.clear()
+			j.roam.stop()
+			j.roam.pos = MapGrid.centre(j.roam.grid.place_cell[arg])
+			band.location = arg
+			band.known_places[arg] = true
+			j.roam.aboard = band.ship != null
+			j.roam.ship_at = Vector2.INF
+		"setyear":
+			j.c.cal.year = int(arg)
+			j.c.world.year = int(arg)
+			band.year = int(arg)
+		"men":
+			while band.living_men().size() < int(arg):
+				band.add_man(Recruits.random(SimRng.new(band.next_id() * 7), j.c.rules, band.next_id()))
+			j.c._arm_new_men()
+		"knarr":
+			band.ship = Ship.make(WorldTypes.ShipKind.KNARR)
+			j.roam.aboard = true
+		"feud":
+			Feud.start(wr, band, arg, "the killing of a man of yours", "", j.said)
+			band.silver = maxi(band.silver, 120)
+		"standoff", "verdict":
+			var s: Dictionary = j.life.case
+			var tc: ThingCase = s.tc
+			s.slip = false
+			s.their_slip = false
+			var ratio := float(cmd.get_slice(":", 1)) if cmd.contains(":") else 0.8
+			tc.their_armed = 2 if cmd == "standoff" else 6
+			tc.their_supporters = 10
+			var them := 10.0 + tc.their_armed * wr.arms_weight
+			tc.supporters = roundi(them * ratio - band.fighters(j.c.rules).size() * wr.arms_weight)
+			j.decisions.clear()
+			j.decisions.push_front(ThingPlay._standoff_decision(j) if cmd == "standoff" else ThingPlay._verdict_decision(j))
+		"outlaw":
+			Outlawry.declare(wr, band, j.c.cal, arg == "full", j.said)
+		"hunters":
+			wr.hunters_chance = 1.0
+			band.fame = maxi(band.fame, 40)
+			Outlawry.spring(j)
+			for p in j.roam.parties:
+				if p.kind == "hunters":
+					p.pos = j.roam.pos + Vector2(3, 2)
+		"land":
+			Landtake.add_holding(band, arg, int(cmd.get_slice(":", 2)), "bought of %s" % j.c.world.place(arg).family, j.c.cal.year)
+		"thralls":
+			for i in int(arg):
+				band.thralls.append({"name": Recruits.NAMES[(i * 7) % Recruits.NAMES.size()], "from": "Ireland", "year": j.c.cal.year})
+			band.unrest = 5
+		"captives":
+			band.captives = int(arg)
+			Thralls.after_raid(j, j.c.world.place(cmd.get_slice(":", 2)))
+		"omen":
+			for o in Omens.SPRING + Omens.RAID:
+				if str(o.id) == arg:
+					var text := str(o.text).replace("%s", band.leader.display_name)
+					j.decisions.push_front(Omens._decision(j, o, text, "spring"))
+		"seer":
+			wr.volva_chance = 1.0
+		"landmodal":
+			map.refresh()
+			map._show_land()
+		_:
+			return false
+	return true
