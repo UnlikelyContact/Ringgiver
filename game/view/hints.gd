@@ -26,7 +26,7 @@ var showing := ""
 var _map: Control = null
 var _card: PanelContainer
 var _card_text: Label
-var _list: PanelContainer
+var _list: UiModal
 var _timer: Timer
 
 
@@ -130,57 +130,49 @@ func learned() -> PackedStringArray:
 # --- On the map ----------------------------------------------------------------
 
 ## Puts the card, the "?" button and a slow look at the journey on `map`
-## (a MapScreen). The nodes go with the map; what was seen stays here.
+## (a MapScreen). The nodes go with the map; what was seen stays here. The
+## card is a slip of parchment under the map's time controls, the "?" the
+## last of those controls.
 func attach(map: Control) -> void:
 	_map = map
 	showing = ""
 	var panel_w := MapScreen.PANEL_W
-	var ask := Button.new()
-	ask.text = "?"
+	var ask := UiTheme.button("?", _show_list, "ToolButton", Vector2(UiTheme.ROW, UiTheme.ROW))
 	ask.tooltip_text = "What you have learned"
-	ask.custom_minimum_size = Vector2(46, 44)
-	ask.add_theme_font_size_override("font_size", 18)
-	ask.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	ask.offset_left = -panel_w - 54
-	ask.offset_right = -panel_w - 8
-	ask.offset_top = 6
-	ask.offset_bottom = 50
-	ask.pressed.connect(_show_list)
-	map.add_child(ask)
-	_card = PanelContainer.new()
+	ask.add_theme_font_size_override("font_size", 22)
+	var bar = map.get("time_bar")
+	if bar != null:
+		(bar as Control).add_child(UiTheme.gap(0, 6))
+		(bar as Control).add_child(ask)
+	else:
+		ask.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		ask.offset_left = -panel_w - UiTheme.ROW - UiTheme.S2
+		ask.offset_right = -panel_w - UiTheme.S2
+		ask.offset_top = UiTheme.S2
+		ask.offset_bottom = UiTheme.S2 + UiTheme.ROW
+		map.add_child(ask)
+	_card = UiTheme.panel("ParchmentPanel")
 	_card.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_card.offset_left = 8
-	_card.offset_top = 50
-	_card.custom_minimum_size = Vector2(minf(520.0, 1169.0 - panel_w - 24.0), 0)
-	_card.add_theme_stylebox_override("panel", _plate(Color(0.09, 0.08, 0.07, 0.94)))
+	_card.offset_left = UiTheme.EDGE
+	_card.offset_top = UiTheme.S2 + UiTheme.ROW + UiTheme.S2
+	_card.custom_minimum_size = Vector2(minf(540.0, 1169.0 - panel_w - 40.0), 0)
 	_card.visible = false
 	map.add_child(_card)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	row.add_theme_constant_override("separation", UiTheme.S3)
 	_card.add_child(row)
-	_card_text = Label.new()
-	_card_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_card_text = UiTheme.label("", "InkLabel")
 	_card_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_card_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_card_text.custom_minimum_size = Vector2(300, 0)
-	_card_text.add_theme_font_size_override("font_size", 16)
-	_card_text.add_theme_color_override("font_color", Palette.TEXT)
 	row.add_child(_card_text)
-	var ok := Button.new()
-	ok.text = "Go on"
-	ok.custom_minimum_size = Vector2(96, 44)
-	ok.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	ok.add_theme_font_size_override("font_size", 16)
-	ok.pressed.connect(func() -> void:
+	var ok := UiTheme.button("Go on", func() -> void:
 		dismiss()
-		check())
+		check(), "PrimaryButton", Vector2(110, UiTheme.ROW))
+	ok.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(ok)
-	_list = PanelContainer.new()
-	_list.anchor_left = 0.08
-	_list.anchor_right = 0.92
-	_list.anchor_top = 0.08
-	_list.anchor_bottom = 0.92
-	_list.add_theme_stylebox_override("panel", _plate(Color("1f2226")))
-	_list.visible = false
+	_list = UiModal.new()
+	_list.max_width = 720.0
 	map.add_child(_list)
 	_timer = Timer.new()
 	_timer.wait_time = 0.5
@@ -188,15 +180,6 @@ func attach(map: Control) -> void:
 	_timer.timeout.connect(check)
 	map.add_child(_timer)
 	check()
-
-
-func _plate(color: Color) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = color
-	sb.border_color = Color(Palette.GOLD, 0.6)
-	sb.set_border_width_all(1)
-	sb.set_content_margin_all(12)
-	return sb
 
 
 ## Shows the next hint whose time has come, unless something the player
@@ -219,37 +202,19 @@ func check() -> void:
 		return
 	_card_text.text = text(showing)
 	_card.visible = true
+	_card.size = Vector2(_card.size.x, 0.0)  # as tall as the words now
 
 
 func _show_list() -> void:
-	for ch in _list.get_children():
-		ch.queue_free()
 	_card.visible = false
-	_list.visible = true
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
-	_list.add_child(box)
-	var title := Label.new()
-	title.text = "What you have learned"
-	title.add_theme_font_size_override("font_size", 22)
-	title.add_theme_color_override("font_color", Palette.GOLD)
-	box.add_child(title)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(scroll)
-	var body := Label.new()
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_theme_font_size_override("font_size", 15)
-	body.add_theme_color_override("font_color", Palette.TEXT)
+	_list.open("What you have learned")
 	var lines := learned()
-	body.text = "\n\n".join(lines) if not lines.is_empty() else "Nothing yet: the hints come as you go."
-	scroll.add_child(body)
-	var close := Button.new()
-	close.text = "Back to the map"
-	close.custom_minimum_size = Vector2(200, 46)
-	close.pressed.connect(func() -> void:
-		_list.visible = false
-		check())
-	box.add_child(close)
+	if lines.is_empty():
+		_list.body.add_child(UiTheme.label("Nothing yet: the hints come as you go.", "SmallLabel"))
+	for line in lines:
+		var p := UiTheme.panel("CardPanel")
+		p.add_child(UiTheme.label(line))
+		_list.body.add_child(p)
+	_list.add_button("Back to the map", func() -> void:
+		_list.close()
+		check(), "PrimaryButton", 220.0)

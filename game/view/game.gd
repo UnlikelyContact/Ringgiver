@@ -25,7 +25,12 @@ var _escape_done_override := -1
 
 
 func _ready() -> void:
-	RenderingServer.set_default_clear_color(Palette.BG)
+	RenderingServer.set_default_clear_color(Palette.UI_NIGHT)
+	# The one look (view/ui_theme.gd): on the window, for tooltips and
+	# pickers, and on every screen's root, since a CanvasLayer does not pass
+	# a theme down.
+	get_tree().root.theme = UiTheme.theme()
+	UiTheme.motion = not fixed_seed  # a repeatable run (the tools) takes its stills at once
 	layer = CanvasLayer.new()
 	add_child(layer)
 	show_title()
@@ -37,14 +42,35 @@ func _swap(c: Control) -> void:
 	screen = c
 	map = null
 	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	UiTheme.apply(c)
 	layer.add_child(c)
+	UiTheme.fade_in(c)
 
 
-func _label(text: String, size: int, color: Color) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
+## A screen of the opening: the night and its fire behind, and a column in
+## the middle at most `width` wide. Returns the column.
+func _opening(fire: float, width := 760.0) -> VBoxContainer:
+	var root := Control.new()
+	_swap(root)
+	root.add_child(UiEmbers.new(fire))
+	var centre := CenterContainer.new()
+	centre.set_anchors_preset(Control.PRESET_FULL_RECT)
+	centre.offset_left = UiTheme.EDGE + 20
+	centre.offset_right = -UiTheme.EDGE - 20
+	centre.offset_top = UiTheme.S3
+	centre.offset_bottom = -UiTheme.S3
+	root.add_child(centre)
+	var box := VBoxContainer.new()
+	box.custom_minimum_size = Vector2(width, 0)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", UiTheme.S4)
+	centre.add_child(box)
+	return box
+
+
+func _centred(text: String, variant: String) -> Label:
+	var l := UiTheme.label(text, variant)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return l
 
 
@@ -53,114 +79,93 @@ func _label(text: String, size: int, color: Color) -> Label:
 func show_title() -> void:
 	_drop_battle()
 	journey = null
-	var root := Control.new()
-	_swap(root)
-	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER)
-	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	box.grow_vertical = Control.GROW_DIRECTION_BOTH
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 14)
-	root.add_child(box)
-	var title := _label("Ring-Giver", 54, Palette.GOLD)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var box := _opening(0.45, 560.0)
+	box.add_theme_constant_override("separation", UiTheme.S2)
+	var ring := UiOrnament.new()
+	ring.kind = UiOrnament.Kind.RING
+	ring.custom_minimum_size = Vector2(0, 150)
+	box.add_child(ring)
+	var title := _centred("RING-GIVER", "DisplayLabel")
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	box.add_child(title)
-	var sub := _label("A saga of Norway in the days of Harald Fairhair", 16, Palette.TEXT)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(sub)
-	var gap := Control.new()
-	gap.custom_minimum_size = Vector2(0, 16)
-	box.add_child(gap)
-	var begin := Button.new()
-	begin.text = "Begin a saga"
-	begin.custom_minimum_size = Vector2(280, 56)
-	begin.add_theme_font_size_override("font_size", 20)
-	begin.pressed.connect(show_name)
+	var band := UiOrnament.new()
+	band.kind = UiOrnament.Kind.INTERLACE
+	band.custom_minimum_size = Vector2(300, 12)
+	band.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(band)
+	box.add_child(_centred("A saga of Norway in the days of Harald Fairhair", "SmallLabel"))
+	box.add_child(UiTheme.gap(UiTheme.S3))
+	var begin := UiTheme.primary("Begin a saga", show_name, 340.0)
+	begin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	begin.name = "Begin"
 	box.add_child(begin)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", UiTheme.S3)
 	box.add_child(row)
-	var other := Button.new()
-	other.text = "Another beginning"
+	var other := UiTheme.secondary("Another beginning", show_origins, 220.0)
 	other.tooltip_text = "Begin as a younger son or a freedman, on the map"
-	other.custom_minimum_size = Vector2(200, 44)
-	other.pressed.connect(show_origins)
 	row.add_child(other)
-	var skirmish := Button.new()
-	skirmish.text = "A single fight"
+	var skirmish := UiTheme.secondary("A single fight", start_skirmish, 220.0)
 	skirmish.tooltip_text = "The battle on its own: a band, a field, an enemy"
-	skirmish.custom_minimum_size = Vector2(200, 44)
-	skirmish.pressed.connect(start_skirmish)
 	row.add_child(skirmish)
+	var stamp := UiTheme.label("build " + UiTheme.build_stamp(), "KeyLabel", false)
+	stamp.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	stamp.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	stamp.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	stamp.offset_right = -UiTheme.EDGE - 6
+	stamp.offset_bottom = -UiTheme.S2
+	stamp.add_theme_color_override("font_color", Palette.UI_FAINT)
+	screen.add_child(stamp)
 
 
 # --- The beginning: the burned hall -------------------------------------------------
 
 ## A card in the middle of the screen: `text` and the buttons under it
-## ([label, Callable] pairs, the first the main one).
-func _card(text: String, buttons: Array, title := "") -> VBoxContainer:
-	var root := Control.new()
-	_swap(root)
-	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 120
-	box.offset_right = -120
-	box.offset_top = 40
-	box.offset_bottom = -30
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 18)
-	root.add_child(box)
+## ([label, Callable] pairs, the first the main one). Returns the row the
+## buttons are in.
+func _card(text: String, buttons: Array, title := "", kicker := "") -> HBoxContainer:
+	var box := _opening(1.0)
+	if kicker != "":
+		box.add_child(_centred(kicker.to_upper(), "KeyLabel"))
 	if title != "":
-		var t := _label(title, 30, Palette.GOLD)
-		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		box.add_child(t)
-	var body := _label(text, 21, Palette.TEXT)
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(body)
+		box.add_child(_centred(title, "TitleLabel"))
+		var r := UiTheme.rule(true)
+		r.custom_minimum_size.x = 240
+		r.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		box.add_child(r)
+	if text != "":
+		box.add_child(_centred(text, "SagaLabel"))
+	box.add_child(UiTheme.gap(UiTheme.S1))
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 14)
+	row.add_theme_constant_override("separation", UiTheme.S3)
 	box.add_child(row)
 	var first := true
 	for b in buttons:
-		var btn := Button.new()
-		btn.text = str(b[0])
-		btn.custom_minimum_size = Vector2(240 if first else 200, 54 if first else 48)
-		btn.add_theme_font_size_override("font_size", 19 if first else 16)
-		btn.pressed.connect(b[1])
+		var btn := UiTheme.primary(str(b[0]), b[1], 260.0) if first else UiTheme.secondary(str(b[0]), b[1], 220.0)
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(btn)
 		first = false
-	return box
+	return row
 
 
 ## Who you are: the name, then the night.
 func show_name() -> void:
-	var box := _card("Your name, son of the hall at Hardanger:", [], "Ring-Giver")
-	var row: HBoxContainer = box.get_child(box.get_child_count() - 1)
+	var row := _card("Your name, son of the hall at Hardanger:", [], "Who are you?", "A saga begins")
 	var name_edit := LineEdit.new()
 	name_edit.text = "Egil"
 	name_edit.max_length = 14
-	name_edit.custom_minimum_size = Vector2(220, 52)
-	name_edit.add_theme_font_size_override("font_size", 20)
+	name_edit.custom_minimum_size = Vector2(240, UiTheme.TOUCH)
 	name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	row.add_child(name_edit)
-	var go := Button.new()
-	go.text = "Go on"
-	go.custom_minimum_size = Vector2(160, 52)
-	go.add_theme_font_size_override("font_size", 19)
 	var on := func() -> void:
 		var who := name_edit.text.strip_edges()
 		show_night(who if who != "" else "Egil", 0)
-	go.pressed.connect(on)
+	var go := UiTheme.primary("Go on", on, 160.0)
 	name_edit.text_submitted.connect(func(_t: String) -> void: on.call())
 	row.add_child(go)
-	var back := Button.new()
-	back.text = "Back"
-	back.custom_minimum_size = Vector2(110, 52)
-	back.pressed.connect(show_title)
-	row.add_child(back)
+	row.add_child(UiTheme.quiet("Back", show_title, 100.0))
 
 
 ## The night the hall burned, a card at a time; the last leads out into
@@ -178,7 +183,7 @@ func show_night(who: String, i: int) -> void:
 		buttons.append(["Out into the yard", func() -> void: begin_escape(who, false)])
 		if escape_done():
 			buttons.append(["Let the saga tell it", func() -> void: begin_escape(who, true)])
-	_card(str(cards[i]), buttons)
+	_card(str(cards[i]), buttons, "", "The night the hall burned   %d of %d" % [i + 1, cards.size()])
 
 
 ## The saga begins in the burning hall: the escape is fought on the battle
@@ -224,67 +229,98 @@ func remember_escape() -> void:
 func show_origins() -> void:
 	var root := Control.new()
 	_swap(root)
+	root.add_child(UiEmbers.new(0.25))
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 16
-	box.offset_right = -16
-	box.offset_top = 10
-	box.offset_bottom = -10
-	box.add_theme_constant_override("separation", 8)
+	box.offset_left = UiTheme.EDGE + 10
+	box.offset_right = -UiTheme.EDGE - 10
+	box.offset_top = UiTheme.S3
+	box.offset_bottom = -UiTheme.S3
+	box.add_theme_constant_override("separation", UiTheme.S2)
 	root.add_child(box)
-	box.add_child(_label("Another beginning. You start with little and no ship. How you live, raider or trader, law-wise man or berserk, skald or king's man, you choose as you go, in any mixture.", 15, Palette.TEXT))
-	(box.get_child(0) as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 10)
+	box.add_child(UiTheme.label("Another beginning", "TitleLabel"))
+	box.add_child(UiTheme.label("You start with little and no ship. How you live, raider or trader, law-wise man or berserk, skald or king's man, you choose as you go, in any mixture.", "SmallLabel"))
+	var over := Control.new()
+	over.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(over)
+	var grid := HBoxContainer.new()
+	grid.add_theme_constant_override("separation", UiTheme.S3)
 	box.add_child(grid)
+	var under := Control.new()
+	under.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(under)
 	var group := ButtonGroup.new()
 	var cards: Array[Button] = []
 	for d in Origins.DEFS:
 		if bool(d.get("escape", false)):
 			continue  # the burned hall is the main beginning, from the title
 		var b := Button.new()
+		b.theme_type_variation = "CardButton"
 		b.toggle_mode = true
 		b.button_group = group
-		b.button_pressed = cards.is_empty()
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.add_theme_font_size_override("font_size", 14)
+		b.size_flags_vertical = Control.SIZE_FILL
+		b.clip_contents = true
 		var men := int(d.followers)
-		b.text = "%s\n\n%s\n\nYou start %s, with %d oz of silver, on foot." % [str(d.name).to_upper(), d.blurb,
-				"alone" if men == 0 else ("with one man" if men == 1 else "with %d men" % men), int(d.silver)]
+		var m := MarginContainer.new()
+		m.set_anchors_preset(Control.PRESET_FULL_RECT)
+		m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		for side in ["left", "right", "top", "bottom"]:
+			m.add_theme_constant_override("margin_" + side, UiTheme.S4)
+		b.add_child(m)
+		var col := VBoxContainer.new()
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_theme_constant_override("separation", UiTheme.S2)
+		m.add_child(col)
+		var head := HBoxContainer.new()
+		head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(head)
+		var nm := UiTheme.label(Journey._cap(str(d.name)), "HeadingLabel", false)
+		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(nm)
+		var chosen := UiTheme.chip("Chosen", Palette.UI_GOLD)
+		head.add_child(chosen)
+		col.add_child(UiTheme.rule(false))
+		var blurb := UiTheme.label(str(d.blurb))
+		col.add_child(blurb)
+		col.add_child(UiTheme.label("You start %s, with %d oz of silver, on foot." % [
+				"alone" if men == 0 else ("with one man" if men == 1 else "with %d men" % men), int(d.silver)], "SmallLabel"))
+		for l in [nm, blurb]:
+			(l as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chosen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.toggled.connect(func(on: bool) -> void: chosen.visible = on)
+		m.minimum_size_changed.connect(func() -> void: b.custom_minimum_size.y = m.get_combined_minimum_size().y)
+		b.button_pressed = cards.is_empty()
+		chosen.visible = b.button_pressed
 		b.set_meta("origin", str(d.key))
 		grid.add_child(b)
 		cards.append(b)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	row.add_theme_constant_override("separation", UiTheme.S3)
 	box.add_child(row)
-	row.add_child(_label("Your name:", 15, Palette.TEXT))
+	var who_l := UiTheme.label("Your name", "SmallLabel", false)
+	who_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(who_l)
 	var name_edit := LineEdit.new()
 	name_edit.text = "Egil"
 	name_edit.max_length = 14
-	name_edit.custom_minimum_size = Vector2(200, 44)
+	name_edit.custom_minimum_size = Vector2(220, UiTheme.ROW)
+	name_edit.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(name_edit)
-	var go := Button.new()
-	go.text = "Begin"
-	go.custom_minimum_size = Vector2(200, 48)
-	go.add_theme_font_size_override("font_size", 18)
-	go.pressed.connect(func() -> void:
+	var fill := Control.new()
+	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(fill)
+	var back := UiTheme.quiet("Back", show_title, 100.0)
+	back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(back)
+	var go := UiTheme.primary("Begin", func() -> void:
 		var origin := str(cards[0].get_meta("origin"))
 		for c in cards:
 			if c.button_pressed:
 				origin = str(c.get_meta("origin"))
 		var who := name_edit.text.strip_edges()
-		begin_saga(origin, who if who != "" else "Egil"))
+		begin_saga(origin, who if who != "" else "Egil"), 220.0)
 	row.add_child(go)
-	var back := Button.new()
-	back.text = "Back"
-	back.custom_minimum_size = Vector2(120, 48)
-	back.pressed.connect(show_title)
-	row.add_child(back)
 
 
 # --- The saga -------------------------------------------------------------------

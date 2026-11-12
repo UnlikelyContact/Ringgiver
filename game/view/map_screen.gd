@@ -5,29 +5,52 @@ extends Control
 ## days pass; the band, the place and what can be done there on the right.
 ## Tap the map to go there. All of it is a face on Journey: every button
 ## is one of its calls, and after each the screen reads the journey again
-## (`refresh`).
+## (`refresh`). The look is UiTheme's (docs/design/notes/ui.md).
 
-const PANEL_W := 430.0
+const PANEL_W := 420.0
 ## Days that pass in a second of travelling, at the plain pace.
 const DAYS_PER_SECOND := 1.5
+## Lines of the saga shown over the map's foot; the rest in the chronicle.
+const LOG_LINES := 3
 
 var journey: Journey
 var host: Node
 var selected := ""
 var canvas: MapCanvas
+## The ship, the hold and the work in hand, under the stat strip.
 var status_label: Label
 var place_box: VBoxContainer
 var log_label: Label
-var modal: PanelContainer
-var side_panel: PanelContainer
+## Decisions, the winter, the saga's end (UiModal).
+var modal: UiModal
+## Your men, your ways, the families, the chronicle (UiModal).
+var side_panel: UiModal
 var ways_btn: Button
-var pause_btn: Button
-var speed_btn: Button
+var pause_btn: UiIconButton
+var speed_btn: UiIconButton
 var quick_box: CheckBox
-var paused := false
+## The time and view controls over the map's top-left corner. An
+## HBoxContainer the map's names keep out from under (MapCanvas); the
+## hints put their "?" on its end.
+var time_bar: HBoxContainer
+## Whether the days stand. Set from anywhere (the tools set it), the
+## controls follow.
+var paused := false:
+	set(v):
+		paused = v
+		if pause_btn != null:
+			_time_buttons()
 var fast := false
 var _quick := false
 var _seen := ""  # what the panel was last drawn for, so it is redrawn only on a change
+var _name_label: Label
+var _date_label: Label
+var _rank_box: HBoxContainer
+var _summer: ProgressBar
+var _summer_label: Label
+var _stats := {}
+var _log_box: HBoxContainer
+var _log_lines := -1  # how many of the saga's lines the log shows now
 
 
 func setup(p_journey: Journey, p_host: Node) -> void:
@@ -43,140 +66,215 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	add_child(canvas)
 	canvas.centre_on(journey.roam.pos)
 
-	# Time and the view, over the map's top edge.
-	var bar := HBoxContainer.new()
-	bar.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	bar.offset_left = 8
-	bar.offset_top = 6
-	bar.add_theme_constant_override("separation", 6)
-	add_child(bar)
-	pause_btn = _small("Pause", func() -> void:
+	# Time and the view, over the map's top edge: a tight cluster of signs.
+	time_bar = HBoxContainer.new()
+	time_bar.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	time_bar.offset_left = UiTheme.EDGE
+	time_bar.offset_top = UiTheme.S2
+	time_bar.add_theme_constant_override("separation", 3)
+	add_child(time_bar)
+	pause_btn = _small("pause", "Let the days stand", func() -> void:
 		paused = not paused
 		_time_buttons())
-	bar.add_child(pause_btn)
-	speed_btn = _small("Faster", func() -> void:
+	time_bar.add_child(pause_btn)
+	speed_btn = _small("fast", "Faster", func() -> void:
 		fast = not fast
 		_time_buttons())
-	bar.add_child(speed_btn)
-	bar.add_child(_small("Stop", func() -> void:
+	time_bar.add_child(speed_btn)
+	time_bar.add_child(_small("stop", "Halt the band where it is", func() -> void:
 		journey.roam.stop()
 		refresh()))
-	bar.add_child(_small("+", func() -> void: canvas.zoom_by(1.3)))
-	bar.add_child(_small("-", func() -> void: canvas.zoom_by(1.0 / 1.3)))
-	bar.add_child(_small("Follow", func() -> void:
+	time_bar.add_child(_gap(6))
+	time_bar.add_child(_small("plus", "Nearer", func() -> void: canvas.zoom_by(1.3)))
+	time_bar.add_child(_small("minus", "Further", func() -> void: canvas.zoom_by(1.0 / 1.3)))
+	time_bar.add_child(_small("follow", "Follow the band", func() -> void:
 		canvas.follow = true
 		canvas.queue_redraw()))
 
-	log_label = Label.new()
-	log_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	log_label.anchor_right = 1.0
-	log_label.offset_left = 10
-	log_label.offset_right = -PANEL_W - 10
-	log_label.offset_top = -118
-	log_label.offset_bottom = -6
-	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# The saga's last lines at the map's foot, on a backing that reads over
+	# any ground, and the way into the whole chronicle.
+	_log_box = HBoxContainer.new()
+	_log_box.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_log_box.offset_left = UiTheme.EDGE
+	_log_box.offset_bottom = -UiTheme.S2
+	_log_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_log_box.add_theme_constant_override("separation", UiTheme.S2)
+	_log_box.draw.connect(func() -> void:
+		var sb := UiTheme.box(Color(Palette.UI_NIGHT, 0.8), Color(Palette.UI_RULE_DIM, 0.8), 1, UiTheme.RADIUS)
+		_log_box.draw_style_box(sb, Rect2(Vector2(-UiTheme.S2, -UiTheme.S1 - 2), _log_box.size + Vector2(UiTheme.S2 + 4, UiTheme.S1 * 2 + 4))))
+	add_child(_log_box)
+	log_label = UiTheme.label("", "SmallLabel")
+	log_label.add_theme_color_override("font_color", Palette.UI_TEXT.darkened(0.08))
+	log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	log_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	log_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	log_label.add_theme_font_size_override("font_size", 13)
-	log_label.add_theme_color_override("font_color", Palette.TEXT)
-	log_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
-	log_label.add_theme_constant_override("shadow_offset_x", 1)
-	log_label.add_theme_constant_override("shadow_offset_y", 1)
+	log_label.max_lines_visible = LOG_LINES + 1
 	log_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(log_label)
+	log_label.resized.connect(_skip_log)
+	_log_box.add_child(log_label)
+	var book := UiIconButton.new("book", "The chronicle: everything told so far")
+	book.custom_minimum_size = Vector2(46, 46)
+	book.size_flags_vertical = Control.SIZE_SHRINK_END
+	book.pressed.connect(_show_chronicle)
+	_log_box.add_child(book)
+	resized.connect(_place_log)
 
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	panel.offset_left = -PANEL_W
-	panel.add_theme_stylebox_override("panel", _plate(Color("2b2e33"), 10))
-	add_child(panel)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 6)
-	panel.add_child(col)
-	status_label = Label.new()
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.add_theme_font_size_override("font_size", 14)
-	status_label.add_theme_color_override("font_color", Palette.TEXT)
-	col.add_child(status_label)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	col.add_child(row)
-	var men_btn := Button.new()
-	men_btn.text = "Your men"
-	men_btn.custom_minimum_size = Vector2(110, 36)
-	men_btn.pressed.connect(_show_men)
-	row.add_child(men_btn)
-	ways_btn = Button.new()
-	ways_btn.text = "Your ways"
-	ways_btn.custom_minimum_size = Vector2(150, 36)
-	ways_btn.pressed.connect(_show_ways)
-	row.add_child(ways_btn)
-	var houses_btn := Button.new()
-	houses_btn.text = "Families"
-	houses_btn.custom_minimum_size = Vector2(110, 36)
-	houses_btn.pressed.connect(_show_families)
-	row.add_child(houses_btn)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	col.add_child(scroll)
-	place_box = VBoxContainer.new()
-	place_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	place_box.add_theme_constant_override("separation", 6)
-	scroll.add_child(place_box)
+	_build_panel()
 
-	modal = PanelContainer.new()
-	modal.anchor_left = 0.14
-	modal.anchor_right = 0.86
-	modal.anchor_top = 0.1
-	modal.anchor_bottom = 0.9
-	modal.visible = false
-	modal.add_theme_stylebox_override("panel", _plate(Color("1f2226"), 16))
+	modal = UiModal.new()
+	modal.max_width = 720.0
 	add_child(modal)
-	side_panel = PanelContainer.new()
-	side_panel.anchor_left = 0.06
-	side_panel.anchor_right = 0.94
-	side_panel.anchor_top = 0.06
-	side_panel.anchor_bottom = 0.94
-	side_panel.visible = false
-	side_panel.add_theme_stylebox_override("panel", _plate(Color("1f2226"), 16))
+	side_panel = UiModal.new()
+	side_panel.max_width = 1000.0
 	add_child(side_panel)
 	_time_buttons()
+	_place_log()
 	refresh()
 	if host != null and host.get("hints") != null:
 		(host.hints as Hints).attach(self)  # the first days' hints (view/hints.gd)
 
 
-func _small(text: String, on: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(54, 34)
-	b.add_theme_font_size_override("font_size", 13)
+## The right-hand panel: who and when, the band in a strip of numbers, the
+## three lists, and the place with what can be done there.
+func _build_panel() -> void:
+	var panel := UiTheme.panel("SidePanel")
+	panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	panel.offset_left = -PANEL_W
+	add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", UiTheme.S2)
+	panel.add_child(col)
+	var head := HBoxContainer.new()
+	col.add_child(head)
+	var who := VBoxContainer.new()
+	who.add_theme_constant_override("separation", 0)
+	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(who)
+	_name_label = UiTheme.label("", "HeadingLabel", false)
+	_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_name_label.clip_text = true
+	who.add_child(_name_label)
+	_date_label = UiTheme.label("", "SmallLabel", false)
+	_date_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_date_label.clip_text = true
+	who.add_child(_date_label)
+	_rank_box = HBoxContainer.new()
+	_rank_box.add_theme_constant_override("separation", UiTheme.S1)
+	_rank_box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	head.add_child(_rank_box)
+	# The summer: the days left in words beside the date, and a thin bar of
+	# the days gone under them.
+	var when := HBoxContainer.new()
+	when.add_theme_constant_override("separation", UiTheme.S2)
+	who.remove_child(_date_label)
+	when.add_child(_date_label)
+	_date_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_summer_label = UiTheme.label("", "KeyLabel", false)
+	_summer_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	when.add_child(_summer_label)
+	col.add_child(when)
+	_summer = ProgressBar.new()
+	_summer.show_percentage = false
+	_summer.custom_minimum_size = Vector2(0, 5)
+	_summer.tooltip_text = "The summer gone"
+	col.add_child(_summer)
+	var strip := UiTheme.panel("WellPanel")
+	col.add_child(strip)
+	var stats := HBoxContainer.new()
+	stats.add_theme_constant_override("separation", UiTheme.S1)
+	strip.add_child(stats)
+	for k in ["silver", "food", "men", "fame", "honor", "luck"]:
+		var s := UiTheme.stat(k, "-")
+		s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		s.size_flags_stretch_ratio = 1.3 if k == "men" else 1.0
+		stats.add_child(s)
+		_stats[k] = s
+	status_label = UiTheme.label("", "SmallLabel")
+	col.add_child(status_label)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UiTheme.S2)
+	col.add_child(row)
+	var men_btn := UiTheme.secondary("Your men", _show_men)
+	men_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(men_btn)
+	ways_btn = UiTheme.secondary("Your ways", _show_ways)
+	ways_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(ways_btn)
+	var houses_btn := UiTheme.secondary("Families", _show_families)
+	houses_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(houses_btn)
+	for b in [men_btn, ways_btn, houses_btn]:
+		(b as Button).custom_minimum_size.y = 48
+		(b as Button).add_theme_font_size_override("font_size", 16)
+	col.add_child(UiTheme.rule(true))
+	place_box = VBoxContainer.new()
+	place_box.add_theme_constant_override("separation", UiTheme.S2)
+	var scroll := UiTheme.scroll(place_box)
+	col.add_child(scroll)
+
+
+func _small(glyph: String, tip: String, on: Callable) -> UiIconButton:
+	var b := UiIconButton.new(glyph, tip)
 	b.pressed.connect(on)
 	return b
 
 
+func _gap(w: int) -> Control:
+	return UiTheme.gap(0, w)
+
+
+## The time controls show the time's state: the pause sign lit gold while
+## the days stand, the fast sign lit while they run fast.
 func _time_buttons() -> void:
-	pause_btn.text = "Go on" if paused else "Pause"
-	speed_btn.text = "Slower" if fast else "Faster"
-
-
-## A flat, opaque plate for a panel, with a gold hairline and some margin.
-func _plate(color: Color, margin: int) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = color
-	sb.border_color = Color(Palette.GOLD, 0.5)
-	sb.set_border_width_all(1)
-	sb.set_content_margin_all(margin)
-	return sb
+	pause_btn.toggle_mode = true
+	speed_btn.toggle_mode = true
+	pause_btn.set_pressed_no_signal(paused)
+	speed_btn.set_pressed_no_signal(fast)
+	pause_btn.glyph = "play" if paused else "pause"
+	pause_btn.tooltip_text = "Let the days go on" if paused else "Let the days stand"
+	speed_btn.tooltip_text = "Slower" if fast else "Faster"
 
 
 func _text(text: String, size: int, color: Color) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var l := UiTheme.label(text)
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	return l
+
+
+func _place_log() -> void:
+	if _log_box == null:
+		return
+	var w := minf(620.0, size.x - PANEL_W - UiTheme.EDGE * 2 - 8)
+	_log_box.offset_right = _log_box.offset_left + w
+	_log_box.offset_top = _log_box.offset_bottom - 10
+
+
+func _show_log() -> void:
+	var n := journey.said.size()
+	if n == _log_lines:
+		return
+	_log_lines = n
+	_log_box.visible = n > 0
+	_skip_log()
+
+
+## The newest lines that fit whole in LOG_LINES + 1 lines at the label's
+## width now: no sentence shown from its middle.
+func _skip_log() -> void:
+	if journey == null:
+		return
+	var said := journey.said
+	var k := mini(LOG_LINES, said.size())
+	log_label.lines_skipped = 0
+	while k > 0:
+		log_label.text = "\n".join(said.slice(said.size() - k))
+		if k == 1 or log_label.get_line_count() <= LOG_LINES + 1:
+			break
+		k -= 1
+	log_label.lines_skipped = maxi(0, log_label.get_line_count() - LOG_LINES - 1)
+	_log_box.queue_redraw()
 
 
 # --- The days passing ---------------------------------------------------------------
@@ -197,7 +295,7 @@ func _process(delta: float) -> void:
 			selected = journey.c.band.location
 		refresh()
 	else:
-		log_label.text = "\n".join(journey.said.slice(maxi(0, journey.said.size() - 5)))
+		_show_log()
 		canvas.queue_redraw()
 
 
@@ -221,7 +319,8 @@ func refresh() -> void:
 	if selected != "" and (journey.c.world.place(selected) == null or not band.knows(selected)):
 		selected = band.location
 	_status()
-	log_label.text = "\n".join(journey.said.slice(maxi(0, journey.said.size() - 5)))
+	_log_lines = -1
+	_show_log()
 	_fill_place()
 	_fill_modal()
 	_seen = _state_key()
@@ -230,31 +329,54 @@ func refresh() -> void:
 
 func _status() -> void:
 	var s := journey.status()
+	var t := str(s.title)
+	_name_label.text = t
+	var where := Journey._cap(str(s.where))
+	_date_label.text = "%d, day %d   %s" % [s.year, s.day, where]
+	var total := int(s.day) + int(s.days_left)
+	_summer.max_value = maxi(1, total)
+	_summer.value = int(s.day)
+	_summer_label.text = "%d DAYS LEFT" % int(s.days_left)
+	_summer_label.tooltip_text = "Days of summer left before the band must winter"
+	_summer_label.add_theme_color_override("font_color", Palette.UI_BLOOD.lightened(0.2) if int(s.days_left) <= Hints.WINTER_DAYS / 2 else Palette.UI_MUTED)
+	var rank_key := "%s|%s|%s|%d" % [s.rank, s.way, s.outlaw, int(s.feuds)]
+	if _rank_box.get_meta("key", "") != rank_key:
+		_rank_box.set_meta("key", rank_key)
+		for ch in _rank_box.get_children():
+			ch.queue_free()
+		if s.outlaw:
+			_rank_box.add_child(UiTheme.chip("Outlaw", Palette.UI_BLOOD))
+		if int(s.feuds) > 0:
+			_rank_box.add_child(UiTheme.chip("Feuds %d" % int(s.feuds), Palette.UI_BLOOD))
+		_rank_box.add_child(UiTheme.chip(str(s.rank).capitalize(), Palette.UI_GOLD))
+	UiTheme.set_stat(_stats.silver, "%d oz" % int(s.silver))
+	UiTheme.set_stat(_stats.food, str(int(s.food)), Palette.UI_BLOOD.lightened(0.2) if int(s.food) < int(s.men) * 3 else Palette.UI_TEXT)
+	UiTheme.set_stat(_stats.men, ("%d +%d hurt" % [s.men, s.hurt]) if int(s.hurt) > 0 else str(int(s.men)))
+	UiTheme.set_stat(_stats.fame, str(int(s.fame)))
+	UiTheme.set_stat(_stats.honor, str(int(s.honor)))
+	UiTheme.set_stat(_stats.luck, str(int(s.luck)))
 	var lines := PackedStringArray()
-	lines.append("%s%s" % [s.title, (", " + str(s.way)) if str(s.way) != "" else ""])
-	lines.append("%d, day %d (%d days of summer left)   %s" % [s.year, s.day, s.days_left, Journey._cap(str(s.where))])
-	lines.append("Silver %d oz   Food %d   Men %d%s" % [s.silver, s.food, s.men, (" (+%d hurt)" % s.hurt) if int(s.hurt) > 0 else ""])
 	var ship := "No ship: you go on foot"
 	if str(s.ship) != "no ship":
 		ship = "%s%s, %s" % [Journey._cap(str(s.ship)), (" (hurt %d)" % s.ship_damage) if int(s.ship_damage) > 0 else "",
 				"with you" if s.ship_with else "left on the beach"]
 		if str(s.ship_trouble) != "":
 			ship += ": " + str(s.ship_trouble)
-	lines.append(ship)
-	lines.append("Fame %d   Honor %d   Luck %d   %s%s%s" % [s.fame, s.honor, s.luck, str(s.rank).capitalize(),
-			"   OUTLAW" if s.outlaw else "", ("   Feuds %d" % s.feuds) if int(s.feuds) > 0 else ""])
-	var hold := "Carrying: %s (room for %d)" % [s.cargo if str(s.cargo) != "" else "nothing", s.cargo_room]
+	lines.append(ship + ".")
+	var hold := "Carrying %s (room for %d)" % [s.cargo if str(s.cargo) != "" else "nothing", s.cargo_room]
 	if int(s.captives) > 0:
-		hold += "   Captives %d" % s.captives
-	lines.append(hold)
+		hold += ", %d captives" % s.captives
+	lines.append(hold + ".")
 	if str(s.work) != "":
 		lines.append("Work in hand: %s" % s.work)
-	status_label.text = "\n".join(lines)
-	ways_btn.text = "Your ways (%d to spend)" % int(s.points) if int(s.points) > 0 else "Your ways"
+	status_label.text = "  ".join(lines)
+	ways_btn.text = "Your ways (%d)" % int(s.points) if int(s.points) > 0 else "Your ways"
+	ways_btn.theme_type_variation = "PrimaryButton" if int(s.points) > 0 else ""
 
 
 func _fill_place() -> void:
 	for ch in place_box.get_children():
+		place_box.remove_child(ch)
 		ch.queue_free()
 	var world := journey.c.world
 	var band := journey.c.band
@@ -262,13 +384,28 @@ func _fill_place() -> void:
 	var here := p != null and p.id == band.location
 	if p == null:
 		# The wilds, or the water.
-		place_box.add_child(_text(Journey._cap(journey.whereabouts()), 18, Palette.GOLD))
-		place_box.add_child(_text("Tap the map to go there: the land on foot, the water if you have a ship. Tap a place to make for it.", 13, Palette.DIM))
+		place_box.add_child(UiTheme.label(Journey._cap(journey.whereabouts()), "TitleLabel"))
+		place_box.add_child(UiTheme.label("Tap the map to go there: the land on foot, the water if you have a ship. Tap a place to make for it.", "SmallLabel"))
 		if journey.moving():
-			place_box.add_child(_text("On your way.", 13, Palette.TEXT))
+			place_box.add_child(UiTheme.label("On your way.", "StrongLabel"))
 		_add_actions()
 		return
-	place_box.add_child(_text(Journey._cap(p.display_name.trim_prefix("the ")), 18, Palette.GOLD))
+	var name_row := HBoxContainer.new()
+	var nm := UiTheme.label(Journey._cap(p.display_name.trim_prefix("the ")), "TitleLabel")
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_row.add_child(nm)
+	if here:
+		name_row.add_child(UiTheme.chip("You are here", Palette.UI_TEAL))
+	place_box.add_child(name_row)
+	var tags := HBoxContainer.new()
+	tags.add_theme_constant_override("separation", UiTheme.S1)
+	tags.add_child(UiTheme.chip(str(WorldTypes.PLACE_KIND_NAMES[p.kind]).capitalize(), Palette.UI_MUTED))
+	tags.add_child(UiTheme.chip(str(WorldTypes.REGION_NAMES[p.region]), Palette.UI_MUTED))
+	if p.id == band.home:
+		tags.add_child(UiTheme.chip("You wintered here", Palette.UI_TEAL))
+	if not Feud.find(band, p.family).is_empty():
+		tags.add_child(UiTheme.chip("Feud", Palette.UI_BLOOD))
+	place_box.add_child(tags)
 	var lord := FactionAI.ruler_of(world, p.id)
 	var about := "A %s in %s" % [WorldTypes.PLACE_KIND_NAMES[p.kind], WorldTypes.REGION_NAMES[p.region]]
 	if lord != null and lord.alive:
@@ -276,226 +413,250 @@ func _fill_place() -> void:
 	if p.family != "":
 		about += ". Home of %s" % p.family
 	about += "."
-	if p.id == band.home:
-		about += " You wintered here."
-	about += _house_line(p)
 	if not Feud.find(band, p.family).is_empty():
 		about += " There is a feud between you."
-	place_box.add_child(_text(about, 13, Palette.DIM))
+	place_box.add_child(UiTheme.label(about, "SmallLabel"))
+	var house := _house_line(p)
+	if house != "":
+		var hl := UiTheme.label(house.strip_edges(), "SmallLabel")
+		hl.add_theme_color_override("font_color", UiTheme.standing_color(_house_standing(p)).lightened(0.1))
+		place_box.add_child(hl)
 	if band.gift("price_talk", false) and p.has_market and not here:
 		var talk := PackedStringArray()
 		for g in WorldTypes.Good.values():
 			if int(p.stock.get(g, 0)) > 0 and g != WorldTypes.Good.GRAIN:
 				talk.append("%s %d" % [WorldTypes.GOOD_NAMES[g], Market.price(journey.c.world_rules, p, g)])
-		place_box.add_child(_text("Prices there, as you hear them: %s." % ", ".join(talk), 12, Palette.TEXT))
+		place_box.add_child(UiTheme.label("Prices there, as you hear them: %s." % ", ".join(talk), "SmallLabel"))
 	if not here:
 		var days := journey.days_to(p.id)
-		var go := Button.new()
-		go.text = ("Make for it (%d days)" % days) if days >= 0 else "No way there: it needs a ship"
+		var text := ("Make for it (%d days)" % days) if days >= 0 else "No way there: it needs a ship"
 		if journey.moving():
-			go.text = "On your way (%d days)" % days if days >= 0 else go.text
-		go.disabled = days < 0 or not journey.can_act()
-		go.custom_minimum_size = Vector2(0, 46)
-		go.add_theme_font_size_override("font_size", 16)
-		go.pressed.connect(func() -> void:
+			text = "On your way (%d days)" % days if days >= 0 else text
+		var go := UiTheme.primary(text, func() -> void:
 			journey.go_to_place(p.id)
 			refresh())
+		go.disabled = days < 0 or not journey.can_act()
+		place_box.add_child(UiTheme.gap(UiTheme.S1))
 		place_box.add_child(go)
 		return
 	# The market first, then the deeds.
 	var goods := journey.market()
 	if not goods.is_empty():
-		place_box.add_child(_text("The market (what you pay / what you are paid, an ounce a unit):", 13, Palette.TEXT))
+		place_box.add_child(UiTheme.gap(UiTheme.S1))
+		place_box.add_child(UiTheme.section("The market"))
+		place_box.add_child(UiTheme.label("What you pay and what you are paid, an ounce a unit.", "SmallLabel"))
 		for row in goods:
-			var line := HBoxContainer.new()
-			line.add_theme_constant_override("separation", 4)
-			var lab := Label.new()
-			lab.text = "%s  %d/%d  (%d here, %d yours)" % [str(row.name).capitalize(), row.buy, row.sell, row.stock, row.have]
-			lab.add_theme_font_size_override("font_size", 13)
-			lab.add_theme_color_override("font_color", Palette.TEXT)
-			lab.clip_text = true
-			lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			line.add_child(lab)
-			for spec in [["+1", 1, true], ["+5", 5, true], ["-1", 1, false], ["all", 999, false]]:
-				var b := Button.new()
-				b.text = str(spec[0])
-				b.custom_minimum_size = Vector2(40, 34)
-				b.add_theme_font_size_override("font_size", 13)
-				var buying: bool = spec[2]
-				b.disabled = (int(row.stock) <= 0 or journey.c.band.silver < int(row.buy)) if buying else int(row.have) <= 0
-				var good: int = row.good
-				var n: int = spec[1]
-				b.pressed.connect(func() -> void:
-					if buying:
-						journey.buy(good, n)
-					else:
-						journey.sell(good, n)
-					refresh())
-				line.add_child(b)
-			place_box.add_child(line)
+			place_box.add_child(_market_row(row))
 	_add_actions()
 
 
-func _add_actions() -> void:
-	for a in journey.actions():
-		var b := Button.new()
-		b.text = str(a.label)
-		b.disabled = not a.get("enabled", true)
-		b.custom_minimum_size = Vector2(0, 42)
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		b.add_theme_font_size_override("font_size", 15)
-		var id := str(a.id)
+## A good at the market: its name and prices, then buy one, buy five,
+## sell one, sell all.
+func _market_row(row: Dictionary) -> Control:
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 3)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(col)
+	var nm := UiTheme.label("%s   %d / %d" % [str(row.name).capitalize(), row.buy, row.sell], "StrongLabel", false)
+	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	col.add_child(nm)
+	var have := UiTheme.label("%d here, %d yours" % [row.stock, row.have], "SmallLabel", false)
+	have.clip_text = true
+	col.add_child(have)
+	for spec in [["+1", 1, true], ["+5", 5, true], ["-1", 1, false], ["All", 999, false]]:
+		var b := UiTheme.button(str(spec[0]), Callable(), "ToolButton", Vector2(46, 46))
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var buying: bool = spec[2]
+		b.tooltip_text = ("Buy %d" % spec[1]) if buying else ("Sell %s" % ("all" if int(spec[1]) > 99 else str(spec[1])))
+		b.disabled = (int(row.stock) <= 0 or journey.c.band.silver < int(row.buy)) if buying else int(row.have) <= 0
+		var good: int = row.good
+		var n: int = spec[1]
 		b.pressed.connect(func() -> void:
+			if buying:
+				journey.buy(good, n)
+			else:
+				journey.sell(good, n)
+			refresh())
+		line.add_child(b)
+	return line
+
+
+func _add_actions() -> void:
+	var acts := journey.actions()
+	if acts.is_empty():
+		return
+	place_box.add_child(UiTheme.gap(UiTheme.S1))
+	place_box.add_child(UiTheme.section("What may be done"))
+	for a in acts:
+		var id := str(a.id)
+		var b := UiTheme.list_row(str(a.label), str(a.get("hint", "")), func() -> void:
 			journey.act(id)
 			selected = journey.c.band.location
 			canvas.follow = true
 			canvas.centre_on(journey.roam.pos)
-			refresh())
+			refresh(), a.get("enabled", true))
 		place_box.add_child(b)
-		if str(a.get("hint", "")) != "":
-			place_box.add_child(_text(str(a.hint), 12, Palette.DIM))
 
 
 # --- What must be answered ---------------------------------------------------------
 
 func _fill_modal() -> void:
-	for ch in modal.get_children():
-		ch.queue_free()
-	modal.visible = false
+	modal.clear()  # still shown, if it was: a new matter does not flash it
 	var c := journey.c
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
 	if c.over:
-		modal.visible = true
-		modal.add_child(box)
-		box.add_child(_text("The saga of %s is ended" % Way.title(c.band), 24, Palette.GOLD))
+		modal.open("The saga of %s is ended" % Way.title(c.band))
 		var told := PackedStringArray()
 		for line in c.band.chronicle.slice(maxi(0, c.band.chronicle.size() - 12)):
 			told.append(line)
-		box.add_child(_scrolling("%s.\n\n%s" % [Journey._cap(c.over_reason), "\n".join(told)]))
-		var again := Button.new()
-		again.text = "Another saga"
-		again.custom_minimum_size = Vector2(200, 46)
-		again.pressed.connect(func() -> void: host.show_title())
-		box.add_child(again)
+		modal.body.add_child(UiTheme.label("%s." % Journey._cap(c.over_reason), "StrongLabel"))
+		modal.body.add_child(_parchment("\n".join(told)))
+		modal.add_button("Another saga", func() -> void: host.show_title(), "PrimaryButton", 220.0)
 		return
 	if not journey.winter_report.is_empty():
-		modal.visible = true
-		modal.add_child(box)
-		box.add_child(_text("The winter of %d" % (c.cal.year - 1), 24, Palette.GOLD))
-		box.add_child(_scrolling("\n".join(journey.winter_report)))
-		var spring := Button.new()
-		spring.text = "Spring"
-		spring.custom_minimum_size = Vector2(200, 46)
-		spring.pressed.connect(func() -> void:
+		modal.open("The winter of %d" % (c.cal.year - 1))
+		modal.body.add_child(_parchment("\n".join(journey.winter_report)))
+		modal.add_button("Spring", func() -> void:
 			journey.winter_report = PackedStringArray()
 			selected = journey.c.band.location
 			canvas.follow = true
 			canvas.centre_on(journey.roam.pos)
-			refresh())
-		box.add_child(spring)
+			refresh(), "PrimaryButton", 220.0)
 		return
 	var d := journey.current()
 	if d.is_empty():
+		modal.visible = false
 		return
-	modal.visible = true
-	modal.add_child(box)
 	var titles := {"fight": "A fight offers", "merchant": "A sail on the sea", "spine": "Word comes", "demand": "A feud", "house": "A house sends word"}
-	box.add_child(_text(str(titles.get(d.kind, "A choice")), 24, Palette.GOLD))
-	var body := _text(str(d.text).strip_edges(), 15, Palette.TEXT)
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(body)
+	modal.open(str(titles.get(d.kind, "A choice")))
+	modal.body.add_child(UiTheme.label(str(d.text).strip_edges(), "SagaLabel"))
 	if d.kind == "fight":
 		quick_box = CheckBox.new()
 		quick_box.text = "Let the saga tell it (do not fight it yourself)"
 		quick_box.button_pressed = _quick
 		quick_box.toggled.connect(func(on: bool) -> void: _quick = on)
-		box.add_child(quick_box)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	box.add_child(row)
+		modal.body.add_child(quick_box)
 	for o in d.options:
-		var b := Button.new()
-		b.text = str(o.label)
-		b.disabled = not o.get("enabled", true)
-		b.custom_minimum_size = Vector2(150, 48)
-		b.add_theme_font_size_override("font_size", 15)
 		var id := str(o.id)
-		b.pressed.connect(func() -> void:
+		var b := modal.add_button(str(o.label), func() -> void:
 			journey.quick = _quick
 			journey.answer(id)
-			refresh())
-		row.add_child(b)
+			refresh(), "", 150.0)
+		b.disabled = not o.get("enabled", true)
+
+
+## Long reading on parchment: the winter's tale, the chronicle.
+func _parchment(text: String) -> PanelContainer:
+	var p := UiTheme.panel("ParchmentPanel")
+	p.add_child(UiTheme.label(text, "InkLabel"))
+	return p
 
 
 func _scrolling(text: String) -> ScrollContainer:
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	var l := _text(text, 14, Palette.TEXT)
-	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(l)
-	return scroll
+	return UiTheme.scroll(UiTheme.label(text))
 
 
 # --- Your men, your ways ----------------------------------------------------------------
 
+## Opens the side panel with `title`; returns its body to fill.
 func _open_side(title: String) -> VBoxContainer:
-	for ch in side_panel.get_children():
-		ch.queue_free()
-	side_panel.visible = true
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
-	side_panel.add_child(box)
-	box.add_child(_text(title, 22, Palette.GOLD))
-	return box
+	side_panel.open(title)
+	return side_panel.body
 
 
-func _close_side(box: VBoxContainer) -> void:
-	var close := Button.new()
-	close.text = "Back to the map"
-	close.custom_minimum_size = Vector2(200, 44)
-	close.pressed.connect(func() -> void:
-		side_panel.visible = false
-		refresh())
-	box.add_child(close)
+## The side panel's way back to the map. `box` is the body (kept for the
+## callers' sake; the button goes in the panel's footer).
+func _close_side(_box: VBoxContainer = null) -> void:
+	side_panel.add_button("Back to the map", func() -> void:
+		side_panel.close()
+		refresh(), "", 200.0)
 
 
 func _show_men() -> void:
 	var c := journey.c
 	var band := c.band
 	var box := _open_side("%s and his men" % Way.title(band))
-	var lines := PackedStringArray()
-	lines.append("Might, Skill, Grit, Nerve, Wits. A man too hurt stays behind when it comes to a fight.")
+	box.add_child(UiTheme.label("Might, Skill, Grit, Nerve, Wits. A man too hurt stays behind when it comes to a fight.", "SmallLabel"))
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", UiTheme.S1 + 2)
+	box.add_child(list)
 	for m in band.fighters():
-		var w := m.current_wound(c.rules)
-		var bits := PackedStringArray()
-		bits.append("%s%s" % [m.display_name, " (you)" if m == band.leader else ""])
-		bits.append("%d, %s %s" % [m.age, CombatTypes.TIER_NAMES[m.tier], CombatTypes.ROLE_NAMES[m.role]])
-		bits.append("M%d S%d G%d N%d W%d" % [m.stats[0], m.stats[1], m.stats[2], m.stats[3], m.stats[4]])
-		if m != band.leader:
-			bits.append("loyalty %d, wants %s" % [m.loyalty, CampaignTypes.AMBITION_NAMES[m.ambition]])
-		if w != CombatTypes.Wound.UNHURT:
-			bits.append(CombatTypes.WOUND_NAMES[w] + (" (stays behind)" if m.too_hurt_to_fight(c.rules) and m != band.leader else ""))
-		for mm in m.maims:
-			bits.append(CampaignTypes.MAIM_NAMES[mm])
-		if m.kills > 0:
-			bits.append("%d put down" % m.kills)
-		for t in m.traits:
-			bits.append(t)
-		lines.append("  ·  ".join(bits))
-	lines.append("")
+		list.add_child(_man_row(m))
+	var more := PackedStringArray()
 	if not band.friends.is_empty():
-		lines.append("Friends won by counsel and deeds: %s." % ", ".join(band.friends.keys()))
+		more.append("Friends won by counsel and deeds: %s." % ", ".join(band.friends.keys()))
 	for f in band.unsettled_feuds():
-		lines.append("Feud with %s (%s)." % [str(f.get("family", f.get("against", ""))), str(f.get("cause", ""))])
-	box.add_child(_scrolling("\n".join(lines)))
+		more.append("Feud with %s (%s)." % [str(f.get("family", f.get("against", ""))), str(f.get("cause", ""))])
+	if not more.is_empty():
+		box.add_child(UiTheme.label("\n".join(more), "SmallLabel"))
 	_close_side(box)
 
 
+## One man: his name and what he is, his five numbers, how he is hurt, and
+## what else is known of him.
+func _man_row(m: Man) -> Control:
+	var c := journey.c
+	var band := c.band
+	var card := UiTheme.panel("CardPanel")
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UiTheme.S3)
+	card.add_child(row)
+	var who := VBoxContainer.new()
+	who.add_theme_constant_override("separation", 0)
+	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(who)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", UiTheme.S2)
+	who.add_child(top)
+	top.add_child(UiTheme.label(m.display_name, "StrongLabel", false))
+	if m == band.leader:
+		top.add_child(UiTheme.chip("You", Palette.UI_GOLD))
+	var bits := PackedStringArray()
+	bits.append("%d, %s %s" % [m.age, CombatTypes.TIER_NAMES[m.tier], CombatTypes.ROLE_NAMES[m.role]])
+	if m != band.leader:
+		bits.append("loyalty %d, wants %s" % [m.loyalty, CampaignTypes.AMBITION_NAMES[m.ambition]])
+	for mm in m.maims:
+		bits.append(CampaignTypes.MAIM_NAMES[mm])
+	if m.kills > 0:
+		bits.append("%d put down" % m.kills)
+	for t in m.traits:
+		bits.append(t)
+	who.add_child(UiTheme.label(", ".join(bits), "SmallLabel"))
+	var nums := HBoxContainer.new()
+	nums.add_theme_constant_override("separation", UiTheme.S2)
+	nums.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(nums)
+	for i in 5:
+		var s := UiTheme.stat("MSGNW"[i], str(m.stats[i]))
+		s.custom_minimum_size.x = 22
+		nums.add_child(s)
+	var w := m.current_wound(c.rules)
+	var state := VBoxContainer.new()
+	state.custom_minimum_size.x = 118
+	state.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	state.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_child(state)
+	var chip: Control
+	if w == CombatTypes.Wound.UNHURT:
+		chip = UiTheme.chip("Unhurt", Palette.UI_TEAL)
+	else:
+		var col := Palette.UI_GOLD if w == CombatTypes.Wound.BRUISED else Palette.UI_BLOOD
+		chip = UiTheme.chip(str(CombatTypes.WOUND_NAMES[w]).capitalize(), col)
+	chip.size_flags_horizontal = Control.SIZE_SHRINK_END
+	state.add_child(chip)
+	if w != CombatTypes.Wound.UNHURT:
+		if m.too_hurt_to_fight(c.rules) and m != band.leader:
+			var stays := UiTheme.label("stays behind", "SmallLabel", false)
+			stays.add_theme_color_override("font_color", Palette.UI_BLOOD.lightened(0.25))
+			state.add_child(stays)
+	return card
+
+
 ## The ways of life: the deeds done, the points they have earned, and the
-## steps to be taken down any path, in any mixture.
+## steps to be taken down any path, in any mixture. Each path is a card:
+## its three steps, the ones taken lit, and the next with its cost.
 func _show_ways() -> void:
 	var band := journey.c.band
 	var box := _open_side("Your ways")
@@ -505,40 +666,69 @@ func _show_ways() -> void:
 		var pts := int(band.deeds.get(way, 0))
 		if pts > 0:
 			deeds.append("%s %d" % [Way.name_of(way).to_lower(), pts])
-	box.add_child(_text("Points to spend: %d. A point comes with every %d deeds of any kind, and you take steps down whichever ways you like. Deeds so far: %s. The saga names a man at %d deeds of one kind." % [
-			free, Way.POINT_DEEDS, ", ".join(deeds) if not deeds.is_empty() else "none yet", Way.EPITHET_DEEDS], 13, Palette.TEXT))
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 4)
-	scroll.add_child(list)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", UiTheme.S3)
+	box.add_child(head)
+	var pts_chip := UiTheme.chip("%d %s to spend" % [free, "point" if free == 1 else "points"], Palette.UI_GOLD if free > 0 else Palette.UI_MUTED)
+	head.add_child(pts_chip)
+	var about := UiTheme.label("A point comes with every %d deeds of any kind, and you take steps down whichever ways you like. Deeds so far: %s. The saga names a man at %d deeds of one kind." % [
+			Way.POINT_DEEDS, ", ".join(deeds) if not deeds.is_empty() else "none yet", Way.EPITHET_DEEDS], "SmallLabel")
+	about.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(about)
+	var grid := GridContainer.new()
+	grid.columns = 2 if side_panel.size.x <= 0.0 or side_panel.size.x > 900.0 else 1
+	grid.add_theme_constant_override("h_separation", UiTheme.S2)
+	grid.add_theme_constant_override("v_separation", UiTheme.S2)
+	box.add_child(grid)
 	for way in Way.Id.values():
-		var d := Way.def(way)
-		var r := Way.rank(band, way)
-		var head := HBoxContainer.new()
-		head.add_theme_constant_override("separation", 10)
-		var name := _text("%s (%d of %d)   %s" % [str(d.name), r, Way.MAX_RANK, d.blurb], 15, Palette.GOLD)
-		name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		head.add_child(name)
-		var cost := Way.next_cost(band, way)
-		if cost > 0:
-			var b := Button.new()
-			b.text = "%s (%d)" % [d.ranks[r].name, cost]
-			b.disabled = not Way.can_invest(band, way)
-			b.custom_minimum_size = Vector2(170, 38)
-			var w: int = way
-			b.pressed.connect(func() -> void:
-				journey.invest(w)
-				_show_ways())
-			head.add_child(b)
-		list.add_child(head)
-		for i in Way.MAX_RANK:
-			var step: Dictionary = d.ranks[i]
-			list.add_child(_text("    %s: %s" % [step.name, step.text], 12, Palette.TEXT if i < r else Palette.DIM))
+		grid.add_child(_way_card(way))
 	_close_side(box)
+
+
+func _way_card(way: int) -> Control:
+	var band := journey.c.band
+	var d := Way.def(way)
+	var r := Way.rank(band, way)
+	var card := UiTheme.panel("CardPanel")
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", UiTheme.S1)
+	card.add_child(col)
+	var top := HBoxContainer.new()
+	col.add_child(top)
+	var nm := UiTheme.label(str(d.name), "HeadingLabel", false)
+	top.add_child(nm)
+	var pips := UiOrnament.new()
+	pips.kind = UiOrnament.Kind.PIPS
+	pips.count = Way.MAX_RANK
+	pips.filled = r
+	pips.custom_minimum_size = Vector2(54, 20)
+	pips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top.add_child(pips)
+	col.add_child(UiTheme.label(str(d.blurb), "SmallLabel"))
+	for i in Way.MAX_RANK:
+		var step: Dictionary = d.ranks[i]
+		var line := UiTheme.label("%s: %s" % [step.name, step.text], "SmallLabel")
+		if i < r:
+			line.add_theme_color_override("font_color", Palette.UI_TEXT)
+		elif i == r:
+			line.add_theme_color_override("font_color", Palette.UI_MUTED)
+		else:
+			line.add_theme_color_override("font_color", Palette.UI_FAINT.lightened(0.1))
+		col.add_child(line)
+	var cost := Way.next_cost(band, way)
+	if cost > 0:
+		var w: int = way
+		var b := UiTheme.button("Take the step: %s (%d)" % [d.ranks[r].name, cost], func() -> void:
+			journey.invest(w)
+			_show_ways(), "PrimaryButton" if Way.can_invest(band, way) else "", Vector2(0, 46))
+		b.disabled = not Way.can_invest(band, way)
+		b.add_theme_font_size_override("font_size", 16)
+		col.add_child(b)
+	else:
+		col.add_child(UiTheme.label("Every step taken.", "SmallLabel"))
+	return card
 
 
 ## The families: every house with its head, its seat, how it stands toward
@@ -550,33 +740,56 @@ func _show_families() -> void:
 	if fs == null:
 		_close_side(box)
 		return
-	box.add_child(_text("How each house stands toward you, from blood-enemy to sworn friend. What you do to one house its kin and friends feel too, and its enemies the other way.", 13, Palette.DIM))
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 2)
-	scroll.add_child(list)
+	box.add_child(UiTheme.label("How each house stands toward you, from blood-enemy to sworn friend. What you do to one house its kin and friends feel too, and its enemies the other way.", "SmallLabel"))
 	var told := fs.tidings_of()
 	if not told.is_empty():
-		list.add_child(_text("Tidings of the houses", 15, Palette.GOLD))
-		list.add_child(_text("\n".join(told), 12, Palette.TEXT))
+		box.add_child(UiTheme.section("Tidings of the houses"))
+		box.add_child(_parchment("\n".join(told)))
+		box.add_child(UiTheme.section("The houses"))
+	var grid := GridContainer.new()
+	grid.columns = 2 if side_panel.size.x <= 0.0 or side_panel.size.x > 900.0 else 1
+	grid.add_theme_constant_override("h_separation", UiTheme.S2)
+	grid.add_theme_constant_override("v_separation", UiTheme.S2)
+	box.add_child(grid)
 	for r in fs.report(c.world_rules, c.world, c.band):
 		if not r.known and int(r.standing) == 0 and str(r.feud) == "" and not r.western:
 			continue
-		list.add_child(_text("%s   %s (%+d)" % [r.name, str(r.step).capitalize(), int(r.standing)], 15,
-				Palette.GOLD if int(r.standing) >= 0 else Palette.TEXT))
+		var card := UiTheme.panel("CardPanel")
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", UiTheme.S1)
+		card.add_child(col)
+		var top := HBoxContainer.new()
+		col.add_child(top)
+		var nm := UiTheme.label(str(r.name), "HeadingLabel", false)
+		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nm.clip_text = true
+		nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		top.add_child(nm)
+		var standing := int(r.standing)
+		top.add_child(UiTheme.chip("%s %+d" % [str(r.step).capitalize(), standing], UiTheme.standing_color(standing)))
 		var about := "%s holds %s; %s is his heir. A %s house, %d men, honor %d." % [r.head, r.seat_name, r.heir, r.temper, int(r.strength), int(r.honor)]
 		if not (r.your_ties as PackedStringArray).is_empty():
 			about += " Yours by %s." % " and ".join(r.your_ties)
+		col.add_child(UiTheme.label(about))
 		if str(r.feud) != "":
-			about += " %s." % Journey._cap(str(r.feud))
-		list.add_child(_text(about, 12, Palette.TEXT))
+			var f := UiTheme.label("%s." % Journey._cap(str(r.feud)), "SmallLabel")
+			f.add_theme_color_override("font_color", Palette.UI_BLOOD.lightened(0.25))
+			col.add_child(f)
 		if not (r.ties as PackedStringArray).is_empty():
-			list.add_child(_text("; ".join(r.ties), 12, Palette.DIM))
+			col.add_child(UiTheme.label("; ".join(r.ties), "SmallLabel"))
+		grid.add_child(card)
 	_close_side(box)
+
+
+## Everything the saga has told this summer, on parchment.
+func _show_chronicle() -> void:
+	var box := _open_side("The chronicle")
+	var lines := journey.said
+	box.add_child(_parchment("\n".join(lines) if not lines.is_empty() else "Nothing is told yet."))
+	_close_side(box)
+	# The newest at the foot, where the eye is.
+	side_panel.scroll.set_deferred("scroll_vertical", 1 << 20)
 
 
 ## The ruling family of a place and how it stands toward you, for the
@@ -588,6 +801,14 @@ func _house_line(p: Place) -> String:
 	var h := fs.house(p.family)
 	return " %s is head of it; they think of you as %s (%+d)." % [h.head,
 			Families.step_phrase(Families.step_of(journey.c.world_rules, journey.c.band, h.name)), Families.standing(journey.c.band, h.name)]
+
+
+## The standing of a place's ruling family toward the band (0 for none).
+func _house_standing(p: Place) -> int:
+	var fs := journey.c.world.families
+	if fs == null or not fs.houses.has(p.family):
+		return 0
+	return Families.standing(journey.c.band, fs.house(p.family).name)
 
 
 # --- The map itself ------------------------------------------------------------------

@@ -9,6 +9,7 @@ config_version=5
 config/name="Ring-Giver"
 config/features=PackedStringArray("4.5")
 config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.0784, 0.0627, 0.051, 1)
 run/main_scene="res://view/game.tscn"
 
 [display]
@@ -27,4 +28,5 @@ pointing/emulate_mouse_from_touch=true
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.0784, 0.0627, 0.051, 1)
 renderer/rendering_method.mobile="gl_compatibility"

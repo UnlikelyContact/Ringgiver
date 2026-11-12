@@ -71,8 +71,8 @@ func start_hosted(built: Dictionary, shouts: Array) -> void:
 	_show_battle()
 
 
-const HUD_TOP := 50.0  # the top bar, in design pixels
-const HUD_BOTTOM := 76.0  # the shout row
+const HUD_TOP := 84.0  # the top bar and its strip, in design pixels, until the HUD measures it
+const HUD_BOTTOM := 78.0  # the shout row
 const EDGE_MARGIN := 40.0  # world pixels kept clear round the outermost men
 ## Design pixels the tutorial's banner takes under the top bar or over the
 ## shout row (view/tutorial.gd), kept clear like the bars themselves.
@@ -107,7 +107,7 @@ func _men_bounds() -> Array[Vector2]:
 func fit_zoom() -> float:
 	var b := _men_bounds()
 	var size := get_viewport_rect().size
-	var band := size.y - HUD_TOP - HUD_BOTTOM - top_extra - bottom_extra
+	var band := size.y - _hud_top() - HUD_BOTTOM - top_extra - bottom_extra
 	var span_y: float = b[1].y - b[0].y + 2.0 * EDGE_MARGIN
 	var span_x: float = b[1].x - b[0].x + 2.0 * EDGE_MARGIN
 	var z := minf(band / maxf(1.0, span_y), size.x / maxf(1.0, span_x))
@@ -119,7 +119,15 @@ func fit_zoom() -> float:
 func focus_point(zoom: float) -> Vector2:
 	var b := _men_bounds()
 	var centre: Vector2 = (b[0] + b[1]) / 2.0
-	return centre + Vector2(0, (HUD_BOTTOM + bottom_extra - HUD_TOP - top_extra) / 2.0 / zoom)
+	return centre + Vector2(0, (HUD_BOTTOM + bottom_extra - _hud_top() - top_extra) / 2.0 / zoom)
+
+
+## Where the top of the screen's controls ends: the HUD measures it (the
+## strip goes under the controls on a narrow screen).
+func _hud_top() -> float:
+	if hud != null and hud.has_method("top_height"):
+		return hud.top_height() + 6.0
+	return HUD_TOP
 
 
 func _process(delta: float) -> void:
