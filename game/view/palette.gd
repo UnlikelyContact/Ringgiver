@@ -53,8 +53,12 @@ static func objective_color(kind: int) -> Color:
 		_:
 			return BONE
 
-## Side colours: the player's band in madder, the enemy in woad.
+## Side colours: the player's band in madder, the enemy in woad; with the
+## colours kinder to colour-blind eyes (Settings), a light ochre-orange and
+## a deep woad, apart in lightness as well as hue.
 static func side_color(side: int) -> Color:
+	if colour_safe:
+		return SAFE_OURS if side == 0 else SAFE_THEIRS
 	return MADDER if side == 0 else WOAD
 
 
@@ -98,3 +102,25 @@ const UI_OURS := Color("d9776a")
 const UI_THEIRS := Color("86a4d6")
 ## The fire of the opening's cards.
 const UI_EMBER := Color("e8823a")
+
+
+# --- Colours kinder to colour-blind eyes (Settings, docs/design/notes/shell.md) --
+## Madder and woad are the same lightness (about L* 31), told apart by hue
+## alone. With the setting on, the two sides are an ochre-orange (L* about
+## 56) and a deep woad (about 26), and the battle strip's words follow; a
+## friendly house's colour is a light blue, not green.
+
+## Whether the safer colours are used; Settings.apply sets it.
+static var colour_safe := false
+const SAFE_OURS := Color("c96a2b")
+const SAFE_THEIRS := Color("243a68")
+const UI_SAFE_OURS := Color("f0a860")
+const UI_SAFE_THEIRS := Color("6c88cc")
+const UI_SAFE_FRIEND := Color("8ec5e8")
+
+
+## The battle strip's colour for a side's words.
+static func ui_side(side: int) -> Color:
+	if colour_safe:
+		return UI_SAFE_OURS if side == 0 else UI_SAFE_THEIRS
+	return UI_OURS if side == 0 else UI_THEIRS

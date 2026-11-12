@@ -22,10 +22,17 @@ const CONFIG_PATH := "user://ringgiver.cfg"
 ## Tools set this to keep the player's config out of a run.
 var use_config := true
 var _escape_done_override := -1
+## A setting changed that the screen now up must be built again for (the
+## size of the words, the colours): done when the settings close.
+var _rebuild := false
 
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.UI_NIGHT)
+	# The player's settings (view/settings.gd), kept beside the tutorial's
+	# flag; a tool's run keeps to the defaults.
+	Settings.persist = use_config
+	Settings.load_file()
 	# The one look (view/ui_theme.gd): on the window, for tooltips and
 	# pickers, and on every screen's root, since a CanvasLayer does not pass
 	# a theme down.
@@ -80,6 +87,7 @@ func show_title() -> void:
 	_drop_battle()
 	journey = null
 	var box := _opening(0.45, 560.0)
+	Audio.scene("title")
 	box.add_theme_constant_override("separation", UiTheme.S2)
 	var ring := UiOrnament.new()
 	ring.kind = UiOrnament.Kind.RING
@@ -117,6 +125,9 @@ func show_title() -> void:
 	stamp.offset_bottom = -UiTheme.S2
 	stamp.add_theme_color_override("font_color", Palette.UI_FAINT)
 	screen.add_child(stamp)
+	var gear := Settings.gear(func() -> void: Settings.open(screen, self))
+	gear.position = Vector2(UiTheme.EDGE, UiTheme.S2)
+	screen.add_child(gear)
 
 
 # --- The beginning: the burned hall -------------------------------------------------
@@ -126,6 +137,7 @@ func show_title() -> void:
 ## buttons are in.
 func _card(text: String, buttons: Array, title := "", kicker := "") -> HBoxContainer:
 	var box := _opening(1.0)
+	Audio.scene("opening")
 	if kicker != "":
 		box.add_child(_centred(kicker.to_upper(), "KeyLabel"))
 	if title != "":
@@ -213,6 +225,11 @@ func escape_done() -> bool:
 	return bool(cfg.get_value("tutorial", "escape_done", false))
 
 
+## Forgets it (Settings' "show the hints again"): the escape is taught again.
+func forget_escape() -> void:
+	_escape_done_override = 0 if not use_config else -1
+
+
 ## Remembers that the player has been through the burned hall.
 func remember_escape() -> void:
 	if not use_config:
@@ -229,6 +246,7 @@ func remember_escape() -> void:
 func show_origins() -> void:
 	var root := Control.new()
 	_swap(root)
+	Audio.scene("opening")
 	root.add_child(UiEmbers.new(0.25))
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -389,3 +407,28 @@ func start_skirmish() -> void:
 	map = null
 	battle_node = preload("res://view/main.tscn").instantiate()
 	add_child(battle_node)
+
+
+# --- The settings (view/settings.gd) -----------------------------------------------
+
+## A setting changed while the settings are open over a screen of the game.
+func settings_changed(key: String) -> void:
+	match key:
+		"large_text", "colour_safe":
+			_rebuild = true
+		"map_fast":
+			if map != null:
+				map.fast = Settings.map_fast
+				map._time_buttons()
+
+
+## The settings closed: build the screen again if the words or the colours
+## changed (what is set on a node, not through the theme, follows then).
+func settings_closed() -> void:
+	if not _rebuild:
+		return
+	_rebuild = false
+	if map != null:
+		show_map()
+	elif journey == null and battle_node == null:
+		show_title()

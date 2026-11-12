@@ -51,12 +51,20 @@ var _summer_label: Label
 var _stats := {}
 var _log_box: HBoxContainer
 var _log_lines := -1  # how many of the saga's lines the log shows now
+# What the sound last heard (view/audio.gd): the day, the place, the
+# matter put to the player, the cell the band stood on.
+var _heard_day := -1
+var _heard_place := ""
+var _heard_matter := ""
+var _heard_cell := Vector2i(-999, -999)
 
 
 func setup(p_journey: Journey, p_host: Node) -> void:
 	journey = p_journey
 	host = p_host
 	selected = journey.c.band.location
+	fast = Settings.map_fast
+	_heard_place = journey.c.band.location
 	canvas = MapCanvas.new()
 	canvas.screen = self
 	canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -90,6 +98,8 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	time_bar.add_child(_small("follow", "Follow the band", func() -> void:
 		canvas.follow = true
 		canvas.queue_redraw()))
+	time_bar.add_child(_gap(6))
+	time_bar.add_child(Settings.gear(func() -> void: Settings.open(self, host)))
 
 	# The saga's last lines at the map's foot, on a backing that reads over
 	# any ground, and the way into the whole chronicle.
@@ -141,8 +151,11 @@ func _build_panel() -> void:
 	panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 	panel.offset_left = -PANEL_W
 	add_child(panel)
+	# Kept tight, so that on a phone three of the place's deeds show under
+	# it without scrolling: who, when and where, the band's numbers, the
+	# three lists; the rest scrolls with the place.
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", UiTheme.S2)
+	col.add_theme_constant_override("separation", UiTheme.S1)
 	panel.add_child(col)
 	var head := HBoxContainer.new()
 	col.add_child(head)
@@ -154,23 +167,20 @@ func _build_panel() -> void:
 	_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_name_label.clip_text = true
 	who.add_child(_name_label)
-	_date_label = UiTheme.label("", "SmallLabel", false)
-	_date_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_date_label.clip_text = true
-	who.add_child(_date_label)
 	_rank_box = HBoxContainer.new()
 	_rank_box.add_theme_constant_override("separation", UiTheme.S1)
 	_rank_box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	head.add_child(_rank_box)
-	# The summer: the days left in words beside the date, and a thin bar of
-	# the days gone under them.
+	# The summer: the date and the place (wrapping, never cut, however long
+	# the place's name), the days left beside them, and a thin bar of the
+	# days gone under them.
 	var when := HBoxContainer.new()
 	when.add_theme_constant_override("separation", UiTheme.S2)
-	who.remove_child(_date_label)
-	when.add_child(_date_label)
+	_date_label = UiTheme.label("", "SmallLabel")
 	_date_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	when.add_child(_date_label)
 	_summer_label = UiTheme.label("", "KeyLabel", false)
-	_summer_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_summer_label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	when.add_child(_summer_label)
 	col.add_child(when)
 	_summer = ProgressBar.new()
@@ -179,18 +189,25 @@ func _build_panel() -> void:
 	_summer.tooltip_text = "The summer gone"
 	col.add_child(_summer)
 	var strip := UiTheme.panel("WellPanel")
+	strip.add_theme_stylebox_override("panel", UiTheme.box(Palette.UI_WELL, Color(0, 0, 0, 0), 0, UiTheme.RADIUS, UiTheme.S3, 3))
 	col.add_child(strip)
 	var stats := HBoxContainer.new()
 	stats.add_theme_constant_override("separation", UiTheme.S1)
 	strip.add_child(stats)
 	for k in ["silver", "food", "men", "fame", "honor", "luck"]:
-		var s := UiTheme.stat(k, "-")
-		s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		s.size_flags_stretch_ratio = 1.3 if k == "men" else 1.0
-		stats.add_child(s)
-		_stats[k] = s
+		var st := UiTheme.stat(k, "-")
+		st.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		st.size_flags_stretch_ratio = 1.3 if k == "men" else 1.0
+		# Never wider than its share: the large words must not push the
+		# panel past the screen's edge.
+		for l in [st.get_child(0), st.get_meta("value")]:
+			(l as Label).clip_text = true
+			(l as Label).text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		(st.get_child(0) as Label).add_theme_font_size_override("font_size", UiTheme.KEY)  # the keys keep theirs
+		stats.add_child(st)
+		_stats[k] = st
+	# The ship and the hold: read with the place, at the head of the scroll.
 	status_label = UiTheme.label("", "SmallLabel")
-	col.add_child(status_label)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", UiTheme.S2)
@@ -206,8 +223,8 @@ func _build_panel() -> void:
 	row.add_child(houses_btn)
 	for b in [men_btn, ways_btn, houses_btn]:
 		(b as Button).custom_minimum_size.y = 48
-		(b as Button).add_theme_font_size_override("font_size", 16)
-	col.add_child(UiTheme.rule(true))
+		(b as Button).add_theme_font_size_override("font_size", 16)  # short names: they keep their size in the large words
+	col.add_child(UiTheme.rule(false))
 	place_box = VBoxContainer.new()
 	place_box.add_theme_constant_override("separation", UiTheme.S2)
 	var scroll := UiTheme.scroll(place_box)
@@ -216,6 +233,7 @@ func _build_panel() -> void:
 
 func _small(glyph: String, tip: String, on: Callable) -> UiIconButton:
 	var b := UiIconButton.new(glyph, tip)
+	b.custom_minimum_size = Vector2(UiTheme.TOUCH, UiTheme.TOUCH)  # a thumb's width on a phone
 	b.pressed.connect(on)
 	return b
 
@@ -282,6 +300,9 @@ func _skip_log() -> void:
 func _process(delta: float) -> void:
 	if journey == null or not visible or host == null:
 		return
+	if host.get("battle_node") != null:
+		return  # the battle screen is up over the map
+	Audio.duck(modal.visible or side_panel.visible or has_node("Settings"))
 	if modal.visible or side_panel.visible or paused or not journey.moving():
 		return
 	journey.advance(delta * DAYS_PER_SECOND * (3.0 if fast else 1.0))
@@ -289,6 +310,7 @@ func _process(delta: float) -> void:
 		refresh()
 		return
 	_status()
+	_ambience()
 	var now := _state_key()
 	if now != _seen:
 		if journey.c.band.location != "":
@@ -324,13 +346,45 @@ func refresh() -> void:
 	_fill_place()
 	_fill_modal()
 	_seen = _state_key()
+	_ambience()
+	var here := band.location
+	if here != "" and here != _heard_place:
+		Audio.play("arrive")
+	_heard_place = here
 	canvas.queue_redraw()
+
+
+## The bed of sound for where the band is (view/audio.gd): the sea aboard,
+## the wind ashore and the sea too on a shore, the hall's fire in winter.
+func _ambience() -> void:
+	if not journey.winter_report.is_empty():
+		Audio.scene("winter")
+		return
+	var roam := journey.roam
+	var cell := roam.cell()
+	if cell == _heard_cell and Audio.get_audio() != null and Audio.get_audio()._scene.begins_with("map"):
+		return
+	_heard_cell = cell
+	if roam.aboard:
+		Audio.scene("map_sea")
+		return
+	var shore := false
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var c := cell + Vector2i(dx, dy)
+			if MapGrid.inside(c) and roam.grid.is_sea(c):
+				shore = true
+	Audio.scene("map_shore" if shore else "map_land")
 
 
 func _status() -> void:
 	var s := journey.status()
 	var t := str(s.title)
 	_name_label.text = t
+	if int(s.day) != _heard_day:
+		if _heard_day >= 0 and journey.moving():
+			Audio.play("tick")
+		_heard_day = int(s.day)
 	var where := Journey._cap(str(s.where))
 	_date_label.text = "%d, day %d   %s" % [s.year, s.day, where]
 	var total := int(s.day) + int(s.days_left)
@@ -377,7 +431,8 @@ func _status() -> void:
 func _fill_place() -> void:
 	for ch in place_box.get_children():
 		place_box.remove_child(ch)
-		ch.queue_free()
+		if ch != status_label:
+			ch.queue_free()
 	var world := journey.c.world
 	var band := journey.c.band
 	var p := world.place(selected) if selected != "" else null
@@ -385,10 +440,11 @@ func _fill_place() -> void:
 	if p == null:
 		# The wilds, or the water.
 		place_box.add_child(UiTheme.label(Journey._cap(journey.whereabouts()), "TitleLabel"))
-		place_box.add_child(UiTheme.label("Tap the map to go there: the land on foot, the water if you have a ship. Tap a place to make for it.", "SmallLabel"))
 		if journey.moving():
 			place_box.add_child(UiTheme.label("On your way.", "StrongLabel"))
 		_add_actions()
+		place_box.add_child(UiTheme.label("Tap the map to go there: the land on foot, the water if you have a ship. Tap a place to make for it.", "SmallLabel"))
+		place_box.add_child(status_label)
 		return
 	var name_row := HBoxContainer.new()
 	var nm := UiTheme.label(Journey._cap(p.display_name.trim_prefix("the ")), "TitleLabel")
@@ -397,8 +453,45 @@ func _fill_place() -> void:
 	if here:
 		name_row.add_child(UiTheme.chip("You are here", Palette.UI_TEAL))
 	place_box.add_child(name_row)
-	var tags := HBoxContainer.new()
-	tags.add_theme_constant_override("separation", UiTheme.S1)
+	if here:
+		# What may be done comes first, under the name, where a thumb finds
+		# it; the market after; what the place is, last.
+		_add_actions()
+		var goods := journey.market()
+		if not goods.is_empty():
+			place_box.add_child(UiTheme.gap(UiTheme.S1))
+			place_box.add_child(UiTheme.section("The market"))
+			place_box.add_child(UiTheme.label("What you pay and what you are paid, an ounce a unit.", "SmallLabel"))
+			for row in goods:
+				place_box.add_child(_market_row(row))
+		place_box.add_child(UiTheme.gap(UiTheme.S1))
+		_about_place(p)
+		place_box.add_child(status_label)
+		return
+	_about_place(p)
+	var days := journey.days_to(p.id)
+	var text := ("Make for it (%d days)" % days) if days >= 0 else "No way there: it needs a ship"
+	if journey.moving():
+		text = "On your way (%d days)" % days if days >= 0 else text
+	var go := UiTheme.primary(text, func() -> void:
+		journey.go_to_place(p.id)
+		refresh())
+	go.disabled = days < 0 or not journey.can_act()
+	place_box.add_child(UiTheme.gap(UiTheme.S1))
+	place_box.add_child(go)
+	place_box.add_child(status_label)
+
+
+## What a place is: its kind and region, who rules it, its house and how
+## that house stands toward you, and (to a man with an ear for prices)
+## its prices.
+func _about_place(p: Place) -> void:
+	var band := journey.c.band
+	var world := journey.c.world
+	var here := p.id == band.location
+	var tags := HFlowContainer.new()
+	tags.add_theme_constant_override("h_separation", UiTheme.S1)
+	tags.add_theme_constant_override("v_separation", UiTheme.S1)
 	tags.add_child(UiTheme.chip(str(WorldTypes.PLACE_KIND_NAMES[p.kind]).capitalize(), Palette.UI_MUTED))
 	tags.add_child(UiTheme.chip(str(WorldTypes.REGION_NAMES[p.region]), Palette.UI_MUTED))
 	if p.id == band.home:
@@ -427,27 +520,6 @@ func _fill_place() -> void:
 			if int(p.stock.get(g, 0)) > 0 and g != WorldTypes.Good.GRAIN:
 				talk.append("%s %d" % [WorldTypes.GOOD_NAMES[g], Market.price(journey.c.world_rules, p, g)])
 		place_box.add_child(UiTheme.label("Prices there, as you hear them: %s." % ", ".join(talk), "SmallLabel"))
-	if not here:
-		var days := journey.days_to(p.id)
-		var text := ("Make for it (%d days)" % days) if days >= 0 else "No way there: it needs a ship"
-		if journey.moving():
-			text = "On your way (%d days)" % days if days >= 0 else text
-		var go := UiTheme.primary(text, func() -> void:
-			journey.go_to_place(p.id)
-			refresh())
-		go.disabled = days < 0 or not journey.can_act()
-		place_box.add_child(UiTheme.gap(UiTheme.S1))
-		place_box.add_child(go)
-		return
-	# The market first, then the deeds.
-	var goods := journey.market()
-	if not goods.is_empty():
-		place_box.add_child(UiTheme.gap(UiTheme.S1))
-		place_box.add_child(UiTheme.section("The market"))
-		place_box.add_child(UiTheme.label("What you pay and what you are paid, an ounce a unit.", "SmallLabel"))
-		for row in goods:
-			place_box.add_child(_market_row(row))
-	_add_actions()
 
 
 ## A good at the market: its name and prices, then buy one, buy five,
@@ -467,7 +539,7 @@ func _market_row(row: Dictionary) -> Control:
 	have.clip_text = true
 	col.add_child(have)
 	for spec in [["+1", 1, true], ["+5", 5, true], ["-1", 1, false], ["All", 999, false]]:
-		var b := UiTheme.button(str(spec[0]), Callable(), "ToolButton", Vector2(46, 46))
+		var b := UiTheme.button(str(spec[0]), Callable(), "ToolButton", Vector2(UiTheme.ROW, UiTheme.ROW))
 		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var buying: bool = spec[2]
 		b.tooltip_text = ("Buy %d" % spec[1]) if buying else ("Sell %s" % ("all" if int(spec[1]) > 99 else str(spec[1])))
@@ -479,6 +551,7 @@ func _market_row(row: Dictionary) -> Control:
 				journey.buy(good, n)
 			else:
 				journey.sell(good, n)
+			Audio.play("coin")
 			refresh())
 		line.add_child(b)
 	return line
@@ -493,11 +566,17 @@ func _add_actions() -> void:
 	for a in acts:
 		var id := str(a.id)
 		var b := UiTheme.list_row(str(a.label), str(a.get("hint", "")), func() -> void:
+			var silver := journey.c.band.silver
 			journey.act(id)
+			if journey.c.band.silver != silver:
+				Audio.play("coin")
 			selected = journey.c.band.location
 			canvas.follow = true
 			canvas.centre_on(journey.roam.pos)
 			refresh(), a.get("enabled", true))
+		# A deed is a main thing to do: a thumb's height on a phone.
+		b.set_meta("min_h", UiTheme.TOUCH)
+		b.custom_minimum_size.y = maxf(b.custom_minimum_size.y, UiTheme.TOUCH)
 		place_box.add_child(b)
 
 
@@ -517,6 +596,7 @@ func _fill_modal() -> void:
 		return
 	if not journey.winter_report.is_empty():
 		modal.open("The winter of %d" % (c.cal.year - 1))
+		Audio.scene("winter")
 		modal.body.add_child(_parchment("\n".join(journey.winter_report)))
 		modal.add_button("Spring", func() -> void:
 			journey.winter_report = PackedStringArray()
@@ -531,6 +611,10 @@ func _fill_modal() -> void:
 		return
 	var titles := {"fight": "A fight offers", "merchant": "A sail on the sea", "spine": "Word comes", "demand": "A feud", "house": "A house sends word"}
 	modal.open(str(titles.get(d.kind, "A choice")))
+	var matter := "%s|%s" % [d.kind, d.text]
+	if matter != _heard_matter:
+		_heard_matter = matter
+		Audio.play("horn" if d.kind == "fight" else "page")
 	modal.body.add_child(UiTheme.label(str(d.text).strip_edges(), "SagaLabel"))
 	if d.kind == "fight":
 		quick_box = CheckBox.new()
@@ -562,6 +646,8 @@ func _scrolling(text: String) -> ScrollContainer:
 
 ## Opens the side panel with `title`; returns its body to fill.
 func _open_side(title: String) -> VBoxContainer:
+	if not side_panel.visible:
+		Audio.play("page")
 	side_panel.open(title)
 	return side_panel.body
 
@@ -575,23 +661,7 @@ func _close_side(_box: VBoxContainer = null) -> void:
 
 
 func _show_men() -> void:
-	var c := journey.c
-	var band := c.band
-	var box := _open_side("%s and his men" % Way.title(band))
-	box.add_child(UiTheme.label("Might, Skill, Grit, Nerve, Wits. A man too hurt stays behind when it comes to a fight.", "SmallLabel"))
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", UiTheme.S1 + 2)
-	box.add_child(list)
-	for m in band.fighters():
-		list.add_child(_man_row(m))
-	var more := PackedStringArray()
-	if not band.friends.is_empty():
-		more.append("Friends won by counsel and deeds: %s." % ", ".join(band.friends.keys()))
-	for f in band.unsettled_feuds():
-		more.append("Feud with %s (%s)." % [str(f.get("family", f.get("against", ""))), str(f.get("cause", ""))])
-	if not more.is_empty():
-		box.add_child(UiTheme.label("\n".join(more), "SmallLabel"))
-	_close_side(box)
+	MenPanel.new(self).show_list()
 
 
 ## One man: his name and what he is, his five numbers, how he is hurt, and

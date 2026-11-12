@@ -137,24 +137,24 @@ func attach(map: Control) -> void:
 	_map = map
 	showing = ""
 	var panel_w := MapScreen.PANEL_W
-	var ask := UiTheme.button("?", _show_list, "ToolButton", Vector2(UiTheme.ROW, UiTheme.ROW))
+	var ask := UiTheme.button("?", _show_list, "ToolButton", Vector2(UiTheme.TOUCH, UiTheme.TOUCH))
 	ask.tooltip_text = "What you have learned"
-	ask.add_theme_font_size_override("font_size", 22)
+	ask.add_theme_font_size_override("font_size", UiTheme.fs(24))
 	var bar = map.get("time_bar")
 	if bar != null:
 		(bar as Control).add_child(UiTheme.gap(0, 6))
 		(bar as Control).add_child(ask)
 	else:
 		ask.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		ask.offset_left = -panel_w - UiTheme.ROW - UiTheme.S2
+		ask.offset_left = -panel_w - UiTheme.TOUCH - UiTheme.S2
 		ask.offset_right = -panel_w - UiTheme.S2
 		ask.offset_top = UiTheme.S2
-		ask.offset_bottom = UiTheme.S2 + UiTheme.ROW
+		ask.offset_bottom = UiTheme.S2 + UiTheme.TOUCH
 		map.add_child(ask)
 	_card = UiTheme.panel("ParchmentPanel")
 	_card.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_card.offset_left = UiTheme.EDGE
-	_card.offset_top = UiTheme.S2 + UiTheme.ROW + UiTheme.S2
+	_card.offset_top = UiTheme.S2 + UiTheme.TOUCH + UiTheme.S2  # under the map's controls
 	_card.custom_minimum_size = Vector2(minf(540.0, 1169.0 - panel_w - 40.0), 0)
 	_card.visible = false
 	map.add_child(_card)
