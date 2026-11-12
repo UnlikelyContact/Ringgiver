@@ -56,3 +56,45 @@ static func objective_color(kind: int) -> Color:
 ## Side colours: the player's band in madder, the enemy in woad.
 static func side_color(side: int) -> Color:
 	return MADDER if side == 0 else WOAD
+
+
+# --- The interface (view/ui_theme.gd, docs/design/notes/ui.md) ---------------
+## Carved wood and worn iron round a saga chart: deep charcoal-brown
+## panels, bone text, a tarnished gold rule and accent, parchment for long
+## reading, blood only for danger, the map's teal for water and calm.
+
+## The darkest ground, behind every screen and under the dimmed backdrop.
+const UI_NIGHT := Color("14100d")
+## Panel wood, from sunken to raised.
+const UI_WELL := Color("1a1511")
+const UI_WOOD := Color("241d17")
+const UI_WOOD_RAISED := Color("332920")
+const UI_WOOD_HOVER := Color("3e3226")
+## The rule round panels and buttons: tarnished gold, and the bright gold
+## of titles and the chosen thing.
+const UI_RULE := Color("8a6d36")
+const UI_RULE_DIM := Color("4d3d26")
+const UI_GOLD := Color("dcb862")
+const UI_GOLD_DEEP := Color("a9822e")
+## Text: bone for reading, muted for what is said aside, faint for what
+## cannot be done now.
+const UI_TEXT := Color("ece3cf")
+const UI_MUTED := Color("ab9f8a")
+const UI_FAINT := Color("6e6556")
+## Parchment, for the long reading surfaces and the hints on the map, with
+## its own ink.
+const UI_PARCHMENT := Color("e3d5b4")
+const UI_PARCHMENT_EDGE := Color("b29d72")
+const UI_INK := Color("33271b")
+const UI_INK_MUTED := Color("6b5a42")
+## Danger and calm.
+const UI_BLOOD := Color("b8433a")
+const UI_BLOOD_DEEP := Color("6e211c")
+const UI_TEAL := Color("5f9c98")
+const UI_FRIEND := Color("9cb35c")
+## Our side and theirs on the battle screen's strip: the shields' madder
+## and woad, raised to read as text on the dark.
+const UI_OURS := Color("d9776a")
+const UI_THEIRS := Color("86a4d6")
+## The fire of the opening's cards.
+const UI_EMBER := Color("e8823a")

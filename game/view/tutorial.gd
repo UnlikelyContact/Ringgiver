@@ -68,10 +68,10 @@ var _hurt_name := ""
 var _resume: Step = Step.PUSH
 var _pushed_said := false
 
-## Where the banner stands: under the top bar and its status lines, or
-## over the shout row (design pixels).
-const TOP_BAR := 68.0
-const BOTTOM_ROW := 80.0
+## Where the banner stands: under the top bar and its status lines (the
+## HUD measures them), or over the shout row (design pixels).
+const TOP_BAR := 84.0
+const BOTTOM_ROW := 82.0
 
 var hud: Node = null
 var _banner: PanelContainer
@@ -249,13 +249,7 @@ func setup(p_hud: Node) -> void:
 	_outline.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_outline.draw.connect(_draw_outline)
-	_banner = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.09, 0.08, 0.07, 0.93)
-	sb.border_color = Color(Palette.GOLD, 0.7)
-	sb.set_border_width_all(1)
-	sb.set_content_margin_all(10)
-	_banner.add_theme_stylebox_override("panel", sb)
+	_banner = UiTheme.panel("ParchmentPanel")
 	_banner.anchor_left = 0.2
 	_banner.anchor_right = 0.8
 	_banner.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -263,26 +257,20 @@ func setup(p_hud: Node) -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	_banner.add_child(box)
-	_said_label = Label.new()
-	_said_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_said_label.add_theme_font_size_override("font_size", 14)
-	_said_label.add_theme_color_override("font_color", Palette.DIM)
+	_said_label = UiTheme.label("", "InkSmallLabel")
 	_said_label.custom_minimum_size = Vector2(320, 0)
 	box.add_child(_said_label)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	box.add_child(row)
-	_text_label = Label.new()
-	_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_text_label = UiTheme.label("", "InkLabel")
+	_text_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_text_label.custom_minimum_size = Vector2(320, 0)  # never a column of letters before the anchors settle
-	_text_label.add_theme_font_size_override("font_size", 17)
-	_text_label.add_theme_color_override("font_color", Palette.TEXT)
+	_text_label.add_theme_font_size_override("font_size", 18)
 	row.add_child(_text_label)
-	_go_on = Button.new()
-	_go_on.text = "Go on"
-	_go_on.custom_minimum_size = Vector2(110, 48)
-	_go_on.add_theme_font_size_override("font_size", 17)
+	_go_on = UiTheme.primary("Go on", Callable(), 120.0)
+	_go_on.custom_minimum_size.y = UiTheme.ROW
 	_go_on.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_go_on.pressed.connect(func() -> void:
 		acknowledge()
@@ -344,8 +332,9 @@ func _show() -> void:
 	_banner.anchor_top = 1.0 if low else 0.0
 	_banner.anchor_bottom = 1.0 if low else 0.0
 	_banner.grow_vertical = Control.GROW_DIRECTION_BEGIN if low else Control.GROW_DIRECTION_END
-	_banner.offset_top = -BOTTOM_ROW if low else TOP_BAR
-	_banner.offset_bottom = -BOTTOM_ROW if low else TOP_BAR
+	var top := _top_bar()
+	_banner.offset_top = -BOTTOM_ROW if low else top
+	_banner.offset_bottom = -BOTTOM_ROW if low else top
 	_banner.offset_left = 0.0
 	_banner.offset_right = 0.0
 	_resize = 3  # shrink to the words over the next frames, as the wrap settles
@@ -361,8 +350,15 @@ func _keep_clear(low: bool) -> void:
 	if main == null or main.get("top_extra") == null:
 		return
 	var h := _banner.size.y + 8.0 if _banner.visible else 0.0
-	main.top_extra = 0.0 if low else maxf(0.0, h + TOP_BAR - 50.0)
+	main.top_extra = 0.0 if low else h + 6.0
 	main.bottom_extra = h if low else 0.0
+
+
+## Just under the HUD's top bar and strip.
+func _top_bar() -> float:
+	if hud != null and hud.has_method("top_height"):
+		return hud.top_height() + 6.0
+	return TOP_BAR
 
 
 func _target() -> Control:
@@ -383,6 +379,11 @@ func _process(delta: float) -> void:
 		_resize -= 1
 		_banner.size = Vector2(_banner.size.x, 0.0)
 	if _banner.visible:
+		if _banner.anchor_top < 0.5:
+			var top := _top_bar()  # the strip may have moved under the controls
+			if absf(_banner.offset_top - top) > 0.5:
+				_banner.offset_top = top
+				_banner.offset_bottom = top
 		_keep_clear(_banner.anchor_top > 0.5)
 
 
