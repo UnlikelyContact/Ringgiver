@@ -132,7 +132,10 @@ func test_benches_and_thwarts_are_the_ceiling() -> void:
 	band.ship.kind = WorldTypes.ShipKind.KARVE
 	assert_eq(c.room(), int(c.world_rules.ship_crew[WorldTypes.ShipKind.KARVE]), "a karve's thwarts")
 	band.ship.kind = WorldTypes.ShipKind.LONGSHIP
-	assert_eq(c.room(), mini(c.rules.room_max, int(c.world_rules.ship_crew[WorldTypes.ShipKind.LONGSHIP])), "a longship's")
+	assert_eq(c.room(), c.rules.room_max_karl, "below a hersir, a snekkja's crew at most")
+	band.rank = WorldTypes.Rank.HERSIR
+	assert_eq(c.room(), mini(c.rules.room_max, int(c.world_rules.ship_crew[WorldTypes.ShipKind.LONGSHIP])), "a lord's longship")
+	band.rank = WorldTypes.Rank.KARL
 	band.ship = null
 	var hall := Hall.ensure(band, c.rules)
 	hall.seats = 20

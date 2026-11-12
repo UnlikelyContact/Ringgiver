@@ -94,7 +94,7 @@ static func winter(j: Journey, bent: int) -> void:
 	if h.can_build():
 		var B := CampaignTypes.Building
 		var costs: Dictionary = c.rules.building_costs
-		if men.size() + 2 >= (band.hall as Hall).seats and h.silver_after(j) >= int(costs.get(B.BENCHES, 0)) + 40:
+		if men.size() + 2 >= (band.hall as Hall).seats and men.size() < _band_wanted(bent) and h.silver_after(j) >= int(costs.get(B.BENCHES, 0)) + 40:
 			j.winter_choose("build:%d" % B.BENCHES)
 		for b in [B.STOREHOUSE, B.BYRE]:
 			if h.silver_after(j) >= int(costs.get(b, 0)) + 150:
@@ -128,8 +128,17 @@ static func winter(j: Journey, bent: int) -> void:
 			j.winter_choose("talk:%d:ask" % i)
 		elif kind == "thralls":
 			j.winter_choose("talk:%d:%s" % [i, "free" if bent == Way.Id.LAWMAN or bent == Way.Id.SKALD else ("press" if bent == Way.Id.BERSERK else "watch")])
-	# He takes on no more men at the hall than his hull will carry, unless
-	# he can pay for a bigger one: a band too big for its boat is stranded.
+	# No more men than a man of his bent wants about him (a trader does not
+	# feed forty), and no more than his hull will carry unless he can pay
+	# for a bigger one: a band too big for its boat is stranded.
+	var wanted := _band_wanted(bent)
+	var keep := band.fighters().size()
+	for i in h.candidates.size():
+		if bool(h.candidates[i].taken):
+			if keep >= wanted:
+				j.winter_choose("take:%d" % i)
+			else:
+				keep += 1
 	if band.ship != null:
 		var carry := band.ship.crew_capacity(c.world_rules)
 		var next_hull := 0
@@ -176,6 +185,22 @@ static func winter(j: Journey, bent: int) -> void:
 			j.winter_choose("years:%d" % let_years)
 			j.winter_choose("offers:accept")
 	j.winter_end()
+
+
+## How many men a man of his bent wants about him, at most.
+static func _band_wanted(bent: int) -> int:
+	match bent:
+		Way.Id.VIKING:
+			return 40
+		Way.Id.KINGS_MAN:
+			return 30
+		Way.Id.BERSERK:
+			return 20
+		Way.Id.SKALD:
+			return 18
+		Way.Id.LAWMAN:
+			return 16
+	return 14
 
 
 ## Points go down his own path first, then wherever they will.
@@ -535,8 +560,10 @@ static func _act(j: Journey, bent: int) -> void:
 		if j.sail_speed() <= 0.0 and ids.has("passage:" + str(o.id)) and int(o.cost) < cost and int(o.cost) * 3 <= band.silver:
 			cost = int(o.cost)
 			cheapest = "passage:" + str(o.id)
-	if cheapest != "" and int(j.life.get("bot_passage", -1)) != c.cal.day:
-		j.life["bot_passage"] = c.cal.day
+	# Not back and forth: a passage, then a fortnight's living where it lands.
+	var today := c.cal.year * 400 + c.cal.day
+	if cheapest != "" and today - int(j.life.get("bot_passage", -100)) >= 15:
+		j.life["bot_passage"] = today
 		j.act(cheapest)
 		return
 	j.act("listen")

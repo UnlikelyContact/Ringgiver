@@ -505,13 +505,15 @@ static func bot_deed(j: Journey, bent: int, ids: Dictionary) -> String:
 	var band := j.c.band
 	if not is_outlawed(band, j.c.cal):
 		return ""
-	var go := pardon_road(j, bent)
-	if go != "" and go != band.location and JourneyBot._go(j, go):
-		return "*"
 	if ids.has("pardon_silver") and band.silver >= pardon_price(j.c.world_rules, band) + 30:
 		return "pardon_silver"
 	if ids.has("pardon_service") and band.fighters(j.c.rules).size() >= 6 and bent != Way.Id.TRADER:
 		return "pardon_service"
+	# Not at a king's hall where he may ask it: on to the nearest.
+	var here_king := j.here() != null and _king_of(j, j.here()) != null and reaches(j.here())
+	var go := pardon_road(j, bent) if not here_king else ""
+	if go != "" and go != band.location and JourneyBot._go(j, go):
+		return "*"
 	if band.outlawry == WorldTypes.Outlawry.FULL or (int(band.law.get("exile_by", 9999)) <= j.c.cal.year and j.days_left() < 60):
 		if in_realm(j) and ids.has("west_passage") and j.sail_speed() <= 0.0:
 			return "west_passage"

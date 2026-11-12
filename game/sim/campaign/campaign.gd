@@ -679,7 +679,8 @@ func room() -> int:
 	if band.hall != null:
 		seats = maxi(seats, (band.hall as Hall).seats)
 	var crew := band.ship.crew_capacity(world_rules) if band.ship != null else 0
-	return clampi(maxi(seats, crew), rules.room_min, rules.room_max)
+	var most := rules.room_max if band.rank >= WorldTypes.Rank.HERSIR else rules.room_max_karl
+	return clampi(maxi(seats, crew), rules.room_min, most)
 
 
 ## Whether the leader stood in the front rank (concept.md, "Your

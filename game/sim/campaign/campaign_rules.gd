@@ -452,6 +452,9 @@ var recruit_cap := 16
 ## away; `recruit_cap` is the plain campaign's ceiling without a map.
 var room_min := 8
 var room_max := 40
+## Below a hersir the ceiling is a snekkja's crew, whatever the benches:
+## no hull a karl can buy carries more, and a great band is a lord's.
+var room_max_karl := 24
 var old_leader_death_chance := 0.15
 
 # --- The winter hall, played (winter_hall.gd) --------------------------------
