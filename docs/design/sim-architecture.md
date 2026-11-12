@@ -1092,3 +1092,43 @@ win 95.5% of green fights; equal veteran 45.5/38 with 16.5% draws.
 
 Measured: equal green 45/52.5 with 2.5% draws; veterans win 99.5% of green
 fights in 17 rounds.
+
+## The whole game (12 Nov 2026)
+
+The modules added when the prototype became one game. Each has notes in
+`docs/design/notes/<name>.md` with its rules, numbers and measurements;
+this is the map of what is where.
+
+| Area | Files | Notes |
+|---|---|---|
+| Houses and standing | `sim/world/family.gd` (`House`), `families.gd` | `families.md` |
+| The summer's own life | `sim/world/world_life.gd`, `hiring.gd`, `trade_road.gd`, `roam.gd` | `world-life.md` |
+| The stepped winter | `sim/world/winter_hall.gd` over `sim/campaign/winter*.gd` | `winter.md` |
+| Years, household, succession, the saga | `sim/world/years.gd`, `sim/campaign/{family,succession,chronicle}.gd` | `generations.md` |
+| The saga's fights | `sim/combat/{scenario,objective,field}.gd` (escape, hall defence, burning, break-out, deck), `Campaign.stake` | `saga-fights.md`, `tutorial.md`, `first-fight.md` |
+| Law, land, the unfree, omens | `sim/world/{thing_play,outlawry,landtake,thralls,omens}.gd` | `law-land.md` |
+| Saving | `sim/save/{save_codec,save_play,save_store}.gd` | `save.md` |
+| The view | `view/{ui_theme,ui_modal,map_canvas,map_art,map_icons,winter_screen,saga_screen,men_panel,settings,saves_modal,audio,audio_synth,tutorial,hints,battle_hints}.gd` | `ui.md`, `map-art.md`, `shell.md` |
+
+Rules that hold across all of it:
+
+- **`Journey` is the player's seam.** Everything the player can do is an
+  entry in `Journey.actions()`, a decision in its queue answered through
+  `answer()`, a fight handed over in `Journey.fight` and concluded in
+  `fight_done()`, or a step of the winter (`winter_state`,
+  `winter_choose`). `JourneyBot` plays through the same seam and is the
+  instrument for every batch.
+- **Special fights are flag-guarded.** The escape, the hall fights and
+  the deck change rules only inside their own scenarios;
+  `tools/diag_mixed.gd` and `tools/diag_identity.gd` fingerprint ordinary
+  battles and must stay byte-identical when a special fight is touched.
+- **The save is generic.** `SaveCodec` walks every script variable (and
+  object metadata) reachable from the Journey; nothing is listed per
+  class. State that must not be saved is named in one registry in
+  `save_codec.gd`, and a test fails on any `static var` under `sim/`
+  that is not in it. `tools/save_check.gd` saves at many points, loads,
+  and plays original and copy on side by side; any difference is a bug.
+- **The view reads plain values.** Screens are built from dictionaries
+  the sim hands out (`Families.report`, `Journey.household`,
+  `price_book`, `winter_state`, `saga`), with `UiTheme` and `UiModal`.
+

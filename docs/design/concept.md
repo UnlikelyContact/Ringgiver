@@ -1443,6 +1443,88 @@ fight of the burned hall (the escape) is told, not played; a ship left
 on a beach is never stolen; other parties do not fight each other or
 raid places; the mountains are a flat grey.
 
+### A playable whole (12 Nov 2026)
+
+Everything above this line was built one piece at a time; this pass made
+it one game. Each part has its own notes under `docs/design/notes/`, with
+the rules, the numbers and what was measured; what follows is what the
+player now meets, in the order he meets it.
+
+**One beginning, taught.** "Begin a saga" is the burned hall: a name,
+three cards of the night, and the escape as the first fight, taught one
+control at a time by a director that reads the fight each round and says
+the one useful thing (`tutorial.md`, `first-fight.md`). The leader
+cannot die in it and the band holds together; a player who presses
+roughly the right things is out in eight to twelve rounds, one who does
+nothing is carried off and wakes wounded in Sogn. The younger son and
+the freedman are behind "Another beginning". The first days on the map
+and the later controls of battle are each hinted once, in context, and
+listed under "?".
+
+**Houses** (`families.md`). Twenty-four named houses with heads, heirs,
+seats and tempers, bound by kin, marriage, fostering, friendship, debt,
+grudge and feud. The band has a standing with each, read in steps from
+blood-enemy to sworn friend, moved by everything it does and spreading
+along the ties: help one house and its enemies hear of it. Standing
+decides who stands with you at the Thing, prices and shelter at a seat,
+and whose men on the road leave you be or hunt you. The houses' own year
+goes on without you: heads die, feuds climb from insult to burning or
+are settled, and the winter tells the tidings. The burned hall's
+vengeance is an arc through this web: the burners field their allies,
+and their wergild and the Thing open only when you have gathered backing
+among their enemies.
+
+**A living summer** (`world-life.md`). Raiders fall on merchants and
+farms, the king's ships hunt raiders, houses at feud send men at each
+other; you come upon fights and take a side, stand with farmers, guard a
+merchant, pay or refuse the king's toll, lose an unwatched ship and take
+her back. Men can be hired by name; a poor man can labour, herd, fish or
+row; farms trade what they make, a man carries a load on foot, and
+another man's goods can be carried for a share. Fights are built from
+the ground under the band, and are fought over something: a raid has a
+clock, a robbery a cargo, a sea fight the other ship's deck
+(`saga-fights.md`).
+
+**The hall in winter** (`winter.md`). Winter is seven steps: the store,
+the ring-giving to named men with their year's deeds, the yard, the men
+(a sworn second, a war-leader who commands in the leader's place), the
+hall's talk (quarrels, a house's ask, a Yule vow, a seer), the year told
+with the skald's verse, and spring. A house at feud may come by night:
+that fight is played, and if the roof takes the choice is to break out
+or to hold and burn. You may burn another house in its hall too, and pay
+for it in honor, standing and perhaps outlawry.
+
+**Law, land and the unfree** (`law-land.md`). A case at the Thing is four
+decisions: support, the law, the standoff, the verdict. Outlawry shuts
+every door in Norway and puts men on your trail; the west, a pardon, the
+Grettir clause or Iceland are the ways out. Land is bought, granted, won
+or claimed, makes a hall of your own, and must be worked and kept.
+Iceland opens in 874 and can be settled. Captives are ransomed, sold,
+kept or freed, and thralls at home grow restless when the band is long
+away. Omens can be heeded or ignored.
+
+**Generations and the saga's end** (`generations.md`). Years can be let
+pass at spring. Sons are fostered, join the band, are named heir;
+daughters are married into houses. The leader's death is a card and then
+the grave-ale: who takes the high seat, the feast, the vow, and a
+challenge on the island if the second disputes it. The saga can be read
+at any time, chapter by leader, and copied; it ends when the line dies
+out, or when the player says so after a great arc, with a reckoning in
+words.
+
+**The shell** (`ui.md`, `map-art.md`, `shell.md`, `save.md`). One look
+across every screen; the map drawn as a chart with relief, forest,
+places by kind and tokens for everyone abroad; sound made in code;
+settings; a men panel told in words; and saving: an autosave at every
+natural beat, three slots, and a save that can be copied between
+devices. A save in the middle of a battle resumes at the fight's start.
+
+Open after this pass, in order of weight: the sound has been checked by
+number and not by ear; the whole has been played end to end only by the
+stand-in players and by scripted taps on the live build, not yet by a
+person for an evening; barring the door against fire is too weak;
+see `balance.md` for the state of the six ways against each other.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art
@@ -1451,7 +1533,8 @@ raid places; the mountains are a flat grey.
   key art off it; see `concept-art-prompts.md`, "Art-route recommendation".
 - [ ] Final title: keep Ring-Giver or choose another
 - [ ] Save policy: ironman by default (the saga is what happened), with
-  reloads as an option, or free saving
+  reloads as an option, or free saving (for now, 12 Nov 2026: an autosave
+  plus three free slots; see `notes/save.md`)
 - [ ] Holmgang rules: full duel mini-game or a variant of normal combat
   (for now, 12 Nov 2026: a variant, two men on a bare field to first
   blood; see "Ways of life")
