@@ -1,6 +1,10 @@
 ## Plays each way of life for some years with its stand-in player
 ## (JourneyBot) and reports what became of the men who lived it. Usage:
 ##   godot --headless --path game -s tools/batch_ways.gd -- [sagas] [years] [seed] [way|all] [origin] [log]
+## Each bent's line is followed by one "by year" line: the sagas still
+## going at the end of each year, the mean silver in hand, how many own a
+## ship, how many have had their vengeance (the burned hall), and the
+## fights fought that year, a saga.
 extends SceneTree
 
 
@@ -31,13 +35,36 @@ func _init() -> void:
 		var shipped := 0
 		var steps := 0
 		var per_year := 0.0
+		var y_alive: Array[int] = []
+		var y_silver: Array[int] = []
+		var y_ship: Array[int] = []
+		var y_avenged: Array[int] = []
+		var y_fights: Array[int] = []
+		for k in years:
+			y_alive.append(0)
+			y_silver.append(0)
+			y_ship.append(0)
+			y_avenged.append(0)
+			y_fights.append(0)
 		for i in n:
 			var j := Journey.begin(seed_in + i, origin, "Egil")
 			var start: int = j.c.band.silver
 			var y := 0
+			var had_ship := false
+			var fights_before := 0
 			while y < years and not j.c.over:
 				var before := j.c.cal.year
 				JourneyBot.play_year(j, way)
+				if not j.c.over:
+					y_alive[y] += 1
+				y_silver[y] += j.c.band.silver
+				had_ship = had_ship or j.c.band.ship != null
+				if had_ship:
+					y_ship[y] += 1
+				if j.c.band.vengeance == "" and origin == "burned_hall":
+					y_avenged[y] += 1
+				y_fights[y] += int(j.c.tally.battles) - fights_before
+				fights_before = int(j.c.tally.battles)
 				if j.c.cal.year == before and not j.c.over:
 					stalls += 1
 					if verbose:
@@ -70,4 +97,8 @@ func _init() -> void:
 		print("%-13s ended %2d/%d  years %.1f  silver %5d (%+.0f a year)  men %.1f  fame %2d  honor %2d  own deeds %3d  steps %.1f  named %2d/%d  ship %2d/%d  fights %.1f  deaths %.1f  stalls %d" % [
 				d.name, ended, n, float(lived) / n, silver / n, per_year / n, float(men) / n, fame / n, honor / n, own / n, float(steps) / n, named, n,
 				shipped, n, float(fights) / n, float(deaths) / n, stalls])
+		var cols := PackedStringArray()
+		for k in years:
+			cols.append("y%d alive %d silver %d ship %d avenged %d fights %.1f" % [k + 1, y_alive[k], y_silver[k] / n, y_ship[k], y_avenged[k], float(y_fights[k]) / n])
+		print("   by year: " + " | ".join(cols))
 	quit(0)

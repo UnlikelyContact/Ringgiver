@@ -59,6 +59,45 @@ static func _answer(j: Journey, d: Dictionary, bent: int) -> String:
 			return "rob" if bent == Way.Id.VIKING and band.fighters(j.c.rules).size() >= 8 else "pass"
 		"house":
 			return _answer_house(j, d, bent)
+		"world":
+			return _answer_world(j, d, bent)
+	return str(d.options[0].id)
+
+
+## The world's own life met on the way (WorldLife): a wreck is stripped; the
+## king's due is paid while silver allows; farmers are stood with, and a
+## fight come upon is joined, when the band is a match for the other side
+## (the raider joins the raiders against a merchant; everyone else helps
+## the merchant or the king's men); a stolen ship is taken back.
+static func _answer_world(j: Journey, d: Dictionary, bent: int) -> String:
+	var men := j.c.band.fighters(j.c.rules).size()
+	var p: Roam.Party = d.get("party", null)
+	var odds := j.c.world_rules.raid_odds_max
+	match str(d.what):
+		"wreck":
+			return "take"
+		"toll":
+			return "pay" if j.c.band.silver >= int(d.toll) * 3 or bent == Way.Id.TRADER and j.c.band.silver >= int(d.toll) else "refuse"
+		"defend":
+			return "defend" if p != null and p.men <= men * odds and men >= 3 else "away"
+		"thieves":
+			return "fight" if p != null and p.men <= men * odds else "away"
+		"fray":
+			var other: Roam.Party = d.get("other", null)
+			if p == null or other == null:
+				return "away"
+			if men < 3:
+				return "away"
+			var pick := ""
+			for side in [["a", p, other], ["b", other, p]]:
+				var ally: Roam.Party = side[1]
+				var foe: Roam.Party = side[2]
+				var robber := ally.kind == "raiders" or ally.kind == "outlaws"
+				if robber != (bent == Way.Id.VIKING):
+					continue
+				if maxi(2, foe.men - ally.men / 2) <= men * odds:
+					pick = str(side[0])
+			return pick if pick != "" else "away"
 	return str(d.options[0].id)
 
 
@@ -145,6 +184,14 @@ static func _act(j: Journey, bent: int) -> void:
 	if not j.contract.is_empty() and j.days_to(str(j.contract.to_place)) > 0:
 		if j.sail(str(j.contract.to_place)) or not j.decisions.is_empty():
 			return
+	if _hire(j, bent, ids):
+		return
+	if _captives(j, bent, ids):
+		return
+	if bent == Way.Id.TRADER and _trade(j, ids):
+		return
+	if _livelihood(j, bent, ids):
+		return
 	match bent:
 		Way.Id.VIKING:
 			# Captives and loot are silver only at a market.
@@ -166,27 +213,11 @@ static func _act(j: Journey, bent: int) -> void:
 			if target != "" and _go(j, target):
 				return
 		Way.Id.TRADER:
-			if here.has_market:
-				for row in j.market():
-					if int(row.have) > 0:
-						j.sell(int(row.good), int(row.have))
-				# Buy what pays best elsewhere, a unit at a time, while the price
-				# here stays well under what it fetches there.
-				var trade := Market.best_trade(c.world, band, here.id, wr)
-				if not trade.is_empty() and int(trade.profit_per_unit) > 0 and j.days_to(str(trade.to)) > 0:
-					var dest := c.world.place(str(trade.to))
-					var got := 0
-					while Market.cargo_room(wr, band) > 0 and band.silver > 20 \
-							and Market.buy_price(wr, here, band, trade.good) * 4 < Market.sell_price(wr, dest, band, trade.good) * 3:
-						if j.buy(int(trade.good), 1) <= 0:
-							break
-						got += 1
-					if got > 0 and _go(j, str(trade.to)):
-						return
-			if band.ship != null and j.sail_speed() > 0.0:
-				var market := _nearest(j, func(q: Place) -> bool: return q.has_market)
-				if market != "" and _go(j, market):
-					return
+			# Nothing to carry from here: on to the nearest place that deals.
+			var stall := _nearest(j, func(q: Place) -> bool: return (q.has_market or not q.trade.is_empty()) \
+					and int(j.life.get("bot_traded:" + q.id, -1)) != c.cal.year)
+			if stall != "" and _go(j, stall):
+				return
 		Way.Id.LAWMAN:
 			if ids.has("counsel"):
 				j.act("counsel")
@@ -195,6 +226,13 @@ static func _act(j: Journey, bent: int) -> void:
 			if where != "" and _go(j, where):
 				return
 		Way.Id.BERSERK:
+			# A merchant pays well for a guard nobody cares to cross.
+			var esc2: Dictionary = j.life.get("escort", {})
+			if not esc2.is_empty() and _go(j, str(esc2.to)):
+				return
+			if ids.has("escort") and band.fighters(c.rules).size() >= 2:
+				j.act("escort")
+				return
 			# While men still speak well enough of him.
 			if band.honor > wr.holmgang_outlaw_honor + 2 * wr.holmgang_honor:
 				if ids.has("holmgang"):
@@ -214,6 +252,13 @@ static func _act(j: Journey, bent: int) -> void:
 			if ids.has("work:0"):
 				j.act("work:0")
 				return
+			# A merchant's guard is service too, and pays.
+			var esc: Dictionary = j.life.get("escort", {})
+			if not esc.is_empty() and _go(j, str(esc.to)):
+				return
+			if ids.has("escort") and band.fighters(c.rules).size() >= 4:
+				j.act("escort")
+				return
 			var lord := _nearest(j, func(q: Place) -> bool:
 				return (q.kind == WorldTypes.PlaceKind.HALL or q.kind == WorldTypes.PlaceKind.TOWN) and not j._offers.has(q.id))
 			if lord != "" and _go(j, lord):
@@ -227,6 +272,22 @@ static func _act(j: Journey, bent: int) -> void:
 		return Callings.can_counsel(wr, c.world, band, q) or (fighter and Callings.can_champion(wr, c.world, band, q)) \
 				or ((q.kind == WorldTypes.PlaceKind.HALL or q.kind == WorldTypes.PlaceKind.TOWN) and not j._offers.has(q.id)))
 	if living != "" and _go(j, living):
+		return
+	# Nothing to hand here: work his way somewhere else (a place at another
+	# man's oars, a day's labour), or pay for passage to the nearest hall.
+	for id in ["crew", "labour", "fish"]:
+		if ids.has(id):
+			j.act(id)
+			return
+	var cheapest := ""
+	var cost := 1 << 20
+	for o in j.passages():
+		if band.ship == null and ids.has("passage:" + str(o.id)) and int(o.cost) < cost and int(o.cost) * 3 <= band.silver:
+			cost = int(o.cost)
+			cheapest = "passage:" + str(o.id)
+	if cheapest != "" and int(j.life.get("bot_passage", -1)) != c.cal.day:
+		j.life["bot_passage"] = c.cal.day
+		j.act(cheapest)
 		return
 	j.act("listen")
 
@@ -262,6 +323,32 @@ static func _houses(j: Journey, bent: int, ids: Dictionary) -> bool:
 			and Families.gift_worth(wr, band, here.family, c.cal.year) >= wr.standing_gift:
 		j.act("gift")
 		return true
+	# The long arc of the vengeance: friends among the burners' enemies (and
+	# their allies' enemies), won with gifts, until the band's side is a
+	# match for theirs.
+	if band.vengeance != "" and fs.house(band.vengeance) != null and band.silver >= wr.gift_ounces + 20:
+		var vb := fs.vengeance_backing(wr, band, band.vengeance, band.fighters(c.rules).size())
+		if not bool(vb.ready):
+			var foes_of := fs.enemies_of(band.vengeance)
+			for a in fs.allies_of(band.vengeance):
+				foes_of.append_array(fs.enemies_of(a))
+			var want := ""
+			for e in foes_of:
+				if e == band.vengeance or Families.is_friend(wr, band, e) or Families.is_foe(wr, band, e) or fs.abroad(e):
+					continue
+				if Families.gift_worth(wr, band, e, c.cal.year) < wr.standing_gift:
+					continue
+				var seat := fs.house(e).seat
+				if not band.knows(seat) or j.days_to(seat) < 0 or j.days_to(seat) + 10 > j.days_left():
+					continue
+				want = e
+				break
+			if want != "":
+				if here.family == want and ids.has("gift"):
+					j.act("gift")
+					return true
+				if _go(j, fs.house(want).seat):
+					return true
 	if not band.pledges.is_empty():
 		var thing := _nearest(j, func(q: Place) -> bool: return q.kind == WorldTypes.PlaceKind.THING_SITE)
 		if thing != "" and _go(j, thing):
@@ -317,3 +404,152 @@ static func _nearest(j: Journey, want: Callable) -> String:
 		best_days = d
 		best = id
 	return best
+
+
+
+# --- The summer's new ways (TradeRoad, Hiring, WorldLife) ----------------------------
+
+## The trader's road: sell what fetches more here than it cost, carry a
+## partner's goods for a share, guard a merchant, and buy what the best
+## known place pays well for, as much as he can carry, then go there.
+static func _trade(j: Journey, ids: Dictionary) -> bool:
+	var c := j.c
+	var band := c.band
+	var wr := c.world_rules
+	var here := j.here()
+	for id in ids:
+		if str(id).begins_with("felag_sell:"):
+			j.act(id)
+			return true
+	if here.has_market or not here.trade.is_empty():
+		j.life["bot_traded:" + here.id] = c.cal.year
+		for row in j.market():
+			if int(row.have) > 0 and bool(row.get("can_sell", true)) and int(row.sell) > 0:
+				var basis: Array = band.bought.get(int(row.good), [0, 0])
+				var cost := float(basis[1]) / maxf(1.0, float(basis[0]))
+				if float(row.sell) >= cost or int(basis[0]) <= 0:
+					j.sell(int(row.good), int(row.have))
+	if ids.has("felag"):
+		j.act("felag")
+		return true
+	if ids.has("escort") and band.fighters(c.rules).size() >= 3:
+		j.act("escort")
+		return true
+	var esc: Dictionary = j.life.get("escort", {})
+	if not esc.is_empty() and _go(j, str(esc.to)):
+		return true
+	if not band.felag.is_empty():
+		var f: Dictionary = band.felag[0]
+		if j.days_to(str(f.to)) > 0 and _go(j, str(f.to)):
+			return true
+	# The best carry from here: margin a day on the loads he can carry.
+	var room := Market.cargo_room(wr, band)
+	if room > 0 and (here.has_market or not here.trade.is_empty()):
+		var best := {}
+		var best_score := 0.0
+		for g in WorldTypes.Good.values():
+			if not Market.sells_here(here, g) or int(here.stock.get(g, 0)) <= 0 or (g == WorldTypes.Good.GRAIN and not here.has_market):
+				continue
+			var cost := Market.buy_price(wr, here, band, g)
+			var n := mini(room, band.silver / maxi(1, cost))
+			if n <= 0:
+				continue
+			for id in band.known_places:
+				var q := c.world.place(str(id))
+				if q == null or q.id == here.id or not q.is_open(c.world.year) or not Market.buys_here(q, g):
+					continue
+				var days := j.days_to(q.id)
+				if days < 0 or days + 10 > j.days_left():
+					continue
+				var margin := Market.sell_price(wr, q, band, g) - cost
+				if margin * 4 < cost:
+					continue
+				var score := float(margin * n) / float(days + 3)
+				if score > best_score:
+					best_score = score
+					best = {"good": g, "to": q.id, "n": n}
+		if not best.is_empty() and best_score >= 0.3:
+			if j.buy(int(best.good), int(best.n)) > 0 and _go(j, str(best.to)):
+				return true
+	return false
+
+
+## A poor man's living, for a band with little silver and no ship it can
+## use: a partner's goods, the fields, the fishing, the herds, a place at
+## another man's oars. Any bent does it while he must.
+static func _livelihood(j: Journey, bent: int, ids: Dictionary) -> bool:
+	var band := j.c.band
+	var poor := band.silver < 30 and j.sail_speed() <= 0.0
+	if not poor:
+		return false
+	# A partner's goods are delivered before anything else.
+	for id in ids:
+		if str(id).begins_with("felag_sell:"):
+			j.act(id)
+			return true
+	if not band.felag.is_empty():
+		var f: Dictionary = band.felag[0]
+		if j.days_to(str(f.to)) > 0 and _go(j, str(f.to)):
+			return true
+	for id in ["felag", "fish", "labour", "herd"]:
+		if ids.has(id):
+			j.act(id)
+			return true
+	if ids.has("crew") and bent != Way.Id.LAWMAN:
+		j.act("crew")
+		return true
+	return false
+
+
+## Men for hire: the fighting ways take on men while they can pay and their
+## hull will carry them, the trader a man or two for the loads, the others
+## enough to stand a fight. Cheap men first; never past the hull.
+static func _hire(j: Journey, bent: int, ids: Dictionary) -> bool:
+	var band := j.c.band
+	var wr := j.c.world_rules
+	var men := band.fighters().size()
+	var want := 4
+	match bent:
+		Way.Id.VIKING:
+			want = 12
+		Way.Id.KINGS_MAN:
+			want = 8
+		Way.Id.BERSERK:
+			want = 5
+		Way.Id.TRADER:
+			want = 4
+	if band.ship != null:
+		want = mini(want, band.ship.crew_capacity(wr))
+	if men >= want:
+		return false
+	var offers := j.men_for_hire()
+	for o in offers:
+		var id := "hire:%d" % int(o.i)
+		if not ids.has(id):
+			continue
+		# Enough in hand for the price and half a year of his wage.
+		var reserve := 30 + int(o.wage) * 12
+		if band.silver < int(o.price) + reserve:
+			continue
+		if str(o.kind) == "berserk" and bent != Way.Id.BERSERK and bent != Way.Id.VIKING:
+			continue
+		if str(o.kind) == "outlaw" and (bent == Way.Id.LAWMAN or bent == Way.Id.SKALD):
+			continue
+		j.act(id)
+		return true
+	return false
+
+
+## Captives: a raider sells them at a slave market (his own block), anyone
+## else lets them be ransomed where he can, the law-wise man and the
+## skald set them free.
+static func _captives(j: Journey, bent: int, ids: Dictionary) -> bool:
+	if j.c.band.captives <= 0 or bent == Way.Id.VIKING:
+		return false
+	if (bent == Way.Id.LAWMAN or bent == Way.Id.SKALD) and ids.has("free"):
+		j.act("free")
+		return true
+	if ids.has("ransom"):
+		j.act("ransom")
+		return true
+	return false
