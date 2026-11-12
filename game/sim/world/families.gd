@@ -795,6 +795,9 @@ func settle_between(a: String, b: String) -> void:
 
 # --- Asked of the band -----------------------------------------------------------------
 
+## Which of a house's asks comes when it has more than one (lowest first).
+const ASK_RANK := {"compensation": 0, "help": 1, "marry": 2, "foster": 3}
+
 ## What the houses ask of the band this spring: at most `asks_per_summer`,
 ## each in `ask_chance`, from houses whose seat the band knows and that are
 ## no ill-wishers of it. Each is {kind: "house", ask, house, against?,
@@ -851,6 +854,20 @@ func asks(rng: SimRng, rules: WorldRules, world: World, band: Band, cal_year: in
 		cands.append({"kind": "house", "ask": "compensation", "house": fam, "ounces": ask, "feud": f, "options": [
 				{"id": "take", "label": "Take %d oz" % ask}, {"id": "blood", "label": "Take blood instead"}],
 				"text": "%s offer %d oz of wergild to end the feud over %s. Silver, or blood?" % [Journey._cap(fam), ask, cause]})
+	# One ask a house a spring, and the pressing one: wergild before a call
+	# for help in a feud, a call for help before a daughter or a fosterling.
+	# (Left to the draw, a kin house at feud sent its boy to be fostered and
+	# said nothing of the men at its door.)
+	var best := {}
+	for d in cands:
+		var k := str(d.house)
+		if not best.has(k) or int(ASK_RANK.get(str(d.ask), 9)) < int(ASK_RANK.get(str(best[k].ask), 9)):
+			best[k] = d
+	var pressing: Array[Dictionary] = []
+	for d in cands:
+		if is_same(best[str(d.house)], d):
+			pressing.append(d)
+	cands = pressing
 	# Drawn in a seeded order, a few a spring.
 	var out: Array[Dictionary] = []
 	var order := cands.duplicate()

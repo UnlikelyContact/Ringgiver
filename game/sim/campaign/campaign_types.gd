@@ -24,6 +24,12 @@ const SEASON_NAMES := ["summer", "winter"]
 const WINTER_TURN_NAMES := ["early winter", "Yule", "deep winter", "the thaw"]
 const AMBITION_NAMES := ["silver", "land", "vengeance", "fame", "a wife", "to go home"]
 const ORIGIN_NAMES := ["fisherman", "younger son", "outlaw", "freedman", "exiled jarl's son"]
+
+
+## "a fisherman", "an outlaw": the origin with its article, for the saga's lines.
+static func a_origin(origin: int) -> String:
+	var n: String = ORIGIN_NAMES[origin]
+	return ("an " if n.left(1) in ["a", "e", "i", "o", "u"] else "a ") + n
 const MAIM_NAMES := ["a lost hand", "a lame leg", "one eye", "broken ribs", "a scarred face"]
 const TASK_NAMES := ["drill", "heal", "repair", "hunt", "fish", "guard", "travel", "idle"]
 const BUILDING_NAMES := ["benches", "storehouse", "smithy", "boathouse", "byre"]

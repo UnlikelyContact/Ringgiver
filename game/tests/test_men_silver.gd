@@ -409,13 +409,15 @@ func test_the_stand_in_spends_on_the_works() -> void:
 	var sunk := 0
 	for s in 3:
 		var j := Journey.begin(300 + s, "younger_son", "Egil")
-		for y in 4:
+		# Five years: a trader is past his reserve (JourneyBot's 350 oz and 15
+		# a man) by the fifth, a little later since the wider world's markets.
+		for y in 5:
 			JourneyBot.play_year(j, Way.Id.TRADER)
 			if j.c.over:
 				break
 		sunk += j.c.band.estate.sunk
 		assert_true(not j.c.band.leader.natures.is_empty(), "the stand-in has a nature")
-	assert_true(sunk > 0, "silver laid out on works and arms in four years: %d" % sunk)
+	assert_true(sunk > 0, "silver laid out on works and arms in five years: %d" % sunk)
 
 
 func test_the_estate_is_saved() -> void:

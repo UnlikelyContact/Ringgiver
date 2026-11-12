@@ -933,7 +933,7 @@ func _thaw(opts := {}) -> void:
 		tally.recruits += 1
 		if Potential.is_coal_biter(rules, m):
 			tally.coal_biters += 1
-		band.log("%s, a %s, swears to %s" % [m.display_name, CampaignTypes.ORIGIN_NAMES[m.origin], band.leader.display_name])
+		band.log("%s, %s, swears to %s" % [m.display_name, CampaignTypes.a_origin(m.origin), band.leader.display_name])
 	if band.living_men().is_empty() and band.leader != null and band.leader.alive:
 		band.log("%s winters alone" % band.leader.display_name)
 

@@ -707,7 +707,7 @@ func resolve(j: Journey) -> void:
 		if Potential.is_coal_biter(rules, m):
 			c.tally.coal_biters += 1
 		lines.append("%s came to the hall and swore to %s%s." % [m.display_name, who, (" for a ring of %d oz" % ask) if ask > 0 else ""])
-		band.log("%s, a %s, swears to %s" % [m.display_name, CampaignTypes.ORIGIN_NAMES[m.origin], who])
+		band.log("%s, %s, swears to %s" % [m.display_name, CampaignTypes.a_origin(m.origin), who])
 	c._arm_new_men()
 	var wl := band.man_by_id(war_leader)
 	if wl != null and band.men.has(wl) and war_leader != band.war_leader_id:

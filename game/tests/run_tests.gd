@@ -5,6 +5,8 @@ extends SceneTree
 ##
 ## Discovers tests/**/test_*.gd, instantiates each (they extend TestCase),
 ## calls every method whose name starts with test_, and exits 1 on failure.
+## Words after `--` narrow the run to tests whose "file::name" holds any of
+## them (`-- test_generations.gd`, `-- stand_in years_stop`).
 
 const TEST_ROOT := "res://tests"
 
@@ -23,6 +25,13 @@ func _init() -> void:
 		for m in script.get_script_method_list():
 			if not m.name.begins_with("test_"):
 				continue
+			var only := OS.get_cmdline_user_args()
+			if not only.is_empty():
+				var wanted := false
+				for word in only:
+					wanted = wanted or ("%s::%s" % [path.get_file(), m.name]).contains(word)
+				if not wanted:
+					continue
 			total += 1
 			var inst: TestCase = script.new()
 			inst.call(m.name)

@@ -144,7 +144,7 @@ func test_years_stop_for_each_interrupt() -> void:
 	assert_true(friend != "", "the burned man has kin")
 	j.c.band.standing[friend] = 60
 	for n in fs.names():
-		if n != friend and not Families.is_friend(j.c.world_rules, j.c.band, n) and fs.house(n).seat != "":
+		if n != friend and not Families.is_friend(j.c.world_rules, j.c.band, n) and fs.house(n).seat != "" and not fs.abroad(n):
 			fs.add_tie(friend, n, "feud", 866)
 			break
 	j.c.world_rules.ask_chance = 1.0
@@ -420,6 +420,7 @@ func test_saga_text_tells_each_generation() -> void:
 	_no_spine(j)
 	j.c.band.silver = 300
 	j.c.rules.years_attack_chance = 0.0
+	j.c.world_rules.ask_chance = 0.0  # no house's word in these two springs: the years are what is told
 	_let(j, 2)
 	JourneyBot.play_year(j, Way.Id.VIKING)
 	_kill(j)
