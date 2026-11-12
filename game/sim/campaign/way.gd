@@ -142,6 +142,8 @@ static func refresh(band: Band) -> void:
 		var g: Dictionary = def(way).ranks[mini(r, MAX_RANK) - 1].gifts
 		for k in g:
 			gifts[k] = g[k]
+	# The leader's own nature lays its edges on top (Natures).
+	Natures.add_edges(null, band.leader, gifts)
 	band.gifts = gifts
 	var leader := band.leader
 	if leader != null:

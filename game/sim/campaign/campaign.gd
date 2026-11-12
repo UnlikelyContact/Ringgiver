@@ -903,10 +903,10 @@ func _thaw(opts := {}) -> void:
 		m.age += 1
 		if m.loyalty >= rules.sent_home_return_loyalty or rr.randf() < rules.sent_home_return_chance:
 			band.add_man(m, m.joined_year)
-			log.append("%s comes back from his kin at the thaw." % m.display_name)
+			log.append("%s comes back from %s kin at the thaw." % [m.display_name, m.his()])
 		else:
 			tally.departures += 1
-			log.append("%s stays with his kin, and does not come back." % m.display_name)
+			log.append("%s stays with %s kin, and does not come back." % [m.display_name, m.his()])
 			band.log("%s went home for the winter and did not come back." % m.display_name)
 	# The year's tallies of deeds are told; the next year starts clean.
 	for m in band.living_men():

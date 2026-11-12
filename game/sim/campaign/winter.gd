@@ -68,14 +68,14 @@ static func run_turn(rng: SimRng, rules: CampaignRules, band: Band, cal: Calenda
 				if not rules.rumor_lines.is_empty():
 					var rumor: String = rules.rumor_lines[rng.randi_range(0, rules.rumor_lines.size() - 1)]
 					band.rumors.append(rumor)
-					log.append("%s: %s came back from his travels saying %s." % [when, m.display_name, rumor])
+					log.append("%s: %s came back from %s travels saying %s." % [when, m.display_name, m.his(), rumor])
 		# Healing: everyone mends a turn; a man set to HEAL mends two.
 		if m.healing_turns > 0:
 			var step := 2 if task == CampaignTypes.Task.HEAL else 1
 			m.healing_turns = maxi(0, m.healing_turns - step)
 			if m.healing_turns == 0:
 				rep.healed.append(m.id)
-				log.append("%s: %s is on his feet again." % [when, m.display_name])
+				log.append("%s: %s is on %s feet again." % [when, m.display_name, m.his()])
 	if hall.has(CampaignTypes.Building.BYRE):
 		band.food += rules.byre_rations
 	if rep.repaired > 0:

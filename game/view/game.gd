@@ -45,6 +45,9 @@ var _save_due := false
 var _last_save_ms := -1000000
 ## What went wrong with the last save, or "".
 var last_save_error := ""
+## The leader's nature as chosen on the nature screen (Natures keys), given
+## to the saga when it begins (Journey.choose_nature); empty for a tool's run.
+var _nature := PackedStringArray()
 
 
 func _ready() -> void:
@@ -243,6 +246,7 @@ func _centred(text: String, variant: String) -> Label:
 func show_title() -> void:
 	_drop_battle()
 	journey = null
+	_nature = PackedStringArray()
 	var box := _opening(0.45, 560.0)
 	Audio.scene("title")
 	box.add_theme_constant_override("separation", UiTheme.S2)
@@ -360,7 +364,8 @@ func show_name() -> void:
 	row.add_child(name_edit)
 	var on := func() -> void:
 		var who := name_edit.text.strip_edges()
-		show_night(who if who != "" else "Egil", 0)
+		who = who if who != "" else "Egil"
+		show_nature(who, func() -> void: show_night(who, 0), show_name)
 	var go := UiTheme.primary("Go on", on, 160.0)
 	name_edit.text_submitted.connect(func(_t: String) -> void: on.call())
 	row.add_child(go)
@@ -391,6 +396,8 @@ func begin_escape(who: String, skip: bool) -> void:
 	if not fixed_seed:
 		seed_in = randi_range(1, 999999)
 	journey = Journey.begin(seed_in, "burned_hall", who, true)
+	if not _nature.is_empty():
+		journey.choose_nature(_nature)
 	hints = Hints.new(journey)
 	if skip:
 		var lines := journey.skip_escape()
@@ -459,6 +466,115 @@ func show_last_saga() -> void:
 	m.max_width = 1000.0
 	screen.add_child(m)
 	SagaScreen.fill(m, told, [["Back", func() -> void: m.queue_free(), "PrimaryButton"]])
+
+
+# --- His nature (docs/design/notes/men-silver.md) ------------------------------------
+
+## What kind of man he is: two traits, each from a different one of the
+## four pairs (Natures), each with what it does in plain words. `then`
+## goes on (the night, or the map); `back` returns to the name.
+func show_nature(who: String, then: Callable, back: Callable) -> void:
+	var root := Control.new()
+	_swap(root)
+	Audio.scene("opening")
+	root.add_child(UiEmbers.new(0.35))
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = UiTheme.EDGE + 10
+	box.offset_right = -UiTheme.EDGE - 10
+	box.offset_top = UiTheme.S3
+	box.offset_bottom = -UiTheme.S3
+	box.add_theme_constant_override("separation", UiTheme.S2)
+	root.add_child(box)
+	box.add_child(UiTheme.label("What kind of man is %s?" % who, "TitleLabel"))
+	box.add_child(UiTheme.label("Choose two, each from a different pair. It is true of him all his life: how he grows, how men take his gifts, how he fares at the Thing and on the island.", "SmallLabel"))
+	var grid := GridContainer.new()
+	grid.columns = Natures.PAIRS.size()
+	grid.add_theme_constant_override("h_separation", UiTheme.S2)
+	grid.add_theme_constant_override("v_separation", UiTheme.S2)
+	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(grid)
+	var rules := CampaignRules.new()
+	var picked: Array[String] = []
+	var cards := {}
+	var go := UiTheme.primary("Go on", Callable(), 200.0)
+	var said := UiTheme.label("", "SmallLabel")
+	var show := func() -> void:
+		for k in cards:
+			var b: Button = cards[k]
+			b.set_pressed_no_signal(picked.has(k))
+			(b.get_meta("chosen") as Control).visible = picked.has(k)
+		go.disabled = picked.size() != Natures.PICK
+		var names := PackedStringArray()
+		for k in picked:
+			names.append(Natures.name_of(k).to_lower())
+		said.text = ("%s is %s." % [who, " and ".join(names)]) if not names.is_empty() else "Nothing chosen yet."
+	for row in 2:
+		for pair in Natures.PAIRS:
+			var k := str(pair[row])
+			var b := Button.new()
+			b.theme_type_variation = "CardButton"
+			b.toggle_mode = true
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			b.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			b.clip_contents = true
+			b.name = "Nature_" + k
+			var m := MarginContainer.new()
+			m.set_anchors_preset(Control.PRESET_FULL_RECT)
+			m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			for side in ["left", "right"]:
+				m.add_theme_constant_override("margin_" + side, UiTheme.S3)
+			for side in ["top", "bottom"]:
+				m.add_theme_constant_override("margin_" + side, UiTheme.S2)
+			b.add_child(m)
+			var col := VBoxContainer.new()
+			col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			col.add_theme_constant_override("separation", 2)
+			m.add_child(col)
+			var head := HBoxContainer.new()
+			head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			col.add_child(head)
+			var nm := UiTheme.label(Natures.name_of(k), "StrongLabel", false)
+			nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			head.add_child(nm)
+			var chosen := UiTheme.chip("Chosen", Palette.UI_GOLD)
+			chosen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			chosen.visible = false
+			head.add_child(chosen)
+			b.set_meta("chosen", chosen)
+			var line := UiTheme.label(Natures.line(rules, k), "SmallLabel")
+			line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			col.add_child(line)
+			m.minimum_size_changed.connect(func() -> void: b.custom_minimum_size.y = maxf(UiTheme.TOUCH, m.get_combined_minimum_size().y))
+			b.pressed.connect(func() -> void:
+				if picked.has(k):
+					picked.erase(k)
+				else:
+					for other in picked.duplicate():
+						if Natures.pair_of(other) == Natures.pair_of(k):
+							picked.erase(other)
+					if picked.size() >= Natures.PICK:
+						picked.remove_at(0)
+					picked.append(k)
+				show.call())
+			cards[k] = b
+			grid.add_child(b)
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", UiTheme.S3)
+	box.add_child(foot)
+	said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	said.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	foot.add_child(said)
+	var bk := UiTheme.quiet("Back", back, 100.0)
+	bk.custom_minimum_size.y = UiTheme.TOUCH
+	foot.add_child(bk)
+	go.pressed.connect(func() -> void:
+		_nature = PackedStringArray(picked)
+		then.call())
+	go.name = "NatureGo"
+	foot.add_child(go)
+	show.call()
 
 
 # --- Another beginning -------------------------------------------------------------
@@ -557,7 +673,8 @@ func show_origins() -> void:
 			if c.button_pressed:
 				origin = str(c.get_meta("origin"))
 		var who := name_edit.text.strip_edges()
-		begin_saga(origin, who if who != "" else "Egil"), 220.0)
+		who = who if who != "" else "Egil"
+		show_nature(who, func() -> void: begin_saga(origin, who), show_origins), 220.0)
 	row.add_child(go)
 
 
@@ -567,6 +684,8 @@ func begin_saga(origin: String, leader_name: String) -> void:
 	if not fixed_seed:
 		seed_in = randi_range(1, 999999)
 	journey = Journey.begin(seed_in, origin, leader_name)
+	if not _nature.is_empty():
+		journey.choose_nature(_nature)
 	hints = Hints.new(journey)
 	show_map()
 

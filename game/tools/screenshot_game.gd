@@ -73,7 +73,59 @@
 ## (a year played by the stand-in viking, saved, a slot kept too), "sagas"
 ## that title with the Sagas modal open, "confirm" that title asking
 ## before a new saga is begun.
+## Men and silver (docs/design/notes/men-silver.md): `what` "nature" is
+## the nature screen (nat:<key> presses a trait's card); on the map,
+## natures:<a>,<b> gives the leader his nature, hallhere makes the place
+## the band stands at its own hall, smith opens the smith (with at:kaupang
+## a great one), works the hall's works, chest:<item> puts arms in the
+## chest, buyfor:<item>:<n> buys item for the n-th of the band, maiden
+## puts a woman's asking up (answer:take takes her), maidenin takes one
+## into the band at once, fallen:<name> a man of the band who fell, named
+## gives the smith here a sword with a name this year.
 extends SceneTree
+
+
+## The men-and-silver commands on the map. True when `cmd` was one.
+func _men_silver(game: Node, j: Journey, map: MapScreen, cmd: String) -> bool:
+	var band := j.c.band
+	var arg := cmd.get_slice(":", 1)
+	match cmd.get_slice(":", 0):
+		"natures":
+			j.choose_nature(PackedStringArray(arg.split(",")))
+		"hallhere":
+			band.hall_at = band.location
+			band.home = band.location
+			Hall.ensure(band, j.c.rules)
+		"smith":
+			map.refresh()
+			EstatePanel.new(map).show_smith()
+			return true
+		"works":
+			map.refresh()
+			EstatePanel.new(map).show_works()
+			return true
+		"chest":
+			var e := Estate.of(band)
+			e.chest[arg] = int(e.chest.get(arg, 0)) + 1
+		"buyfor":
+			var people := MenPanel.people(band)
+			j.buy_arms(arg, people[clampi(int(cmd.get_slice(":", 2)), 0, people.size() - 1)].id)
+		"maiden", "maidenin":
+			var r := SimRng.new(77)
+			Shieldmaidens._offer(j, r, j.here() if j.here() != null else j.c.world.place(band.location))
+			if cmd == "maidenin":
+				j.answer("take")
+		"named":
+			var sm := Estate._smith(j, j.here(), Estate.smith_kind(j, j.here()))
+			sm.named = "Legbiter"
+		"fallen":
+			var m := Man.new()
+			m.display_name = arg
+			Chronicle.fell(band, m, j.c.cal.year - 1)
+		_:
+			return false
+	map.refresh()
+	return true
 
 
 ## The save's commands on the map. True when `cmd` was one.
@@ -195,6 +247,15 @@ func _init() -> void:
 		game.show_origins()
 	elif what == "begin":
 		game.show_name()
+	elif what == "nature":
+		game.show_nature("Egil", func() -> void: pass, game.show_title)
+		await process_frame
+		for i in range(3, args.size()):
+			if args[i].begins_with("nat:"):
+				var b: Button = game.screen.find_child("Nature_" + args[i].trim_prefix("nat:"), true, false)
+				if b != null:
+					b.pressed.emit()
+				await process_frame
 	elif what.begins_with("night:"):
 		game.show_night("Egil", int(what.trim_prefix("night:")))
 	elif what == "escape" or what == "skip":
@@ -514,6 +575,8 @@ func _init() -> void:
 			elif cmd.begins_with("select:"):
 				map.selected = cmd.trim_prefix("select:")
 				map.refresh()
+				continue
+			elif await _men_silver(game, j, map, cmd):
 				continue
 			elif _law_land(j, map, cmd):
 				if cmd == "landmodal":

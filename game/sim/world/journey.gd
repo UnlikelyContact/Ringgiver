@@ -206,6 +206,7 @@ func begin_summer() -> void:
 						{"id": "refuse", "label": "Refuse"}]})
 	_houses_spring()
 	_law_land_spring()
+	_men_silver_spring()
 	_settle()
 
 
@@ -289,6 +290,8 @@ func answer(id: String) -> void:
 			_answer_saga(d, id)
 		"thing", "land", "unfree", "omen":
 			_answer_law_land(d, id)
+		"men_silver":
+			Shieldmaidens.answer(self, d, id)
 		"fight":
 			_answer_fight(d, int(id))
 			return  # _answer_fight settles when the fight is over
@@ -663,7 +666,7 @@ func sail_speed() -> float:
 		return wr.ship_limp_speed if roam.afloat() and roam.aboard else 0.0
 	if not band.ship.can_sail(wr):
 		return wr.ship_limp_speed
-	return float(wr.ship_speed[band.ship.kind])
+	return float(wr.ship_speed[band.ship.kind]) * Estate.sail_mult(self)
 
 
 ## Why the ship is no use, in words, or "" when she is (or there is none).
@@ -1025,6 +1028,7 @@ func actions() -> Array[Dictionary]:
 			hint = "The door of %s is shut to you." % p.family
 		out.append({"id": "winter", "label": "Winter here", "enabled": door != "shut" and (band.silver >= cost or not guest), "hint": hint})
 	out.append_array(_law_land_actions())
+	out.append_array(_men_silver_actions())
 	var kj := _king_justice()
 	if not kj.is_empty():
 		out.append(kj)
@@ -1222,7 +1226,7 @@ func act(id: String) -> void:
 		wintering = true
 	elif id == "king_justice":
 		_act_king_justice()
-	elif TradeRoad.act(self, id) or Hiring.act(self, id) or WorldLife.act(self, id) or _act_law_land(id):
+	elif TradeRoad.act(self, id) or Hiring.act(self, id) or WorldLife.act(self, id) or _act_law_land(id) or _act_men_silver(id):
 		pass
 	elif _act_house(id, p):
 		pass
@@ -2839,3 +2843,97 @@ func burners_let_none_out(against: String) -> bool:
 		f["level"] = 3
 	c.tally.burned_none_out = int(c.tally.get("burned_none_out", 0)) + 1
 	return true
+
+
+# --- Men and silver (docs/design/notes/men-silver.md) ------------------------------------
+#
+# The leader's nature, chosen once at the start (Natures); the smith and
+# the works where the band stands (Estate); gifts to a man in summer; the
+# shieldmaidens' spring (Shieldmaidens). The screens (view/estate_panel.gd,
+# view/men_panel.gd, the nature screen in view/game.gd) call these.
+
+## The traits the leader may choose among: [{key, name, line, pair}], in
+## their pairs' order. Empty once he has his nature.
+func nature_choices() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if c.band.leader == null or not c.band.leader.natures.is_empty():
+		return out
+	for k in Natures.keys():
+		out.append({"key": k, "name": Natures.name_of(k), "line": Natures.line(c.rules, k), "pair": Natures.pair_of(k)})
+	return out
+
+
+## Gives the leader his nature: two traits, not of one pair. Once.
+func choose_nature(picked: PackedStringArray) -> bool:
+	if c.band.leader == null or not c.band.leader.natures.is_empty():
+		return false
+	return Natures.choose(c.band, picked)
+
+
+## The smith where the band stands, for his screen, or {} (Estate.smith_state).
+func smith() -> Dictionary:
+	return Estate.smith_state(self)
+
+
+## Buys `item` from the smith here for the man `man_id`, or the chest (-1);
+## "named" is the sword with a name.
+func buy_arms(item: String, man_id := -1) -> bool:
+	var done := Estate.buy_arms(self, item, man_id)
+	if done:
+		_settle()
+	return done
+
+
+## What may be built, given or raised where the band stands (Estate.works).
+func works() -> Array[Dictionary]:
+	return Estate.works(self)
+
+
+func do_work(id: String) -> bool:
+	var done := Estate.do_work(self, id)
+	if done:
+		_settle()
+	return done
+
+
+## What may be given the man `man_id` now (Estate.gift_options).
+func gift_options(man_id: int) -> Array[Dictionary]:
+	return Estate.gift_options(self, c.band.man_by_id(man_id))
+
+
+func give(man_id: int, what: String) -> bool:
+	return Estate.give(self, man_id, what)
+
+
+func _men_silver_spring() -> void:
+	Shieldmaidens.spring(self)
+
+
+## The smith and the works as deeds on the place's list; each opens its
+## screen (the view), and does nothing by itself.
+func _men_silver_actions() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var p := here()
+	if p == null:
+		return out
+	var kind := Estate.smith_kind(self, p)
+	if kind != "":
+		var words := {"great": "Fine arms, dear, for a man or for the chest; now and then a sword with a name.",
+				"plain": "Helmets, swords, mail and bows, as many as he has made this year.",
+				"own": "Arms made at your own hall, cheaper than the market's."}
+		out.append({"id": "smith", "label": "Go to the smith" if kind != "own" else "Go to your smith", "hint": words[kind]})
+	var w := Estate.works(self)
+	if not w.is_empty():
+		var home := p.id == c.band.hall_at
+		var open := 0
+		for x in w:
+			if bool(x.enabled):
+				open += 1
+		out.append({"id": "works", "label": "Works at your hall" if home else "Spend silver here",
+				"hint": ("Benches, the high seat, a skald, the district's feast, stones for the dead: %d you can pay for now." % open) if home
+						else ("A feast for the house, fittings for the ship: %d you can pay for now." % open)})
+	return out
+
+
+func _act_men_silver(id: String) -> bool:
+	return id == "smith" or id == "works"

@@ -566,3 +566,138 @@ var hall_help_per := 10
 var hall_help_max := 8
 ## A band of this many living men has a third named man for a wing.
 var wing_third_band := 16
+
+
+# --- Men and silver (docs/design/notes/men-silver.md) -----------------------
+## The leader's nature (Natures): Natures key -> [stat whose growth goes
+## up, stat whose growth goes down] (by `nature_up` / `nature_down`, as a
+## man's personality); the open hand and the closed fist move no stat.
+var nature_growth := {
+	"reckless": [CombatTypes.Stat.MIGHT, CombatTypes.Stat.WITS],
+	"steady": [CombatTypes.Stat.NERVE, CombatTypes.Stat.MIGHT],
+	"silver_tongued": [CombatTypes.Stat.WITS, CombatTypes.Stat.GRIT],
+	"grim": [CombatTypes.Stat.NERVE, CombatTypes.Stat.SKILL],
+	"deep_minded": [CombatTypes.Stat.WITS, CombatTypes.Stat.MIGHT],
+	"quick_to_anger": [CombatTypes.Stat.MIGHT, CombatTypes.Stat.NERVE],
+}
+## Natures key -> the edges it lays on the band (Band.gift): `odds_fame`
+## more fame for a win against the odds (Leader.on_battle);
+## `withdraw_free`, drawing off costs no honor; `gift_bind`, what a gift's
+## loyalty is multiplied by (Loyalty.gift, gift_gear); `keep_share`, the
+## more of the plunder the leader keeps with the men content
+## (Loyalty.share_plunder); `law` and `verse`, added to the ways'; `dread`,
+## added to the berserk's (Callings); `luck_keep`, the points higher luck
+## must stand before it drifts down at the thaw (Leader.winter_drift);
+## `challenge_honor`, what an overbearing challenge's honor is multiplied
+## by (Callings.holmgang_terms).
+var nature_edges := {
+	"reckless": {"odds_fame": 2},
+	"steady": {"withdraw_free": true},
+	"open_handed": {"gift_bind": 1.5},
+	"close_fisted": {"gift_bind": 0.75, "keep_share": 0.1},
+	"silver_tongued": {"law": 1, "verse": 1},
+	"grim": {"dread": 0.1},
+	"deep_minded": {"luck_keep": 1},
+	"quick_to_anger": {"challenge_honor": 0.5},
+}
+## A son has each of his father's traits with this chance; the rest are
+## drawn from the pairs left open.
+var nature_inherit_chance := 0.5
+
+## The smith (Estate): at market towns and kings' halls. What each piece
+## costs a man buying it outright (the winter's `arms_price` and two more);
+## a great smith (`smith_great`, the three great markets) asks
+## `smith_great_price` times as much for fine work that binds a man
+## `smith_fine_loyalty` more when given. Stock is rolled once a place a
+## year: item -> [least, most], a plain smith and a great one.
+var smith_items := ["helmet", "sword", "mail", "long axe", "bow"]
+var smith_price := {"helmet": 12, "sword": 25, "mail": 45, "long axe": 20, "bow": 8}
+var smith_great := ["kaupang", "hedeby", "dublin"]
+var smith_great_price := 1.25
+var smith_fine_loyalty := 5
+var smith_stock_plain := {"helmet": [0, 2], "sword": [0, 1], "mail": [0, 1], "long axe": [0, 1], "bow": [1, 2]}
+var smith_stock_great := {"helmet": [2, 3], "sword": [1, 3], "mail": [1, 2], "long axe": [1, 2], "bow": [2, 3]}
+## A sword with a name: at a great smith in `smith_named_chance` of years,
+## for `smith_named_price`; it binds the man given it `smith_named_loyalty`
+## and is talked of (`smith_named_fame`). The names a smith may give it.
+var smith_named_chance := 0.35
+var smith_named_price := 150
+var smith_named_loyalty := 20
+var smith_named_fame := 3
+var sword_names := ["Legbiter", "Greyflank", "Whitling", "Wound-wand", "Gold-hilt", "Long-tooth", "Battle-snake",
+	"Raven-feeder", "Mail-biter", "Ice-edge", "Byrnie-bane", "Dragvandil"]
+## The band's own smithy at its hall: a small stock (`smith_own_stock`) at
+## `smith_own_price` of the plain price.
+var smith_own_price := 0.8
+var smith_own_stock := {"helmet": [1, 1], "sword": [0, 1], "long axe": [0, 1], "bow": [1, 1]}
+
+## Gifts in summer (the men panel): silver as at Yule (`hall_gift_ounces`),
+## or arms from the chest; once a summer a man.
+
+## The hall's adornment, step by step (a carved high seat, carved pillars,
+## a hall painted with the old tales, as Olaf the Peacock's at
+## Hjardarholt): what each costs, the honor and fame it brings once, and
+## the loyalty every fed and seated man gains on top of his rest each
+## winter turn (`adorn_rest`, for each step built).
+var hall_adorn := [
+	{"name": "a carved high seat", "cost": 60, "honor": 3, "fame": 2},
+	{"name": "high-seat pillars carved with the gods", "cost": 180, "honor": 3, "fame": 4},
+	{"name": "the hall painted with the old tales", "cost": 500, "honor": 2, "fame": 8},
+]
+var adorn_rest := 1
+## A feast given in summer: at a house's seat, `feast_house_base` and
+## `feast_house_per_man` oz a man of the band, for `feast_house_standing`
+## with that house and `feast_fame` fame, once a house a year; at the
+## band's own hall for its district (every house whose seat is within
+## `feast_district_leagues`), `feast_district_base` and
+## `feast_district_per_man`, for `feast_district_standing` with each and
+## `feast_district_fame` fame, once a year.
+var feast_house_base := 30
+var feast_house_per_man := 3
+var feast_house_standing := 18
+var feast_fame := 1
+var feast_district_base := 40
+var feast_district_per_man := 4
+var feast_district_standing := 8
+var feast_district_fame := 2
+var feast_district_leagues := 25.0
+## For the dead (Chronicle's fallen): a rune-stone (`stone_cost`, fame and
+## honor) or a mound (`mound_cost`), once for each; the saga tells it.
+var stone_cost := 40
+var stone_fame := 2
+var stone_honor := 1
+var mound_cost := 150
+var mound_fame := 5
+var mound_honor := 2
+## A skald kept at the hall: `kept_skald_take` oz to take him on and
+## `kept_skald_keep` every winter after; `kept_skald_fame` fame a winter and a verse
+## in the saga. He leaves when the chest cannot pay him.
+var kept_skald_take := 30
+var kept_skald_keep := 20
+var kept_skald_fame := 2
+var kept_skald_names := ["Thjodolf", "Eyvind", "Glum", "Kormak", "Sighvat", "Hallfred", "Ottar", "Bragi"]
+## The ship fitted (lost with her when she is sold for another): a striped
+## sail (`fit_sail`, her speed under sail times `fit_sail_speed`); shields
+## on the rail (`fit_shields`, fame once); a dragon's head on the prow for
+## a snekkja or a longship (`fit_prow`, fame once).
+var fit_sail := 60
+var fit_sail_speed := 1.1
+var fit_shields := 40
+var fit_shields_fame := 2
+var fit_prow := 150
+var fit_prow_fame := 4
+
+## Shieldmaidens (Shieldmaidens): in `maiden_chance` of summers, once the
+## band has `maiden_fame`, a woman asks to swear to it; never more than
+## `maiden_max` in a saga. After a year with the band a house may ask for
+## her hand (`maiden_suit_chance` a summer, once a woman), for
+## `maiden_suit_standing`.
+var maiden_chance := 0.05
+var maiden_fame := 15
+var maiden_max := 2
+var maiden_superstitious := 4
+var maiden_boastful := 2
+var maiden_suit_chance := 0.25
+var maiden_suit_standing := 25
+var maiden_names := ["Hervor", "Thorbjorg", "Brynhild", "Freydis", "Alfhild", "Gudrid", "Hild", "Rannveig",
+	"Aud", "Hlif", "Gunnhild", "Thorgunna", "Ingibjorg", "Sigrid"]

@@ -603,6 +603,9 @@ func _add_actions() -> void:
 	for a in acts:
 		var id := str(a.id)
 		var b := UiTheme.list_row(str(a.label), str(a.get("hint", "")), func() -> void:
+			if EstatePanel.opens(id):  # the smith and the works have screens of their own
+				EstatePanel.new(self).open(id)
+				return
 			var silver := journey.c.band.silver
 			journey.act(id)
 			if journey.c.band.silver != silver:

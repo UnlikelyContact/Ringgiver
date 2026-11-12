@@ -117,7 +117,7 @@ static func open_chapter(band: Band, leader_name: String, year: int, how: String
 ## A man of the band fell (or the leader himself): kept for his leader's chapter.
 static func fell(band: Band, m: Man, year: int) -> void:
 	var fallen: Array = band.get_meta(FALLEN_META, []) if band.has_meta(FALLEN_META) else []
-	fallen.append({"name": m.display_name, "year": year})
+	fallen.append({"name": m.display_name, "year": year, "woman": m.woman})
 	band.set_meta(FALLEN_META, fallen)
 
 

@@ -429,7 +429,9 @@ func test_saga_text_tells_each_generation() -> void:
 	var s := j.saga()
 	var text := str(s.text)
 	assert_true(str(s.title).begins_with("The saga of Egil Hardanger-son"), str(s.title))
-	assert_eq(s.chapters.size(), 2)
+	# Two generations at least: the heir may fall in his own first summer too
+	# (the stand-in's play is the instrument, docs/design/notes/men-silver.md).
+	assert_true(s.chapters.size() >= 2, "chapters %d" % s.chapters.size())
 	assert_true(text.contains("There was a man named Egil"))
 	assert_true(text.contains("%s took the high seat" % heir), "the second generation")
 	assert_true(text.contains("Then nothing is told of Egil for"), "the years let pass")

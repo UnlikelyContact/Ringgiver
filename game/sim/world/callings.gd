@@ -183,7 +183,8 @@ static func holmgang_terms(rules: WorldRules, world: World, band: Band, place: P
 	var feud := not Feud.find(band, place.family).is_empty()
 	var stake := mini(place.wealth, roundi(float(place.wealth) * float(rules.holmgang_stake.get(place.kind, 0.0))))
 	var stat := int(rules.defender_stat_by_kind[place.kind] + place.defenses * rules.defender_stat_per_defense) + 1
-	return {"stake": stake, "feud": feud, "family": place.family, "honor_cost": 0 if feud else rules.holmgang_honor,
+	return {"stake": stake, "feud": feud, "family": place.family,
+			"honor_cost": 0 if feud else roundi(rules.holmgang_honor * float(band.gift("challenge_honor", 1.0))),
 			"tier": maxi(CombatTypes.Tier.BLOODED, Raiding.defender_tier(rules, place)), "stat": clampi(stat, 1, 10)}
 
 
