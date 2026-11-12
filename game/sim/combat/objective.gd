@@ -24,6 +24,15 @@ extends RefCounted
 ##                   the objective is the doors and the floor inside. The
 ##                   attacker wins once he has stood on at least half of them
 ##                   for `hall_streak` rounds running; else the defender.
+##   ESCAPE          the burned hall (Scenario.build_escape): the attacker
+##                   is not taking anything but getting out. The cells are
+##                   the edge of the dark (the tree line); the fight ends
+##                   the round his sworn leader stands on one of them, or
+##                   slips away out of contact near it (Battle.withdraw), or
+##                   goes down (his men drag him off, or he is left for
+##                   dead), or his men all break and scatter into the night.
+##                   Every one of those is an escape (BattleResult.End.ESCAPE):
+##                   the fight cannot be won here, only left. It has no clock.
 ##
 ## The clock: `rounds` are counted from the round the lines meet
 ## (Battle.lines_met: a man of one side at arm's length of the other), not
@@ -35,10 +44,13 @@ extends RefCounted
 ## lists every cell it drew in `features` (Field keeps its own features off
 ## them). Deterministic like the rest.
 
-enum Kind { HOLD_GROUND, REACH_THE_SHIPS, THE_HALL }
+enum Kind { HOLD_GROUND, REACH_THE_SHIPS, THE_HALL, ESCAPE }
 
-const NAMES := ["the ford", "the ships", "the hall"]
-const SHORT := ["ford", "ships", "hall"]
+const NAMES := ["the ford", "the ships", "the hall", "the dark"]
+const SHORT := ["ford", "ships", "hall", "the dark"]
+## The kinds a varied field may draw (Scenario.build): the escape is only
+## ever built on purpose.
+const DRAWN_KINDS := 3
 
 var kind: Kind
 var attacker := 0
@@ -159,6 +171,57 @@ func place(grid: BattleGrid, front_row: int, p_back: int, centre_col: int) -> vo
 				_mark(grid, BattleGrid.from_offset(col, front_row + depth * back), CombatTypes.Terrain.FLAT, true)
 		Kind.THE_HALL:
 			_place_hall(grid, r, front_row, back, centre_col)
+
+
+## The escape's edge of the dark: every passable hex of offset row `row`.
+## The ground itself (the trees beyond, the burning hall) is the
+## scenario's to draw.
+func place_escape(grid: BattleGrid, row: int) -> void:
+	cells.clear()
+	features.clear()
+	for col in grid.width:
+		var c := BattleGrid.from_offset(col, row)
+		if grid.is_passable(c):
+			cells.append(c)
+			features.append(c)
+
+
+## The escape: hexes from `c` to the nearest edge of the dark.
+func dark_distance(c: Vector2i) -> int:
+	var best := 99
+	for e in cells:
+		best = mini(best, BattleGrid.distance(c, e))
+	return best
+
+
+## The escape: hexes from the escaper's sworn leader to the dark, or 99
+## when he is not on the field.
+func leader_distance(battle: Battle) -> int:
+	var l := battle.sworn_leader(attacker)
+	if l == null or not l.is_active():
+		return 99
+	return dark_distance(l.pos)
+
+
+## The escape: the way to the dark is open when no standing man of the
+## burners is nearer it than the escaper's leader: he is through the ring.
+func way_open(battle: Battle) -> bool:
+	var mine := leader_distance(battle)
+	if mine >= 99:
+		return false
+	for w in battle.active(defender()):
+		if not w.broken and dark_distance(w.pos) < mine:
+			return false
+	return true
+
+
+## Whether `side` may leave the field in order now (Battle.can_withdraw).
+## Only the escape says no: its band slips away only once it is through
+## the ring (`way_open`), so the way out is fought for.
+func allows_withdraw(battle: Battle, side: int) -> bool:
+	if kind != Kind.ESCAPE or side != attacker:
+		return true
+	return way_open(battle)
 
 
 func _mark(grid: BattleGrid, c: Vector2i, t: CombatTypes.Terrain, is_objective: bool) -> void:
@@ -294,6 +357,8 @@ func brief(side: int) -> String:
 			return ("Get %d men over the ford, %d rounds from contact" % [ford_men, rounds]) if attacking else ("Keep them off the ford, %d rounds from contact" % rounds)
 		Kind.REACH_THE_SHIPS:
 			return ("Get %d men to the ships, %d rounds from contact" % [ships_men, rounds]) if attacking else ("Keep them from the ships, %d rounds from contact" % rounds)
+		Kind.ESCAPE:
+			return "Get out: reach the dark beyond their ring" if attacking else "Let none of them out of the fire"
 		_:
 			return ("Take the hall, %d rounds from contact" % rounds) if attacking else ("Hold the hall, %d rounds from contact" % rounds)
 
@@ -301,6 +366,8 @@ func brief(side: int) -> String:
 ## The clock for the HUD: "12 left" once the lines have met, else how long
 ## the attacker will have ("16 once they meet").
 func clock_text(battle: Battle) -> String:
+	if kind == Kind.ESCAPE:
+		return ""
 	if clock_start < 0:
 		return "%d once they meet" % rounds
 	return "%d left" % rounds_left(battle)
@@ -313,6 +380,9 @@ func progress(battle: Battle) -> String:
 			return "ford %d/%d" % [ford_count(battle, attacker), ford_men]  # attackers on or over the crossing
 		Kind.REACH_THE_SHIPS:
 			return "ships %d/%d" % [men_on(battle, attacker), ships_men]
+		Kind.ESCAPE:
+			var d := leader_distance(battle)
+			return "the dark: %d away" % d if d < 99 else ""
 		_:
 			return "hall %d/%d" % [men_on(battle, attacker), cells.size()]
 
@@ -324,6 +394,9 @@ func check(battle: Battle) -> int:
 	if battle.round == _checked_round:
 		return _decision
 	_checked_round = battle.round
+	if kind == Kind.ESCAPE:
+		_decision = _decide_escape(battle)
+		return _decision
 	if clock_start < 0 and battle.lines_met():
 		clock_start = battle.round
 		battle.log.append("the lines meet: %d rounds for side %d to take %s" % [rounds, attacker, name])
@@ -363,6 +436,39 @@ func _decide(battle: Battle) -> int:
 	return -1
 
 
+## The escape (see the header): -1 while the band is still in the ring,
+## else the side left holding the field (the defender: the hall is his),
+## with `reason` saying how the band got out. Battle ends it as an ESCAPE.
+func _decide_escape(battle: Battle) -> int:
+	var l := battle.sworn_leader(attacker)
+	if l == null:
+		return -1
+	if l.fled:
+		reason = "%s runs for the dark and is gone" % l.display_name
+		return defender()
+	if l.is_down():
+		var carriers := 0
+		for w in battle.active(attacker):
+			if not w.broken:
+				carriers += 1
+		if carriers > 0:
+			reason = "%s is down: his men drag him off into the dark" % l.display_name
+		else:
+			reason = "%s is down and left for dead in the yard" % l.display_name
+		return defender()
+	if has_cell(l.pos) and not l.broken:
+		reason = "%s gets out into the dark" % l.display_name
+		return defender()
+	var standing := 0
+	for w in battle.active(attacker):
+		if not w.broken:
+			standing += 1
+	if standing == 0:
+		reason = "%s's men break and scatter into the night" % l.display_name
+		return defender()
+	return -1
+
+
 ## The finish line when the time runs out on the attacker.
 func time_up_reason() -> String:
 	match kind:
@@ -370,12 +476,16 @@ func time_up_reason() -> String:
 			return "the ford is held: side %d keeps it" % defender()
 		Kind.REACH_THE_SHIPS:
 			return "the ships are safe: side %d holds them" % defender()
+		Kind.ESCAPE:
+			return "nobody comes after them: side %d gets away into the dark" % attacker
 		_:
 			return "the hall stands: side %d holds it" % defender()
 
 
 ## What an AI leader's men hear when the objective changes his order.
 func ai_line(leader_name: String, attacking: bool) -> String:
+	if kind == Kind.ESCAPE:
+		return "%s will let none of them out of the fire" % leader_name if not attacking else "%s makes for the dark" % leader_name
 	if attacking:
 		match kind:
 			Kind.HOLD_GROUND:
@@ -385,3 +495,18 @@ func ai_line(leader_name: String, attacking: bool) -> String:
 			_:
 				return "%s means to see the hall burn" % leader_name
 	return "%s keeps to %s: let them come to him" % [leader_name, name]
+
+
+## The careful way out of the burned hall, as the tutorial teaches it
+## (view/tutorial.gd) and as the dice tell it when the player skips it
+## (Journey.skip_escape): the wall on the first round, then push at the
+## ring until the way to the dark is open (`way_open`), then fall back
+## toward the dark with the shields to the men coming after. The caller
+## withdraws whenever Battle.can_withdraw allows it.
+static func escape_order(battle: Battle, side: int) -> CombatTypes.Shout:
+	var obj := battle.objective
+	if battle.round == 0:
+		return CombatTypes.Shout.SHIELD_WALL
+	if obj != null and obj.kind == Kind.ESCAPE and obj.way_open(battle):
+		return CombatTypes.Shout.FALL_BACK
+	return CombatTypes.Shout.PUSH

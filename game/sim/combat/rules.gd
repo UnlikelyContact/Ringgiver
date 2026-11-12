@@ -418,6 +418,20 @@ var ambush_gap_every := 3
 ## bows as you. The ambush is the way to fight a band bigger than yours.
 var ambush_more_shields := 0.5
 
+# --- The burned hall (Scenario.build_escape, Objective.Kind.ESCAPE) --------
+## The field: small, so three men and the ring round them fill the screen.
+var escape_width := 13
+var escape_height := 12
+## The jarl's men in the ring: shields and spears (no bows at night). More
+## than three men can beat: it is a fight to get out of, not to win.
+var escape_enemy_shields := 6
+var escape_enemy_spears := 2
+## Rows between the hall's door and the ring's front, where the thin place is.
+var escape_ring_distance := 3
+## The jarl's men are watching the roof fall in: their leader gives no
+## order for this many rounds after the band comes out of the smoke.
+var escape_surprise_rounds := 3
+
 ## The objective's clock counts from the round the lines meet; an attacker
 ## who has not closed by this round has given the day up to the defender.
 var objective_approach_rounds := 24

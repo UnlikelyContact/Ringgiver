@@ -379,6 +379,10 @@ var deed_verse := 2
 var deed_trade_margin := 10
 ## What the wait costs when a man listens for rumours instead of acting.
 var listen_days := 5
+## Days the band rests under a roof to mend a turn of its wounds (the
+## "Rest and mend" deed, where there are hurt men): a bruise is gone, a
+## wound is half healed, a man carried off the field needs four.
+var rest_days := 6
 ## A place plundered or taxed by the sword mends this share of the way back
 ## to what it was worth, each year.
 var wealth_mend := 0.34

@@ -316,6 +316,31 @@ func build_duel(opponent: Warrior, seed_in: int) -> Dictionary:
 	return built
 
 
+## The burned hall: the night the saga begins, the leader and his men
+## getting out of the ring of the jarl's men (Scenario.build_escape). The
+## band's men as side 0, the jarl's men drawn here so their ids never meet
+## the band's. Returns the same dictionary as `build_fight`, with `escape`
+## true and `seed_value`; nobody's AI is set on side 0 (the player fights
+## it, or `Journey.skip_escape` gives it one). `conclude_fight` takes it
+## with a null offer.
+func build_escape() -> Dictionary:
+	tally.battles += 1
+	var fighters := band.fighters(rules)
+	var seed_in := rng.fork("escape").seed_value
+	var ours: Array[Warrior] = []
+	for m in fighters:
+		ours.append(m.to_warrior(0, rules, combat_rules.javelins_per_man))
+	var theirs := BandFactory.make_mixed_band(SimRng.new(seed_in).fork("burners"), 1, combat_rules.escape_enemy_shields,
+			combat_rules.escape_enemy_spears, 0, CombatTypes.Tier.GREEN, combat_rules, CombatTypes.Armor.NONE, 3, ENEMY_FIRST_ID)
+	var built := Scenario.build_escape(seed_in, combat_rules, {"ours": ours, "theirs": theirs})
+	built.fighters = fighters
+	built.choice = FightOffer.Choice.TAKE_THE_FIELD
+	built.odds = float(fighters.size()) / maxf(1.0, float(theirs.size()))
+	built.escape = true
+	built.seed_value = seed_in
+	return built
+
+
 ## What the fight left: growth, wounds, deaths, loot, a man who asks to
 ## join (Aftermath); grief and oaths (Bonds); luck, fame and the flat
 ## plunder of a win (Leader, not for a duel); succession if the leader
@@ -326,12 +351,15 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 	var ours: Array[Warrior] = built.ours
 	var enemy: Array[Warrior] = built.theirs
 	var is_duel: bool = built.get("duel", false)
+	var is_escape: bool = built.get("escape", false)
 	if debug_battles:
 		battle_logs.append(battle.log.duplicate())
 	var won := result.winner == 0
 	var outcome := result.outcome(0)
 	var seed_in: int = built.get("seed_value", offer.seed_value if offer != null else 0)
-	if is_duel:
+	if is_escape:
+		log.append("%s: the burning of the hall, against %d men: %s (%s)" % [cal.describe(), enemy.size(), result.summary(), result.outcome_text(0)])
+	elif is_duel:
 		log.append("%s: holmgang against %s: %s" % [cal.describe(), enemy[0].display_name, result.outcome_text(0)])
 	else:
 		log.append("%s: %s (%s) against %d %s men: %s (%s)" % [cal.describe(), offer.kind,
@@ -339,7 +367,7 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 				offer.enemy_size, CombatTypes.TIER_NAMES[offer.enemy_tier], result.summary(), result.outcome_text(0)])
 
 	# Growth, wounds, deaths, loot, a man who asks to join.
-	var on_land: bool = not is_duel and not offer.at_sea
+	var on_land: bool = is_escape or (not is_duel and not offer.at_sea)
 	var told := Aftermath.apply(rules, band, ours, result, SimRng.new(seed_in).fork("aftermath"), on_land, log)
 	tally.recruits += told.joined.size()
 	_arm_new_men()
@@ -366,10 +394,11 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 		if m != band.leader:
 			band.remove_man(m)
 
-	# Luck, reputation, plunder.
-	if not is_duel:
+	# Luck, reputation, plunder. Getting out of the burned hall is none of
+	# these: the saga begins there, it is not judged by it.
+	if not is_duel and not is_escape:
 		Leader.on_battle(rules, band, won, true, built.odds, log, outcome)
-	if won and not is_duel:
+	if won and not is_duel and not is_escape:
 		_summer_wins += 1
 		tally.wins += 1
 		var flat := rules.plunder_per_win if world == null else rules.plunder_per_win_world

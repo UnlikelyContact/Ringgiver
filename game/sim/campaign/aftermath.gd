@@ -50,7 +50,7 @@ static func lines(told: Dictionary) -> PackedStringArray:
 	for line in told.maimed:
 		out.append(line + ".")
 	if not told.grievous.is_empty():
-		out.append("%s %s carried to the ship, too hurt to fight for a while." % [_names(told.grievous), "is" if told.grievous.size() == 1 else "are"])
+		out.append("%s %s carried off the field, too hurt to fight for a while." % [_names(told.grievous), "is" if told.grievous.size() == 1 else "are"])
 	if not told.wounded.is_empty():
 		out.append("%s %s wounded and will fight hurt." % [_names(told.wounded), "is" if told.wounded.size() == 1 else "are"])
 	if not told.fled.is_empty():

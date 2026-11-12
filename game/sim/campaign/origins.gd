@@ -8,9 +8,17 @@ extends RefCounted
 ## key, name, blurb; origin (CampaignTypes.Origin, for his stats and
 ## trait); followers, silver; `at`: the place he starts; `feud_with`: a
 ## place whose family he begins at feud with (the burners), or "".
+## `escape`: the saga begins with the fight out of the burning hall
+## (Journey.begin with `escape`, Scenario.build_escape), told first by the
+## `night` cards. The other origins begin on the map.
 const DEFS := [
 	{"key": "burned_hall", "name": "The burned hall", "origin": CampaignTypes.Origin.EXILED_JARLS_SON,
-		"followers": 2, "silver": 10, "at": "sogn_farms", "feud_with": "hardanger",
+		"followers": 2, "silver": 10, "at": "sogn_farms", "feud_with": "hardanger", "escape": true,
+		"night": [
+			"Your father's hall at Hardanger. Late in the night the dogs wake you, and there are men in the yard: the jarl's men, who hold this land for Harald now.",
+			"They have barred the great door and put fire to the thatch. Your father is dead in the smoke behind you. The roof will not stand long.",
+			"Two men will not leave you. The byre door at the end of the hall is not barred. Beyond the yard and the ring of the jarl's men is the dark of the trees, and kin in Sogn.",
+		],
 		"blurb": "Your father's hall at Hardanger burned in the night, and men loyal to another lord hold his land. You got out with two men and what you stood in. Kin in Sogn have taken you in. Vengeance is your saga."},
 	{"key": "younger_son", "name": "The younger son", "origin": CampaignTypes.Origin.YOUNGER_SON,
 		"followers": 1, "silver": 15, "at": "hardanger", "feud_with": "",
@@ -33,3 +41,8 @@ static func keys() -> PackedStringArray:
 	for d in DEFS:
 		out.append(d.key)
 	return out
+
+
+## Whether the origin begins with the burned hall's escape, played.
+static func has_escape(key: String) -> bool:
+	return bool(def(key).get("escape", false))

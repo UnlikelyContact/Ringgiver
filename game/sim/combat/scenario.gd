@@ -122,7 +122,7 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true, 
 			orng.randi_range(0, 2)
 			orng.randf()
 		elif orng.randf() < rules.objective_chance:
-			kind = orng.randi_range(0, Objective.Kind.size() - 1)
+			kind = orng.randi_range(0, Objective.DRAWN_KINDS - 1)
 			attacker = 0 if orng.randf() < rules.objective_player_attacks else 1
 		if kind >= 0:
 			objective = Objective.new(kind as Objective.Kind, attacker, seed_in, rules)
@@ -269,3 +269,101 @@ static func build_ambush(seed_in: int, rules: CombatRules, band := 12, bands := 
 	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": doctrine, "offset": 0,
 			"objective": null, "field": null, "field_name": what, "title": "Ambush" if ambushed == 1 else "Ambushed",
 			"band": band, "size": size}
+
+
+## The burned hall (concept.md, "Character creation": "you flee at night
+## with two men, and the escape is the first fight"): every saga's first
+## fight, and the one that teaches the battle (view/tutorial.gd). A small
+## field at night. The hall burns along the bottom edge, its door in the
+## middle of its front wall, and your leader and his men stand just
+## outside it in a line, facing up the field. Up the field, beyond the
+## ring of the jarl's men, is the edge of the dark: the tree line along the
+## top, the objective (Objective.Kind.ESCAPE). The ring stands
+## `escape_ring_distance` rows off in an arc, with the thin place straight
+## ahead of the door: two men with an empty hex between them, every other
+## man of the ring further round. They are watching the roof fall in and
+## are taken by surprise for `escape_surprise_rounds`. Their leader stands
+## at the ring's front, off the thin place, and fights it out
+## (AGGRESSIVE): it is a fight to get out of, not to win. Your sworn
+## leader is spared (Battle.spared): he cannot die here.
+##
+## `bands` {ours, theirs} replaces the drawn bands (the campaign's men);
+## without it you are "You" and two men. The layout is fixed; the seed
+## draws the men, the scattered trees and every die. Returns Scenario's
+## dictionary, `field_name` "burned_hall", plus `gap` (the thin place's
+## empty hex and the two men's) and `door`.
+static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dictionary:
+	var size := Vector2i(rules.escape_width, rules.escape_height)
+	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
+	var g := battle.grid
+	var c := size.x / 2
+	var door_row := size.y - 3
+	var our_row := door_row - 1
+	var ring_row := our_row - rules.escape_ring_distance
+	var brng := SimRng.new(seed_in).fork("bands")
+	var ours: Array[Warrior] = bands.get("ours", BandFactory.make_mixed_band(brng.fork("a"), 0, 3, 0, 0, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1))
+	var theirs: Array[Warrior] = bands.get("theirs", BandFactory.make_mixed_band(brng.fork("b"), 1, rules.escape_enemy_shields,
+			rules.escape_enemy_spears, 0, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 3, 101))
+	# The hall: three rows of burning timber along the bottom, its door in
+	# the middle of the front wall.
+	for row in range(door_row, size.y):
+		for col in range(c - 3, c + 4):
+			g.set_terrain(BattleGrid.from_offset(col, row), CombatTypes.Terrain.BUILDING)
+	var door := BattleGrid.from_offset(c, door_row)
+	g.set_terrain(door, CombatTypes.Terrain.DOOR)
+	# The dark: the wood along the top edge, its near hexes the way out, and
+	# a few trees down the sides of the yard drawn from the seed.
+	var tr := SimRng.new(seed_in).fork("escape-wood")
+	for col in size.x:
+		g.set_terrain(BattleGrid.from_offset(col, 0), CombatTypes.Terrain.TREE)
+		if col <= 1 or col >= size.x - 2:
+			g.set_terrain(BattleGrid.from_offset(col, 1), CombatTypes.Terrain.TREE)
+	for i in 4:
+		var col := tr.randi_range(0, 1) if i % 2 == 0 else tr.randi_range(size.x - 2, size.x - 1)
+		g.set_terrain(BattleGrid.from_offset(col, tr.randi_range(2, ring_row - 1)), CombatTypes.Terrain.TREE)
+	var objective := Objective.new(Objective.Kind.ESCAPE, 0, seed_in, rules)
+	objective.place_escape(g, 1)
+	battle.objective = objective
+	# Your men: a line outside the door, facing up the field.
+	BandFactory.deploy_formation(g, ours, BattleGrid.from_offset(c, our_row), Vector2i(0, -1), rules, FormationTemplate.line())
+	# The ring: the thin place first (two men either side of an empty hex
+	# straight ahead of the door), their leader beside it, the rest round
+	# the arc toward the hall's ends.
+	var spots: Array[Vector2i] = [
+		BattleGrid.from_offset(c + 4, our_row),  # their leader, by the hall's end, watching it burn
+		BattleGrid.from_offset(c - 1, ring_row), BattleGrid.from_offset(c + 1, ring_row),  # the thin place
+		BattleGrid.from_offset(c + 3, ring_row), BattleGrid.from_offset(c - 3, ring_row),
+		BattleGrid.from_offset(c + 4, ring_row + 1), BattleGrid.from_offset(c - 4, ring_row + 1),
+		BattleGrid.from_offset(c - 4, our_row), BattleGrid.from_offset(c + 5, our_row),
+		BattleGrid.from_offset(c - 5, our_row),
+	]
+	var me := BattleGrid.from_offset(c, our_row)
+	var placed := 0
+	for w in theirs:
+		w.reset_for_battle(rules)
+		var at: Vector2i = spots[placed] if placed < spots.size() else BattleGrid.NO_CELL
+		if at == BattleGrid.NO_CELL or not g.is_free(at):
+			continue
+		g.place(w, at)
+		w.facing = BattleGrid.direction_to(at, me)
+		if w.is_leader:
+			w.line_facing = w.facing
+			w.formation = FormationTemplate.line()
+		placed += 1
+	battle.add_band(ours)
+	battle.add_band(theirs)
+	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
+	battle.surprise(1, rules.escape_surprise_rounds, 0)
+	for w in ours:
+		if w.is_leader:
+			battle.spared.append(w)
+	if battle.spared.is_empty() and not ours.is_empty():
+		battle.spared.append(ours[0])
+	for side in 2:
+		battle.result.started[side] = battle.active(side).size()
+	if not bands.has("ours"):
+		ours[0].display_name = "You"
+	var gap: Array[Vector2i] = [BattleGrid.from_offset(c, ring_row), spots[1], spots[2]]
+	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": LeaderAI.Doctrine.AGGRESSIVE, "offset": 0,
+			"objective": objective, "field": null, "field_name": "burned_hall", "title": "The burned hall",
+			"band": ours.size(), "size": size, "gap": gap, "door": door}

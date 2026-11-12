@@ -45,8 +45,13 @@ var _was_at := ""  # the place the band was last seen to be at
 
 
 ## A new saga: a man of the given origin (Origins key) and name, where his
-## origin puts him, in the spring of the first year. No ship.
-static func begin(seed_in: int, origin_key: String, leader_name: String) -> Journey:
+## origin puts him, in the spring of the first year. No ship. With
+## `escape`, an origin that has one (Origins.has_escape: the burned hall)
+## begins with its fight waiting in `fight` (Campaign.build_escape): the
+## night the hall burned, before he comes to his kin. The battle view
+## fights it and calls `fight_done`; `skip_escape` lets the dice tell it.
+## Without, the escape is only told, as before (the stand-in players).
+static func begin(seed_in: int, origin_key: String, leader_name: String, escape := false) -> Journey:
 	var j := Journey.new()
 	j.c = Campaign.new(seed_in)
 	j.c.start_from(origin_key, leader_name)
@@ -71,8 +76,43 @@ static func begin(seed_in: int, origin_key: String, leader_name: String) -> Jour
 		band.known_places[theirs.id] = true
 		if theirs.faction_id != "":
 			FactionAI.shift(j.c.world, theirs.faction_id, FactionAI.BAND, -20)
+	if escape and Origins.has_escape(origin_key):
+		var built := j.c.build_escape()
+		(built.battle as Battle).clear_ai(0)
+		j.fight = {"offer": null, "built": built, "ctx": {"kind": "escape"}}
+		j._say("The night the hall at %s burned." % theirs_name(j))
 	j.begin_summer()
 	return j
+
+
+## The place the band's vengeance lies, by name, for the telling.
+static func theirs_name(j: Journey) -> String:
+	var key := str(Origins.def(j.c.band.origin).get("feud_with", ""))
+	var p: Place = j.c.world.place(key) if key != "" else null
+	return p.display_name if p != null else "home"
+
+
+## Whether the fight waiting is the burned hall's escape.
+func escape_pending() -> bool:
+	return not fight.is_empty() and str((fight.ctx as Dictionary).get("kind", "")) == "escape"
+
+
+## Lets the dice tell the escape instead of the player: the leader gives
+## the careful orders (Objective.escape_order) and slips away the moment
+## he can, the rounds are fought out, and the result goes through
+## `fight_done`. Returns its lines.
+func skip_escape() -> PackedStringArray:
+	if not escape_pending():
+		return PackedStringArray()
+	var battle: Battle = fight.built.battle
+	while not battle.is_over() and battle.round < battle.rules.max_rounds:
+		if battle.can_withdraw(0) and battle.withdraw(0):
+			break
+		battle.set_shout(0, Objective.escape_order(battle, 0))
+		battle.run_round()
+	if not battle.is_over():
+		battle.run()
+	return fight_done(battle.result)
 
 
 # --- The year ------------------------------------------------------------------
@@ -227,6 +267,11 @@ func fight_done(result: BattleResult) -> PackedStringArray:
 	var f := fight
 	fight = {}
 	var told := c.conclude_fight(f.offer, f.built, result)
+	if str((f.ctx as Dictionary).get("kind", "")) == "escape":
+		var out: PackedStringArray = told.lines
+		out.append_array(_after_escape(f.built, result))
+		_settle()
+		return out
 	_tell_fight(result, told)
 	var mark := said.size()
 	_after_fight(f.ctx, result)
@@ -314,6 +359,38 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 	_vengeance()
 	if c.over:
 		_say("The saga of %s ends here: %s." % [Way.title(c.band), c.over_reason])
+
+
+## What the burned hall's escape leaves: how the band came to its kin, the
+## chronicle's first line, and a man lent by the kin when both of his
+## fell (the saga goes on with whoever lived). The leader never dies here
+## (Battle.spared). Returns the lines told, also put in `said`.
+func _after_escape(built: Dictionary, result: BattleResult) -> PackedStringArray:
+	var band := c.band
+	var who := band.leader.display_name
+	var at := here().display_name if here() != null else "Sogn"
+	var lines := PackedStringArray()
+	var leader_w: Warrior = null
+	for w in built.ours:
+		if (w as Warrior).id == band.leader.id:
+			leader_w = w
+	var carried := leader_w != null and leader_w.is_down()
+	var with_him := band.living_men().size()
+	if carried:
+		lines.append("%s remembers nothing after the blow. He wakes at %s with his wounds bound, and is told how he came there." % [who, at])
+	else:
+		lines.append("%s comes over the hills to %s by night, and his kin take him in." % [who, at])
+	if with_him == 0:
+		var m := Recruits.random(_fork("lent"), c.rules, band.next_id())
+		band.add_man(m)
+		c._arm_new_men()
+		lines.append("Both his men lie dead at %s. His kin lend him %s, who will follow him." % [theirs_name(self), m.display_name])
+		band.log("%s's kin lent him %s" % [who, m.display_name])
+	band.log("%s got out of his father's burning hall at %s %s" % [who, theirs_name(self),
+			"alone" if with_him == 0 else ("with one man" if with_him == 1 else "with %d men" % with_him)])
+	for line in lines:
+		_say(line)
+	return lines
 
 
 ## The origin's unfinished matter: when the feud with the burners is ended,
@@ -652,6 +729,9 @@ func actions() -> Array[Dictionary]:
 	if band.ship != null and band.ship.damage > 0 and roam.aboard:
 		out.append({"id": "mend", "label": "Mend the ship", "hint": "%d days on the beach for each of her %d hurts%s." % [
 				wr.ship_mend_days, band.ship.damage, "" if band.ship.can_sail(wr) else ". She only limps as she is"]})
+	if SETTLED.has(p.kind) and _healing() > 0:
+		out.append({"id": "rest", "label": "Rest and mend", "hint": "%d days under a roof: every man's wounds mend a turn. %s" % [wr.rest_days,
+				"Some of your men are too hurt to fight yet." if not band.hurt(c.rules).is_empty() else "Your men are hurt, but can stand in the line."]})
 	out.append({"id": "listen", "label": "Wait and listen", "hint": "%d days. At a hall or a market there is talk of places you do not know." % wr.listen_days})
 	if SETTLED.has(p.kind):
 		var guest := not at_home
@@ -659,6 +739,14 @@ func actions() -> Array[Dictionary]:
 		out.append({"id": "winter", "label": "Winter here", "enabled": band.silver >= cost or not guest,
 				"hint": ("End the summer as a guest here: %d oz for the lodging." % cost) if guest else "End the summer: the hall, the men, the long dark."})
 	return out
+
+
+## Turns of healing the band still has to do, all its men together.
+func _healing() -> int:
+	var n := 0
+	for m in c.band.fighters():
+		n += m.healing_turns
+	return n
 
 
 ## The hulls worth showing here: every one the band can pay for (bigger
@@ -776,6 +864,11 @@ func act(id: String) -> void:
 		if heard == "":
 			_say("%d days pass at %s, and nothing new is heard." % [wr.listen_days, p.display_name])
 		_pass(float(wr.listen_days))
+	elif id == "rest":
+		band.mend(1)
+		_pass(float(wr.rest_days))
+		_say("The band rests %d days at %s, and the wounds mend%s." % [wr.rest_days, p.display_name,
+				"" if _healing() > 0 else ": every man is whole again"])
 	elif id == "winter":
 		wintering = true
 	_vengeance()

@@ -26,6 +26,10 @@ var _volleyed := {}  # side -> true once the wall has paused to throw its spears
 var _routing_logged := {}  # side -> true while its wall is making for a way round
 ## A holmgang: the fight ends at first blood (CombatRules.duel_first_blood).
 var duel := false
+## Men who cannot die of this fight: a downed man here is left for dead
+## and lives (the burned hall's leader, whose saga it is). Empty in every
+## other fight.
+var spared: Array[Warrior] = []
 var _custom_called := {}  # side -> CustomShout given this round
 var _follow_up := {}  # side -> the order a custom shout gives next round
 ## The side taken by surprise (an ambush), or -1, and the last round its
@@ -168,11 +172,13 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 			order = CombatTypes.Shout.PUSH
 	if order != CombatTypes.Shout.PUSH and order != CombatTypes.Shout.FALL_BACK:
 		return
+	if order == CombatTypes.Shout.FALL_BACK and escaping(side):
+		_turn_to_pursuers(side, leader)
 	var members := wall_members(side)
 	if members.size() < 2:
 		return
 	var back := order == CombatTypes.Shout.FALL_BACK
-	if not back and _wheel_toward_enemy(side, leader, members):
+	if not back and not escaping(side) and _wheel_toward_enemy(side, leader, members):
 		_hold_wall(members)
 		return
 	var theirs := active(1 - side)
@@ -225,9 +231,13 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	var step := BattleGrid.forward(leader.pos, ax, BattleGrid.rotate(lf, 3) if back else lf)
 	if not back and not theirs.is_empty():
 		var near_l := _nearest_enemy(leader.pos, theirs)
+		var goal := near_l.pos
+		if escaping(side):
+			# Getting out, the line slants toward the dark, not the enemy.
+			goal = _nearest_cell(leader.pos, objective.cells)
 		var pair := BattleGrid.forward_pair(ax, lf)
 		var other: Vector2i = pair[1] if step == pair[0] else pair[0]
-		if other != step and BattleGrid.distance(leader.pos + other, near_l.pos) < BattleGrid.distance(leader.pos + step, near_l.pos):
+		if other != step and BattleGrid.distance(leader.pos + other, goal) < BattleGrid.distance(leader.pos + step, goal):
 			step = other
 	for w in members:
 		if engaged.has(w) and not back:
@@ -403,6 +413,18 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 		log.append("%s's wall %s, %d men step and %d hold" % [leader.display_name, "gives ground" if back else "closes", stepped, held])
 
 
+## The nearest of `cells` to `from` (`from` itself when there are none).
+static func _nearest_cell(from: Vector2i, cells: Array[Vector2i]) -> Vector2i:
+	var best := from
+	var best_d := 1 << 30
+	for c in cells:
+		var d := BattleGrid.distance(from, c)
+		if d < best_d:
+			best = c
+			best_d = d
+	return best
+
+
 ## The nearest active enemy to a cell (never null when `theirs` is not empty).
 func _nearest_enemy(from: Vector2i, theirs: Array[Warrior]) -> Warrior:
 	var best: Warrior = null
@@ -490,6 +512,22 @@ func _wheel_toward_enemy(side: int, leader: Warrior, members: Array[Warrior]) ->
 	return true
 
 
+## Getting out of the burned hall, falling back means giving ground toward
+## the dark with the shields to the men coming after: a wall that faces the
+## dark when it is told to fall back turns about first, every man of it
+## where he stands, so its step back is the step out.
+func _turn_to_pursuers(side: int, leader: Warrior) -> void:
+	var ahead := leader.pos + BattleGrid.forward(leader.pos, leader.wall_axis(), leader.wall_facing())
+	if objective.dark_distance(ahead) >= objective.dark_distance(leader.pos):
+		return  # already facing away from the dark
+	var members := wall_members(side)
+	var about := BattleGrid.rotate(leader.wall_facing(), 3)
+	leader.line_facing = about
+	for w in members:
+		w.facing = about
+	log.append("%s's men turn about, shields to the men coming after" % leader.display_name)
+
+
 ## Marks a wall's men to stand fast this round (wall_move = own cell).
 func _hold_wall(members: Array[Warrior]) -> void:
 	for w in members:
@@ -513,6 +551,17 @@ func leader_of(side: int) -> Warrior:
 
 func is_over() -> bool:
 	return _over
+
+
+## The sworn leader of a side as he was added, down or not; null if none.
+func sworn_leader(side: int) -> Warrior:
+	return _leaders.get(side, null)
+
+
+## Whether `side` is the band getting out of the burned hall
+## (Objective.Kind.ESCAPE): its wall makes for the dark, not the enemy.
+func escaping(side: int) -> bool:
+	return objective != null and objective.kind == Objective.Kind.ESCAPE and objective.attacker == side
 
 
 func run(max_rounds := -1) -> BattleResult:
@@ -689,7 +738,7 @@ func run_round() -> void:
 		var taken := objective.check(self)
 		if taken >= 0:
 			result.by_objective = true
-			_finish(taken, objective.reason, BattleResult.End.OBJECTIVE)
+			_finish(taken, objective.reason, BattleResult.End.ESCAPE if objective.kind == Objective.Kind.ESCAPE else BattleResult.End.OBJECTIVE)
 			return
 	if duel:
 		# First blood ends a holmgang: the man blooded has lost. Both in the
@@ -749,9 +798,11 @@ func run_round() -> void:
 				_finish(1 - side, "side %d has had enough and quits the field" % side, BattleResult.End.DRAW_OFF)
 				return
 		if objective != null:
-			# Nobody will close again: the attacker has given up his task.
+			# Nobody will close again: the attacker has given up his task
+			# (or, getting out of the burned hall, nobody comes after him).
 			result.by_objective = true
-			_finish(objective.defender(), objective.time_up_reason(), BattleResult.End.OBJECTIVE)
+			_finish(objective.defender(), objective.time_up_reason(),
+					BattleResult.End.ESCAPE if objective.kind == Objective.Kind.ESCAPE else BattleResult.End.OBJECTIVE)
 			return
 		_finish(-1, "neither side will close again; both draw off", BattleResult.End.STALL)
 		return
@@ -778,6 +829,8 @@ func _face_about(side: int, leader: Warrior) -> void:
 ## Whether a side can withdraw: none of its standing men has an enemy at
 ## arm's length. Engaged, it must break contact first (fall back).
 func can_withdraw(side: int) -> bool:
+	if objective != null and not objective.allows_withdraw(self, side):
+		return false
 	for w in active(side):
 		if w.broken:
 			continue
@@ -797,6 +850,12 @@ func withdraw(side: int) -> bool:
 		return false
 	var leader := leader_of(side)
 	var who := leader.display_name if leader != null else "side %d" % side
+	if escaping(side):
+		# Out of the burned hall: slipping away into the dark is the escape.
+		log.append("%s and his men slip away into the dark" % who)
+		result.by_objective = true
+		_finish(1 - side, "side %d gets away into the dark" % side, BattleResult.End.ESCAPE)
+		return true
 	log.append("%s leads his men off the field" % who)
 	_finish(1 - side, "side %d withdraws from the field" % side, BattleResult.End.WITHDRAWAL)
 	return true
@@ -846,7 +905,8 @@ func _objective_nudge(side: int, leader: Warrior, shout: CombatTypes.Shout) -> C
 		if standing_order(side) != CombatTypes.Shout.PUSH:
 			log.append(objective.ai_line(leader.display_name, true))
 		return CombatTypes.Shout.PUSH
-	if objective.attacker != side and shout == CombatTypes.Shout.PUSH and objective.rounds_left(self) > 0:
+	if objective.attacker != side and shout == CombatTypes.Shout.PUSH and objective.rounds_left(self) > 0 \
+			and objective.kind != Objective.Kind.ESCAPE:  # the burners come on: there is nothing to keep but the fire
 		for w in active(side):
 			if not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
 				return shout
@@ -1175,6 +1235,13 @@ func _after_exchange(r: ExchangeResult) -> void:
 
 
 func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.STALL) -> void:
+	if objective != null and objective.kind == Objective.Kind.ESCAPE and how != BattleResult.End.ESCAPE \
+			and not (how == BattleResult.End.ROUT and winner == objective.attacker):
+		# Out of the burned hall every end but routing the burners is the
+		# band getting away: they drew off, the light failed, nobody closed.
+		winner = objective.defender()
+		how = BattleResult.End.ESCAPE
+		result.by_objective = true
 	_over = true
 	result.winner = winner
 	result.how = how
@@ -1182,7 +1249,10 @@ func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.
 	log.append("=== %s ===" % why)
 	var fr := rng.fork("fate")
 	for w in warriors:
-		if w.is_down():
+		if w.is_down() and spared.has(w):
+			w.fate = CombatTypes.Fate.RECOVERED
+			log.append("%s will live" % w.display_name)
+		elif w.is_down():
 			var f := Fate.roll(fr.fork("fate:%d" % w.id), rules, w)
 			match f:
 				CombatTypes.Fate.DEAD:
