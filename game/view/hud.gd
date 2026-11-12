@@ -453,8 +453,14 @@ func _on_finished(result: BattleResult) -> void:
 	var box := result_panel.body
 	var obj := view.battle.objective
 	var at := ""
-	if obj != null and obj.kind == Objective.Kind.ESCAPE:
+	if obj != null and obj.kind == Objective.Kind.ESCAPE and obj.attacker == 1:
+		at = "You ringed their hall in the dark."
+	elif obj != null and obj.kind == Objective.Kind.ESCAPE:
 		at = "You made for the dark beyond their ring."
+	elif obj != null and obj.kind == Objective.Kind.DECK:
+		at = "You fought ship to ship, the hulls lashed together."
+	elif obj != null and obj.kind == Objective.Kind.FIRE:
+		at = "You stood to keep the fire from your hall."
 	elif obj != null:
 		at = "You %s %s." % ["came for" if obj.attacker == 0 else "stood to hold", obj.name]
 	var why := _why(result)

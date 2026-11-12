@@ -116,10 +116,22 @@ func fit_zoom() -> float:
 
 ## Where the camera looks: the middle of everyone standing, set so that the
 ## middle sits in the clear band between the top bar and the shout row.
+## When everything will not fit (a phone held sideways, the tutorial's
+## banner under the top bar), a field whose goal lies along its top edge
+## (the burned hall's dark) keeps that edge in view and lets the bottom go:
+## the player must see where he is going.
 func focus_point(zoom: float) -> Vector2:
 	var b := _men_bounds()
 	var centre: Vector2 = (b[0] + b[1]) / 2.0
+	var band := get_viewport_rect().size.y - _hud_top() - HUD_BOTTOM - top_extra - bottom_extra
+	if _goal_on_top() and (b[1].y - b[0].y + 2.0 * EDGE_MARGIN) * zoom > band:
+		centre.y = b[0].y - EDGE_MARGIN * 0.5 + band / 2.0 / zoom
 	return centre + Vector2(0, (HUD_BOTTOM + bottom_extra - _hud_top() - top_extra) / 2.0 / zoom)
+
+
+func _goal_on_top() -> bool:
+	var obj := battle.objective if battle != null else null
+	return obj != null and obj.kind == Objective.Kind.ESCAPE
 
 
 ## Where the top of the screen's controls ends: the HUD measures it (the
@@ -179,7 +191,9 @@ func start(p_scenario: String, p_seed: int) -> void:
 	var ours: Array[Warrior] = []
 	for m in fighters:
 		ours.append(m.to_warrior(0, campaign_rules, rules.javelins_per_man))
-	var field := Scenario.build(p_scenario, p_seed, rules, true, ours.size(), template, {"ours": ours})
+	var field := _saga_fight(p_scenario, p_seed, rules, ours)
+	if field.is_empty():
+		field = Scenario.build(p_scenario, p_seed, rules, true, ours.size(), template, {"ours": ours})
 	battle = field.battle
 	field_name = field.field_name
 	field_title = field.title
@@ -187,6 +201,28 @@ func start(p_scenario: String, p_seed: int) -> void:
 	doctrine = field.doctrine
 	player = ours[0]
 	_show_battle()
+
+
+## The saga's own fights by name, for the tools (tools/screenshot.gd):
+## "deck" (you board), "deck_boarded", "hall_defence" (spears in the snow,
+## the door barred), "hall_fire" (fire in the night, out to meet them),
+## "burning" (you ring their hall), "plunder" (a raid on a steading and its
+## clock). {} for any other name.
+func _saga_fight(name: String, s: int, rules: CombatRules, ours: Array[Warrior]) -> Dictionary:
+	var r := SimRng.new(s).fork("proto-enemy")
+	var n := ours.size()
+	var split := Scenario.band_split(n, rules)
+	var theirs := BandFactory.make_mixed_band(r, 1, split[0], split[1], split[2], CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 16, 1001)
+	match name:
+		"deck", "deck_boarded":
+			return Scenario.build_deck(s, rules, {"ours": ours, "theirs": theirs}, 0 if name == "deck" else 1)
+		"hall_defence", "hall_fire":
+			return Scenario.build_hall_defence(s, rules, {"ours": ours, "theirs": theirs}, name == "hall_fire", "bar" if name == "hall_defence" else "meet")
+		"burning":
+			return Scenario.build_hall_burning(s, rules, {"ours": ours, "theirs": theirs})
+		"plunder":
+			return Scenario.build("equal_green", s, rules, true, n, "", {"ours": ours}, {"objective": Objective.Kind.PLUNDER, "attacker": 0})
+	return {}
 
 
 ## The camera, the field and the HUD for `battle`.
