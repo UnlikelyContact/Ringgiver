@@ -72,7 +72,7 @@ static func after_raid(rng: SimRng, rules: WorldRules, world: World, band: Band,
 	var out := {"silver": 0, "goods": {}, "captives": 0, "feud": false}
 	if won:
 		var frac := rules.plunder_fraction + (rng.randf() * 2.0 - 1.0) * rules.plunder_spread
-		var silver := clampi(roundi(float(place.wealth) * frac), 0, place.wealth)
+		var silver := clampi(roundi(float(place.wealth) * frac * float(band.gift("raid_plunder", 1.0))), 0, place.wealth)
 		place.wealth -= silver
 		band.silver += silver
 		out.silver = silver

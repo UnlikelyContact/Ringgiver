@@ -30,6 +30,9 @@ var deeds: PackedStringArray = []
 ## His place in the line (CombatTypes.Role): a shield-bearer, a spearman
 ## of the second rank, or a bowman.
 var role: CombatTypes.Role = CombatTypes.Role.SHIELD
+## Whether he has been given that place (Campaign._arm_new_men); a man
+## keeps the place he was given.
+var armed := false
 ## Drill points by learned shape name: how well he knows it (concept.md,
 ## "Drill, custom formations and custom shouts"), and the last year he
 ## drilled, for the thaw's decay.
@@ -125,6 +128,7 @@ func to_warrior(side: int, rules: CampaignRules = null, javelins := 1) -> Warrio
 	w.is_banner = is_banner
 	w.is_horn = is_horn
 	w.drill = drill.duplicate()
+	w.fury = traits.has("berserk")
 	if rules != null:
 		w.wound = current_wound(rules)
 	return w

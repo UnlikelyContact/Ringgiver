@@ -373,6 +373,17 @@ var objective_attacker_shields := 2
 ## the patch than the defender at the end of this round; otherwise the
 ## defender has held it.
 var objective_ford_rounds := 16
+# --- The fury and the holmgang (way.gd, scenario.gd) ------------------------
+## A berserk (Warrior.fury) strikes this much better while half his breath
+## or more is left, feels no wound while it lasts, and is this much worse
+## once it has left him. Enemies at arm's length of a man in the fury lose
+## heart each round.
+var fury_bonus := 2
+var fury_spent_penalty := 1
+var morale_fury_near := -1
+## A holmgang ends at first blood: the first man WOUNDED or worse has lost.
+var duel_first_blood: CombatTypes.Wound = CombatTypes.Wound.WOUNDED
+
 # --- Drill (formation_template.gd, custom_shout.gd) -------------------------
 ## Drill points at which a man knows a learned shape fully (Warrior.drill,
 ## from Man.drill; CampaignRules.drill_points_full is the same number on

@@ -55,11 +55,12 @@ static func complete(rules: WorldRules, world: World, band: Band, contract: Dict
 		FactionAI.shift(world, fid, FactionAI.BAND, -rules.contract_fail_relation_hit)
 		log.append("the band fails %s: %s" % [who, contract.text])
 		return
-	band.silver += contract.pay
+	var pay := roundi(float(contract.pay) * float(band.gift("contract_pay", 1.0)))
+	band.silver += pay
 	band.fame += contract.fame
-	band.rank_progress += rules.rank_progress_per_contract
+	band.rank_progress += rules.rank_progress_per_contract * int(band.gift("rank_progress", 1))
 	FactionAI.shift(world, fid, FactionAI.BAND, rules.contract_relation_gain)
-	log.append("%s pays the band %d oz and speaks well of it (%s)" % [who, contract.pay, contract.kind])
+	log.append("%s pays the band %d oz and speaks well of it (%s)" % [who, pay, contract.kind])
 
 
 ## The highest rank whose threshold the band's progress has reached (for the

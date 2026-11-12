@@ -69,6 +69,11 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 				delta += rules.morale_leader_near
 		if is_flanked(grid, w):
 			delta += rules.morale_flanked
+		# A berserk in his fury at arm's length takes the heart out of a man.
+		for e in grid.adjacent_warriors(w.pos):
+			if e.side != w.side and e.is_active() and e.in_fury(rules):
+				delta += rules.morale_fury_near
+				break
 		# Heart comes from the man at your shoulder: no shield-friend beside
 		# him in his line, and a man feels alone whoever is milling about. A
 		# friend straight ahead or at his back is company too: a file on the

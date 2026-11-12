@@ -11,6 +11,9 @@ var factions := {}  # id -> Faction (Module L)
 var timeline_state := {}  # event id -> true once fired
 var chronicle: PackedStringArray = []
 var year := 866
+## A number of this world's own, so that what is drawn from a place and a
+## year (a dispute at a farm) differs from one saga to the next.
+var salt := 0
 
 
 static func build_norway(rules: WorldRules, p_year := 866) -> World:
@@ -24,6 +27,7 @@ static func build_norway(rules: WorldRules, p_year := 866) -> World:
 		p.kind = d.kind
 		p.pos = d.pos
 		p.wealth = d.wealth
+		p.base_wealth = d.wealth
 		p.defenses = d.defenses
 		p.faction_id = d.get("faction", "")
 		p.family = d.get("family", "")

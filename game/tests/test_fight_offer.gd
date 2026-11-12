@@ -60,7 +60,7 @@ func test_fading_away_costs_honor_not_luck_and_no_blood() -> void:
 	var men := c.band.fighters().size()
 	var honor := c.band.honor
 	var luck := c.band.luck
-	var o := c.offer_fight("outlaws", CombatTypes.Tier.GREEN, 20, false)
+	var o := c.offer_fight("outlaws", CombatTypes.Tier.GREEN, men, false)
 	assert_true(o.report.has("text") and o.report.text.begins_with("Your scout counts"), o.report.get("text", ""))
 	var res := c.resolve_offer(o, FightOffer.Choice.FADE_AWAY)
 	assert_true(res == null, "no fight")
@@ -68,6 +68,10 @@ func test_fading_away_costs_honor_not_luck_and_no_blood() -> void:
 	assert_eq(c.band.luck, luck, "no luck lost")
 	assert_eq(c.band.honor, honor - c.rules.honor_withdrew, "honor lost")
 	assert_eq(c.tally.faded, 1)
+	# From a fight at long odds there is no shame in it.
+	var o2 := c.offer_fight("levy", CombatTypes.Tier.GREEN, men * 2, false)
+	c.resolve_offer(o2, FightOffer.Choice.FADE_AWAY)
+	assert_eq(c.band.honor, honor - c.rules.honor_withdrew, "twice their number: no honor lost for leaving")
 
 
 func test_each_answer_builds_its_fight() -> void:

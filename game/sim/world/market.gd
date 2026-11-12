@@ -24,6 +24,23 @@ static func _price_at(rules: WorldRules, place: Place, good: WorldTypes.Good, st
 	return maxi(1, roundi(float(rules.base_price[good]) * factor * scarcity))
 
 
+## What this band pays here: the price and the middlemen's spread, less
+## its `trade_edge` gift (never under the price itself). Rations at a farm
+## are sold at the farm's price.
+static func buy_price(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good) -> int:
+	if not place.has_market:
+		return price(rules, place, good)
+	var over := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)))
+	return maxi(1, ceili(float(price(rules, place, good)) * (1.0 + over) - 0.0001))
+
+
+## What this band is paid here: the price less the spread, plus its
+## `trade_edge` gift (never over the price itself).
+static func sell_price(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good) -> int:
+	var under := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)))
+	return maxi(0, floori(float(price(rules, place, good)) * (1.0 - under) + 0.0001))
+
+
 ## Free cargo room: the ship's hold, or what the men can carry without one.
 static func cargo_room(rules: WorldRules, band: Band) -> int:
 	var cap: int = band.ship.cargo_capacity(rules) if band.ship != null else rules.no_ship_cargo
@@ -46,7 +63,7 @@ static func buy(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Go
 			break
 		if not farm and cargo_room(rules, band) <= 0:
 			break
-		var p := price(rules, place, good)
+		var p := buy_price(rules, place, band, good)
 		if band.silver < p:
 			break
 		band.silver -= p
@@ -56,6 +73,8 @@ static func buy(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Go
 			band.food += 1
 		else:
 			band.cargo[good] = int(band.cargo.get(good, 0)) + 1
+			var basis: Array = band.bought.get(good, [0, 0])
+			band.bought[good] = [int(basis[0]) + 1, int(basis[1]) + p]
 		bought += 1
 	if bought > 0:
 		if farm:
@@ -76,13 +95,30 @@ static func sell(rules: WorldRules, place: Place, band: Band, good: WorldTypes.G
 	var n := mini(units, int(band.cargo.get(good, 0)))
 	var earned := 0
 	for i in n:
-		earned += price(rules, place, good)
+		# The unit goes onto the stall first and is paid for at the price it
+		# then stands at: the same price a buyer would pay to take it back,
+		# so selling and buying back is never a gain.
 		place.stock[good] = int(place.stock.get(good, 0)) + 1
+		earned += sell_price(rules, place, band, good)
 	if n > 0:
 		band.cargo[good] = int(band.cargo[good]) - n
 		if band.cargo[good] <= 0:
 			band.cargo.erase(good)
 		band.silver += earned
+		# The margin on what was bought (not on loot) is the trader's deed.
+		var basis: Array = band.bought.get(good, [0, 0])
+		var of_bought := mini(n, int(basis[0]))
+		if of_bought > 0:
+			var cost := int(round(float(basis[1]) * of_bought / float(basis[0])))
+			var margin := int(round(float(earned) * of_bought / float(n))) - cost
+			band.bought[good] = [int(basis[0]) - of_bought, int(basis[1]) - cost]
+			if int(band.bought[good][0]) <= 0:
+				band.bought.erase(good)
+			band.trade_margin += maxi(0, margin)
+			var deeds: int = band.trade_margin / rules.deed_trade_margin
+			if deeds > 0:
+				band.trade_margin -= deeds * rules.deed_trade_margin
+				Way.add_deed(band, Way.Id.TRADER, deeds)
 		log.append("sold %d %s at %s for %d oz" % [n, WorldTypes.GOOD_NAMES[good], place.display_name, earned])
 	return earned
 

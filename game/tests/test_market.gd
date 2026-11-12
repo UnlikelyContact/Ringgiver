@@ -55,9 +55,15 @@ func test_cargo_capacity_and_silver_limit_buying() -> void:
 	var walker := Band.new()
 	walker.silver = 1000
 	assert_eq(Market.buy(r, kaupang, walker, G.FURS, 20, log), r.no_ship_cargo, "no ship: what men can carry")
+	# A stranger pays the middlemen a tenth over the price (5 oz for a 4 oz
+	# fur); a man with the trader's edge pays the price itself.
 	var poor := _band(9)
-	assert_eq(Market.buy(r, World.build_norway(r).place("kaupang"), poor, G.FURS, 20, log), 2, "4 + 4 oz, then too poor")
-	assert_eq(poor.silver, 1)
+	assert_eq(Market.buy(r, World.build_norway(r).place("kaupang"), poor, G.FURS, 20, log), 1, "5 oz, then too poor")
+	assert_eq(poor.silver, 4)
+	var trader := _band(9)
+	trader.gifts = {"trade_edge": r.market_spread}
+	assert_eq(Market.buy(r, World.build_norway(r).place("kaupang"), trader, G.FURS, 20, log), 2, "4 + 4 oz, then too poor")
+	assert_eq(trader.silver, 1)
 
 
 func test_farms_sell_only_food_and_buy_nothing() -> void:

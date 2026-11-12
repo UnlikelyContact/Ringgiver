@@ -70,7 +70,18 @@ func start(origin: CampaignTypes.Origin, leader_name: String, followers: int) ->
 		if Potential.is_coal_biter(rules, m):
 			tally.coal_biters += 1
 	band.log("%s gathers %d men and swears them to his service" % [leader.display_name, followers])
+	_arm_new_men()
 	_name_second_if_needed()
+
+
+## A fresh start in one of the ways of life (Way): its origin, followers,
+## silver and gifts, and the leader's own bent. The ship and what the way
+## knows of the map are given by Journey.setup, once there is a world.
+func start_as(way: int, leader_name: String) -> void:
+	var d := Way.def(way)
+	start(d.origin, leader_name, int(d.followers))
+	Way.apply(band, way)
+	band.log("%s takes up the life of a %s" % [leader_name, str(d.name).to_lower()])
 
 
 func run_years(n: int) -> void:
@@ -184,40 +195,69 @@ func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, at
 	var scout := Scouting.pick_scout(band.fighters(rules))
 	var wits := scout.stat(CombatTypes.Stat.WITS) if scout != null else 1
 	var tier := scout.tier if scout != null else CombatTypes.Tier.GREEN
+	# Foresight (the law-wise man's gift): his scouts count true, and he is
+	# never caught on the march.
+	var foresight: bool = band.gift("foresight", false)
+	if foresight:
+		wits = 10
+		tier = CombatTypes.Tier.VETERAN
 	var sr := SimRng.new(o.seed_value).fork("scout")
 	# Only a band that comes to you can be caught on the march, by you or
 	# the other way about; your own raid is your own doing.
 	if not at_sea and not cornered and not attacking:
 		o.we_know_first = Scouting.spots_first(sr.fork("first"), rules, wits, tier)
-		if not o.we_know_first:
+		if not o.we_know_first and not foresight:
 			o.they_know_first = sr.fork("caught").randf() < rules.caught_chance
 	o.report = Scouting.report(sr.fork("report"), rules, wits, tier, o)
 	last_offer = o
 	return o
 
 
-## Answers the offer. FADE_AWAY: no fight; the band withdrew (Leader
-## bookkeeping, no luck lost, honor lost) and null comes back. Otherwise
-## the fight is built from the choice (Scenario: the open field, the river
-## bank, an ambush either way) with the band's men as side 0, fought by the
-## leader AIs, and its consequences applied: growth, wounds, deaths, bonds,
-## luck, fame, plunder, succession.
+## Answers the offer with the leader AIs fighting it out. FADE_AWAY: no
+## fight; the band withdrew (`fade`) and null comes back. Otherwise
+## `build_fight`, the battle run to its end, and `conclude_fight`.
 func resolve_offer(offer: FightOffer, choice: int) -> BattleResult:
-	if offer.they_know_first:
-		choice = FightOffer.Choice.TAKE_THE_FIELD
-	elif not offer.allows(choice):
-		choice = FightOffer.Choice.TAKE_THE_FIELD
+	choice = settle_choice(offer, choice)
+	if choice == FightOffer.Choice.FADE_AWAY:
+		fade(offer)
+		return null
+	var built := build_fight(offer, choice)
+	var battle: Battle = built.battle
+	var result := battle.run()
+	conclude_fight(offer, built, result)
+	return result
+
+
+## The choice as it will be taken: no choice when they saw you first, and
+## the field when the offer does not allow what was asked.
+func settle_choice(offer: FightOffer, choice: int) -> int:
+	if offer.they_know_first or not offer.allows(choice):
+		return FightOffer.Choice.TAKE_THE_FIELD
+	return choice
+
+
+## The band declines the fight: it costs honor, never luck or blood.
+func fade(offer: FightOffer) -> void:
+	tally.faded += 1
+	log.append("%s: %s, %s: the band fades away" % [cal.describe(), offer.kind, offer.brief()])
+	# Our strength over theirs, as Leader.on_battle reads it.
+	var odds := float(offer.our_men) / maxf(1.0, float(offer.enemy_size))
+	Leader.on_battle(rules, band, false, true, odds, log, BattleResult.Outcome.WITHDREW)
+
+
+## Builds the fight the choice makes (Scenario: the open field, the river
+## bank, an ambush either way; the flat deck at sea) with the band's men
+## as side 0 and leader AIs on both sides, and returns Scenario's
+## dictionary with `fighters`, `choice` and `odds` added. Nothing is fought:
+## run `built.battle` (or hand it to the battle view, clearing side 0's AI)
+## and give the result to `conclude_fight`.
+func build_fight(offer: FightOffer, choice: int) -> Dictionary:
+	choice = settle_choice(offer, choice)
 	# The days between fights mend a turn; then the men who can stand.
 	band.mend(rules.mend_between_fights)
 	var fighters := band.fighters(rules)
 	if fighters.size() > MAX_FIGHTERS:
 		fighters = fighters.slice(0, MAX_FIGHTERS)
-	var odds := float(offer.enemy_size) / maxf(1.0, fighters.size())
-	if choice == FightOffer.Choice.FADE_AWAY:
-		tally.faded += 1
-		log.append("%s: %s, %s: the band fades away" % [cal.describe(), offer.kind, offer.brief()])
-		Leader.on_battle(rules, band, false, true, odds, log, BattleResult.Outcome.WITHDREW)
-		return null
 	if offer.they_know_first:
 		tally.caught += 1
 	elif choice == FightOffer.Choice.LAY_AMBUSH:
@@ -250,20 +290,58 @@ func resolve_offer(offer: FightOffer, choice: int) -> BattleResult:
 	battle.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE if ours_aggressive else LeaderAI.Doctrine.STEADY))
 	if offer.they_know_first or choice == FightOffer.Choice.WAIT_FOR_THEM:
 		battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
-	var result := battle.run()
+	built.fighters = fighters
+	built.choice = choice
+	built.odds = float(fighters.size()) / maxf(1.0, float(offer.enemy_size))  # ours over theirs
+	return built
+
+
+## A holmgang: the leader alone against `opponent`, to first blood
+## (Scenario.build_duel). Returns the same dictionary as `build_fight`,
+## with `duel` true; `conclude_fight` takes it with a null offer.
+func build_duel(opponent: Warrior, seed_in: int) -> Dictionary:
+	tally.battles += 1
+	tally.duels = tally.get("duels", 0) + 1
+	var fighters: Array[Man] = [band.leader]
+	var ours: Array[Warrior] = [band.leader.to_warrior(0, rules, 0)]
+	var theirs: Array[Warrior] = [opponent]
+	var built := Scenario.build_duel(seed_in, combat_rules, ours, theirs)
+	(built.battle as Battle).set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
+	built.fighters = fighters
+	built.choice = FightOffer.Choice.TAKE_THE_FIELD
+	built.odds = 1.0
+	built.duel = true
+	built.seed_value = seed_in
+	return built
+
+
+## What the fight left: growth, wounds, deaths, loot, a man who asks to
+## join (Aftermath); grief and oaths (Bonds); luck, fame and the flat
+## plunder of a win (Leader, not for a duel); succession if the leader
+## fell. Returns Aftermath's dictionary (`lines` reads it out).
+func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) -> Dictionary:
+	var battle: Battle = built.battle
+	var fighters: Array[Man] = built.fighters
+	var ours: Array[Warrior] = built.ours
+	var enemy: Array[Warrior] = built.theirs
+	var is_duel: bool = built.get("duel", false)
 	if debug_battles:
 		battle_logs.append(battle.log.duplicate())
 	var won := result.winner == 0
 	var outcome := result.outcome(0)
-	var kind := offer.kind
-	var enemy_size := offer.enemy_size
-	var enemy_tier := offer.enemy_tier
-	log.append("%s: %s (%s) against %d %s men: %s (%s)" % [cal.describe(), kind, FightOffer.CHOICE_NAMES[choice] if not offer.they_know_first else "caught on the march",
-			enemy_size, CombatTypes.TIER_NAMES[enemy_tier], result.summary(), result.outcome_text(0)])
+	var seed_in: int = built.get("seed_value", offer.seed_value if offer != null else 0)
+	if is_duel:
+		log.append("%s: holmgang against %s: %s" % [cal.describe(), enemy[0].display_name, result.outcome_text(0)])
+	else:
+		log.append("%s: %s (%s) against %d %s men: %s (%s)" % [cal.describe(), offer.kind,
+				FightOffer.CHOICE_NAMES[built.choice] if not offer.they_know_first else "caught on the march",
+				offer.enemy_size, CombatTypes.TIER_NAMES[offer.enemy_tier], result.summary(), result.outcome_text(0)])
 
 	# Growth, wounds, deaths, loot, a man who asks to join.
-	var told := Aftermath.apply(rules, band, ours, result, SimRng.new(seed_in).fork("aftermath"), not offer.at_sea, log)
+	var on_land: bool = not is_duel and not offer.at_sea
+	var told := Aftermath.apply(rules, band, ours, result, SimRng.new(seed_in).fork("aftermath"), on_land, log)
 	tally.recruits += told.joined.size()
+	_arm_new_men()
 	var survivors: Array[Man] = []
 	var fallen: Array[Man] = []
 	for m in fighters:
@@ -288,18 +366,48 @@ func resolve_offer(offer: FightOffer, choice: int) -> BattleResult:
 			band.remove_man(m)
 
 	# Luck, reputation, plunder.
-	Leader.on_battle(rules, band, won, true, odds, log, outcome)
-	if won:
+	if not is_duel:
+		Leader.on_battle(rules, band, won, true, built.odds, log, outcome)
+	if won and not is_duel:
 		_summer_wins += 1
 		tally.wins += 1
-		band.silver += rules.plunder_per_win
-		Loyalty.share_plunder(rules, band, rules.plunder_per_win, rules.fair_leader_share, log)
+		var flat := rules.plunder_per_win if world == null else rules.plunder_per_win_world
+		band.silver += flat
+		Loyalty.share_plunder(rules, band, flat, rules.fair_leader_share, log)
 		for m in band.living_men():
 			if m.ambition == CampaignTypes.Ambition.SILVER or m.ambition == CampaignTypes.Ambition.FAME:
 				Loyalty.ambition_progress(rules, band, m, rules.ambition_per_win, log)
 	if band.leader != null and not band.leader.alive:
 		succession("battle")
-	return result
+	return told
+
+
+## Gives every man who has no place in the line yet one: a shield-bearer,
+## a spearman of the second rank or a bowman, whichever the band is
+## shortest of against `Scenario.band_split` (two thirds shields). A man
+## keeps the place he was given.
+func _arm_new_men() -> void:
+	var men := band.fighters()
+	var have := [0, 0, 0]
+	for m in men:
+		if m.armed or m == band.leader:
+			have[int(m.role)] += 1
+	if band.leader != null:
+		band.leader.armed = true
+	for m in men:
+		if m.armed:
+			continue
+		var want := Scenario.band_split(have[0] + have[1] + have[2] + 1, combat_rules)
+		var role: CombatTypes.Role = CombatTypes.Role.SHIELD
+		var short: int = int(want[0]) - int(have[0])
+		for r: int in [CombatTypes.Role.SPEAR, CombatTypes.Role.MISSILE]:
+			var lack: int = int(want[r]) - int(have[r])
+			if lack > short:
+				short = lack
+				role = r as CombatTypes.Role
+		m.role = role
+		m.armed = true
+		have[int(role)] += 1
 
 
 func _settle_vow() -> void:
@@ -407,6 +515,7 @@ func _thaw() -> void:
 			break
 		var m := Recruits.random(rng.fork("recruit:%d:%d" % [cal.year, i]), rules, band.next_id())
 		band.add_man(m)
+		_arm_new_men()
 		tally.recruits += 1
 		if Potential.is_coal_biter(rules, m):
 			tally.coal_biters += 1

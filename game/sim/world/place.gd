@@ -9,6 +9,8 @@ var region: WorldTypes.Region = WorldTypes.Region.VIKEN
 var kind: WorldTypes.PlaceKind = WorldTypes.PlaceKind.FARMSTEAD
 var pos := Vector2.ZERO
 var wealth := 30
+## What the place is worth left in peace: it mends toward this each year.
+var base_wealth := 30
 var defenses := 1
 var alertness := 0
 var faction_id := ""

@@ -43,6 +43,28 @@ var rank_progress := 0
 var outlawry: WorldTypes.Outlawry = WorldTypes.Outlawry.NONE
 var outlaw_until := 0
 
+## The way the leader lives (Way.Id, -1 for none), the edges it gives
+## (name -> value, read through `gift`), and the deeds done in each way
+## (Way.Id -> points), which are what the saga names him by.
+var way := -1
+var gifts := {}
+var deeds := {}
+## Families who owe the leader friendship for his counsel (family -> year):
+## they stand with him at the Thing.
+var friends := {}
+## Place id -> the year counsel was last given, a verse recited, a man
+## challenged there: once a year each.
+var counselled := {}
+var versed := {}
+var challenged := {}
+var championed := {}
+var raided := {}
+## Place id -> how many verses its lord has heard from the leader.
+var verses_heard := {}
+## What the band paid for the cargo it bought: Good -> [units, ounces],
+## and the margin made on it not yet counted as a trader's deed.
+var bought := {}
+var trade_margin := 0
 ## The band's own shouts (CustomShout) and the learned shape it drills in
 ## winter ("" for none; Winter.default_plan reads it).
 var custom_shouts: Array[CustomShout] = []
@@ -110,6 +132,11 @@ func hurt(rules: CampaignRules) -> Array[Man]:
 		if m.too_hurt_to_fight(rules):
 			out.append(m)
 	return out
+
+
+## An edge of the leader's way, or `default` without it.
+func gift(name: String, default: Variant = 0) -> Variant:
+	return gifts.get(name, default)
 
 
 ## How well the band knows a learned shape, 0 to 1: the mean of its

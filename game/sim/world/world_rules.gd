@@ -67,6 +67,10 @@ var region_factor := {
 	WorldTypes.Region.VIKEN: {WorldTypes.Good.IRON: 0.7, WorldTypes.Good.SOAPSTONE: 0.7},
 	WorldTypes.Region.EAST: {WorldTypes.Good.SILK: 0.4, WorldTypes.Good.FURS: 2.5},
 }
+## What a market's middlemen take: a stranger buys this much over the
+## price and sells this much under it. A trader's `trade_edge` gift cancels
+## it (he deals at the price itself), so no round trip is ever free silver.
+var market_spread := 0.1
 var stock_baseline := 20
 var price_floor := 0.5
 var price_ceiling := 3.0
@@ -287,3 +291,87 @@ var iceland_land_claim := 3
 var land_food_per_unit := 10
 var land_silver_per_unit := 5
 var pass_years_interrupts := ["feud_attack", "summons", "spine", "son_of_age", "vow_due"]
+
+# --- Ways of life (callings.gd, journey.gd, way.gd) --------------------------
+## Counsel: the leader's Wits + 2d6 + his `law` gift against this; a Thing
+## site is harder by `counsel_thing_harder` and pays double. Success: the
+## fee (`counsel_fee` + the place's wealth over `counsel_wealth_per_oz`,
+## times his `counsel_fee` gift), honor, the lord's goodwill and the
+## family's friendship (a supporter at the Thing, `friend_support` each).
+## A miss by `counsel_bad_miss` or more costs honor. Once a year a place.
+## A place has a dispute worth a stranger's counsel in this share of years
+## (a Thing site always has cases).
+var counsel_dispute_chance := 0.35
+var counsel_difficulty := 11
+var counsel_thing_harder := 1
+var counsel_fee := 8
+var counsel_wealth_per_oz := 10
+var counsel_honor := 2
+var counsel_relation := 3
+var counsel_bad_miss := 4
+var counsel_bad_honor := 1
+var counsel_days := 3
+var friend_support := 1
+## A verse before a lord: Wits + 2d6 + fame over `verse_fame_per_point` +
+## the `verse` gift against this. Success: a ring worth `verse_ring` + the
+## hall's wealth over `verse_wealth_per_oz` (times the `verse_gift` gift),
+## fame and the lord's goodwill. A bad miss costs fame. Once a year a hall.
+## A lord who has heard a man's praise before is harder to please by
+## `verse_heard_harder` for each time: a skald must find new halls.
+var verse_difficulty := 11
+var verse_heard_harder := 2
+var verse_fame_per_point := 25
+var verse_ring := 6
+var verse_wealth_per_oz := 10
+var verse_fame := 1
+var verse_relation := 6
+var verse_bad_miss := 4
+var verse_days := 2
+## Holmgang: the stake is this share of the place's wealth (a hall's
+## champion fights for less of more). A challenge without a feud behind it
+## is overbearing and costs honor; with one, a win settles the feud. A man
+## may pay half the stake rather than fight a challenger with `dread`.
+## The loser pays `holmgang_ransom` to leave the island alive.
+## A man beaten for his goods without cause may take up a feud for it.
+var holmgang_stake := {WorldTypes.PlaceKind.FARMSTEAD: 0.5, WorldTypes.PlaceKind.HALL: 0.3}
+var holmgang_honor := 3
+var holmgang_feud_chance := 0.3
+## An overbearing challenge from a man whose honor is already this low is
+## more than the district will bear: he is outlawed for a time.
+var holmgang_outlaw_honor := 15
+var holmgang_win_fame := 2
+var holmgang_ransom := 12
+var holmgang_days := 2
+var holmgang_relation_hit := 8
+## Deeds counted toward a way (Way.add_deed).
+var deed_raid := 3
+var deed_strandhogg := 1
+var deed_rob := 2
+var deed_contract := 2
+var deed_case := 3
+var deed_counsel := 2
+var deed_settle := 1
+var deed_duel := 3
+var deed_duel_yielded := 2
+var deed_verse := 2
+## A trader's deed for every so many ounces of margin on goods he bought.
+var deed_trade_margin := 10
+## What the wait costs when a man listens for rumours instead of acting.
+var listen_days := 5
+## A place plundered or taxed by the sword mends this share of the way back
+## to what it was worth, each year.
+var wealth_mend := 0.34
+## A lord has one piece of work for a man in a year.
+var work_per_hall := 1
+## A bully: in this share of years a berserk has called a farmer out for
+## his land, and a man may stand in the farmer's place. He fights a
+## seasoned berserk; a win is worth `champion_fee` + the farm's wealth over
+## `champion_wealth_per_oz`, honor, fame and the family's friendship.
+var bully_chance := 0.25
+var champion_fee := 10
+var champion_wealth_per_oz := 4
+var champion_honor := 4
+var champion_fame := 3
+var deed_champion := 2
+## Days the crew needs to mend one point of the ship's damage on a beach.
+var ship_mend_days := 4

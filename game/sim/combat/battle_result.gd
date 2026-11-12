@@ -9,7 +9,7 @@ var rounds := 0
 ## (nobody standing, or broken), a side drew off the field in order, both
 ## drew off (a stall), the objective decided it, the light failed, or a
 ## side withdrew by its leader's choice before the lines met again.
-enum End { ROUT, DRAW_OFF, STALL, OBJECTIVE, TIMEOUT, WITHDRAWAL }
+enum End { ROUT, DRAW_OFF, STALL, OBJECTIVE, TIMEOUT, WITHDRAWAL, FIRST_BLOOD }
 var how: End = End.STALL
 ## What the fight was for a side, best to worst: the ladder the campaign
 ## reads (concept.md, "Picking your fights"). A rout is worth more than a

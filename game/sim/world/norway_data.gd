@@ -46,6 +46,9 @@ const PLACES := [
 	# The west
 	{"id": "orkney", "name": "Orkney", "region": R.WEST, "kind": K.HALL, "pos": Vector2(0, 50), "wealth": 40, "defenses": 3, "faction": "orkney", "family": "the Orkney jarls"},
 	{"id": "dublin", "name": "Dublin", "region": R.WEST, "kind": K.TOWN, "pos": Vector2(-30, 80), "wealth": 85, "defenses": 7, "faction": "dublin_norse", "family": "Ivar's kin", "market": true},
+	# The raider's prey: rich, and no king's levy near.
+	{"id": "iona", "name": "the monastery on Iona", "region": R.WEST, "kind": K.FARMSTEAD, "pos": Vector2(-16, 62), "wealth": 75, "defenses": 0, "faction": "", "family": "the monks of Iona"},
+	{"id": "northumbria", "name": "the Northumbrian coast", "region": R.WEST, "kind": K.FARMSTEAD, "pos": Vector2(8, 74), "wealth": 60, "defenses": 1, "faction": "", "family": "the Northumbrians"},
 	{"id": "iceland", "name": "the Iceland land-take", "region": R.ICELAND, "kind": K.FARMSTEAD, "pos": Vector2(-40, 10), "wealth": 10, "defenses": 0, "faction": "", "family": "", "open_year": 874},
 ]
 
@@ -63,6 +66,7 @@ const LANES := [
 	["kaupang", "gotland", 7, true], ["gotland", "birka", 3, true],
 	["avaldsnes", "orkney", 4, true], ["giske", "orkney", 5, true], ["orkney", "dublin", 4, true],
 	["orkney", "iceland", 7, true],
+	["orkney", "iona", 3, true], ["iona", "dublin", 3, false], ["orkney", "northumbria", 4, true],
 ]
 
 const FACTIONS := [

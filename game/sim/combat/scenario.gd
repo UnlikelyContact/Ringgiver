@@ -166,6 +166,26 @@ static func build(name: String, seed_in: int, rules: CombatRules, vary := true, 
 			"title": field.title() if field != null else "", "band": band, "size": size}
 
 
+## The holmgang: two men on a small bare field, three rows apart, the
+## fight over at first blood (Battle.duel). `ours` and `theirs` are one
+## man each. Returns the same dictionary as `build`, `field_name` "holmgang".
+static func build_duel(seed_in: int, rules: CombatRules, ours: Array[Warrior], theirs: Array[Warrior]) -> Dictionary:
+	var size := Vector2i(9, 8)
+	var battle := Battle.new(rules, seed_in, BattleGrid.new(size.x, size.y))
+	battle.duel = true
+	var centre := size.x / 2
+	BandFactory.deploy_formation(battle.grid, ours, BattleGrid.from_offset(centre, 5), Vector2i(0, -1), rules, FormationTemplate.line())
+	BandFactory.deploy_formation(battle.grid, theirs, BattleGrid.from_offset(centre, 2), Vector2i(0, 1), rules, FormationTemplate.line())
+	battle.add_band(ours)
+	battle.add_band(theirs)
+	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
+	for side in 2:
+		battle.result.started[side] = battle.active(side).size()
+	return {"battle": battle, "ours": ours, "theirs": theirs, "doctrine": LeaderAI.Doctrine.AGGRESSIVE, "offset": 0,
+			"objective": null, "field": null, "field_name": "holmgang", "title": "Holmgang",
+			"band": 1, "size": size}
+
+
 ## The ambush: see `build`. Returns the same dictionary, `field_name`
 ## "ambush", `title` "Ambush", `objective` null. `ambushed` is the side
 ## caught on the march: 1 (theirs, the fight you chose) or 0 (yours: you

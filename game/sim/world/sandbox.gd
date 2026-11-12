@@ -180,11 +180,9 @@ static func _do_raid(c: Campaign, rng: SimRng, target: Place, log: PackedStringA
 	var won := result != null and result.winner == 0
 	var take := Raiding.after_raid(rng.fork("after"), c.world_rules, c.world, c.band, target, won, log)
 	if won:
-		c.band.silver += take.get("silver", 0)
-		c.band.captives += take.get("captives", 0)
-		for g in take.get("goods", {}):
-			c.band.cargo[g] = c.band.cargo.get(g, 0) + take.goods[g]
+		# Raiding.after_raid has put the silver, goods and captives aboard.
 		Loyalty.share_plunder(c.rules, c.band, take.get("silver", 0), c.rules.fair_leader_share, log)
+		Way.add_deed(c.band, Way.Id.VIKING, c.world_rules.deed_raid)
 		if target.faction_id != "":
 			FactionAI.shift(c.world, target.faction_id, "band", -c.world_rules.raid_relation_hit)
 	c.cal.advance_days(c.world_rules.raid_days)
@@ -448,6 +446,8 @@ static func year_end(c: Campaign, log: PackedStringArray) -> void:
 	for p in c.world.places.values():
 		p.alertness = maxi(0, p.alertness - c.world_rules.alertness_decay_per_year)
 		p.captives_sold = 0
+		if p.wealth < p.base_wealth:
+			p.wealth += ceili(float(p.base_wealth - p.wealth) * c.world_rules.wealth_mend)
 	for r in c.world.region_alertness:
 		c.world.region_alertness[r] = maxi(0, c.world.region_alertness[r] - c.world_rules.alertness_decay_per_year)
 	if Outlawry.is_outlawed(c.band, c.cal) and c.band.outlawry == WorldTypes.Outlawry.LESSER \

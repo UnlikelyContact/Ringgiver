@@ -24,6 +24,8 @@ var _contact_logged := {}  # side -> bool, so "in contact" is logged once per sp
 var _wall_step := {}  # side -> true when the leader asks his wall to step forward this round
 var _volleyed := {}  # side -> true once the wall has paused to throw its spears
 var _routing_logged := {}  # side -> true while its wall is making for a way round
+## A holmgang: the fight ends at first blood (CombatRules.duel_first_blood).
+var duel := false
 var _custom_called := {}  # side -> CustomShout given this round
 var _follow_up := {}  # side -> the order a custom shout gives next round
 ## The side taken by surprise (an ambush), or -1, and the last round its
@@ -60,6 +62,11 @@ func add_band(band: Array[Warrior]) -> void:
 
 func set_ai(side: int, ai: LeaderAI) -> void:
 	_ai[side] = ai
+
+
+## Hands a side back to a person: its leader AI no longer shouts for it.
+func clear_ai(side: int) -> void:
+	_ai.erase(side)
 
 
 ## External (player) shout for the coming round.
@@ -683,6 +690,19 @@ func run_round() -> void:
 		if taken >= 0:
 			result.by_objective = true
 			_finish(taken, objective.reason, BattleResult.End.OBJECTIVE)
+			return
+	if duel:
+		# First blood ends a holmgang: the man blooded has lost. Both in the
+		# same round: the worse hurt; equally hurt, nobody's.
+		var hurt := [0, 0]
+		for w in warriors:
+			hurt[w.side] = maxi(hurt[w.side], int(w.wound))
+		if hurt[0] >= rules.duel_first_blood or hurt[1] >= rules.duel_first_blood:
+			if hurt[0] == hurt[1]:
+				_finish(-1, "both men are blooded: the holmgang is nobody's", BattleResult.End.FIRST_BLOOD)
+			else:
+				var loser := 0 if hurt[0] > hurt[1] else 1
+				_finish(1 - loser, "side %d is blooded: the holmgang is over" % loser, BattleResult.End.FIRST_BLOOD)
 			return
 	for side in 2:
 		var standing := 0

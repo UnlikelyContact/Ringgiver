@@ -72,6 +72,13 @@ var looted := false
 var kills := 0
 ## Drill points by learned shape name (Man.drill): how well he knows it.
 var drill := {}
+## A berserk: the fury is on him while his breath lasts (CombatRules.fury_*).
+var fury := false
+
+
+## Whether the fury is on him now: a berserk with half his breath or more.
+func in_fury(rules: CombatRules) -> bool:
+	return fury and breath * 2 >= max_breath(rules)
 
 
 ## How well he knows a shape, 0 to 1: full for a shape every leader knows,
@@ -173,6 +180,11 @@ func fatigue_penalty(rules: CombatRules) -> int:
 
 ## Combined roll penalty from wounds and fatigue (a positive number to subtract).
 func condition_penalty(rules: CombatRules) -> int:
+	if fury:
+		# In the fury he feels no wound and strikes harder; spent, he is weak.
+		if in_fury(rules):
+			return -rules.fury_bonus
+		return wound_penalty(rules) + fatigue_penalty(rules) + rules.fury_spent_penalty
 	return wound_penalty(rules) + fatigue_penalty(rules)
 
 

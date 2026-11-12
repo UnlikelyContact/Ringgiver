@@ -256,7 +256,7 @@ var luck_oath_broken := 3
 var honor_oath_broken := 25
 var fame_feast := 3
 ## Fame from victories (a win against long odds gives fame_long_odds instead).
-var fame_win := 2
+var fame_win := 1
 ## A rout is talked of more than a drive-off: this much fame on top.
 var fame_rout := 1
 ## Withdrawing in order before the lines meet again is a choice, not a
@@ -336,6 +336,9 @@ var enemy_size_min := 3
 var enemy_weaker_chance := 0.3
 var enemy_stronger_chance := 0.15
 var plunder_per_win := 30
+## On the map a fight pays what it was fought for (a raid's plunder, a
+## lord's fee, a bounty); the flat win is only what the dead carried.
+var plunder_per_win_world := 10
 var ambition_per_win := 15
 var vow_wins_needed := 2
 var grave_ale_ounces := 20

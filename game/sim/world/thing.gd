@@ -35,20 +35,21 @@ static func gather_support(rng: SimRng, rules: WorldRules, world: World, band: B
 			if String(fid) == their_faction:
 				continue
 			from_factions += _faction_support(rules, world.factions[fid])
-	c.supporters = from_fame + from_silver + brothers + from_factions
+	var from_friends: int = band.friends.size() * rules.friend_support
+	c.supporters = from_fame + from_silver + brothers + from_factions + from_friends
 	var wealth := family_place.wealth if family_place != null else 0
 	var spread := rng.randi_range(-rules.their_supporters_spread, rules.their_supporters_spread)
 	c.their_supporters = maxi(0, rules.their_supporters_base + wealth / rules.family_standing + spread)
 	c.their_armed = rules.family_armed_men
-	_say(c, log, "The band gathers %d supporters (%d for its fame, %d bought with %d oz, %d oath brothers, %d from friendly lords); %s bring %d." % [
-		c.supporters, from_fame, from_silver, spent, brothers, from_factions, c.against, c.their_supporters])
+	_say(c, log, "The band gathers %d supporters (%d for its fame, %d bought with %d oz, %d oath brothers, %d from friendly lords, %d friends won by counsel); %s bring %d." % [
+		c.supporters, from_fame, from_silver, spent, brothers, from_factions, from_friends, c.against, c.their_supporters])
 	return c.supporters
 
 
 ## Stage 2. The band's best Wits + 2d6 against the case's difficulty. A
 ## slip sinks the case; a hired law-man buys one reroll.
 static func procedure(rng: SimRng, rules: WorldRules, band: Band, c: ThingCase, log: PackedStringArray) -> bool:
-	var wits := best_wits(rules, band)
+	var wits := best_wits(rules, band) + int(band.gift("law", 0))
 	var difficulty: int = rules.procedure_difficulty.get(c.kind, 10)
 	var roll := wits + rng.roll_2d6()
 	var ok := roll >= difficulty

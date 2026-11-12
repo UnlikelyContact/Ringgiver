@@ -15,14 +15,19 @@ const REP_MAX := 100
 ## fame than an ordinary win. Hanging back costs luck and honor either way.
 ## `outcome` (BattleResult.Outcome, or -1 for the plain won/lost of old
 ## callers) is the ladder: a rout brings `fame_rout` on top; a withdrawal
-## costs `honor_withdrew` and no luck; both drawing off costs nothing.
+## costs `honor_withdrew` and no luck, and nothing at all when the odds
+## were long (below `long_odds`); both drawing off costs nothing.
 static func on_battle(rules: CampaignRules, band: Band, won: bool, led_from_front: bool,
 		odds: float, log: PackedStringArray, outcome := -1) -> void:
 	var who := _name(band)
 	var O := BattleResult.Outcome
 	if outcome == O.WITHDREW:
-		_add(band, 0, 0, -rules.honor_withdrew)
-		log.append("%s did not care to fight that day, and led his men off" % who)
+		if odds < rules.long_odds:
+			# Nobody blames a man for not fighting at such odds.
+			log.append("%s would not fight at such odds, and no one thought the less of him" % who)
+		else:
+			_add(band, 0, 0, -rules.honor_withdrew)
+			log.append("%s did not care to fight that day, and led his men off" % who)
 	elif outcome == O.BOTH_DREW_OFF:
 		log.append("%s and his enemy drew off, and neither had the better of it" % who)
 	elif won and odds < rules.long_odds:
