@@ -23,6 +23,7 @@ func _init() -> void:
 		var over := 0
 		var drowned := 0
 		var head_down := 0
+		var mine_down := 0
 		for i in n:
 			var sc := _build(name, seed_in + i, rules)
 			var b: Battle = sc.battle
@@ -39,12 +40,15 @@ func _init() -> void:
 			var hl: Warrior = b.sworn_leader(1)
 			if hl != null and hl.is_down():
 				head_down += 1
+			var ml: Warrior = b.sworn_leader(0)
+			if ml != null and ml.is_down():
+				mine_down += 1
 			if show_log:
 				print("--- %s seed %d: %s" % [name, seed_in + i, r.summary()])
 				for line in b.log:
 					print(line)
-		print("%-13s n=%d  ours %2d  theirs %2d  draw %2d  mean rounds %.1f  taken %d  overboard %d drowned %d  their head down %d  %s" % [
-				name, n, wins[1], wins[2], wins[0], float(rounds) / n, taken, over, drowned, head_down, str(hows)])
+		print("%-13s n=%d  ours %2d  theirs %2d  draw %2d  mean rounds %.1f  taken %d  overboard %d drowned %d  leaders down: theirs %d ours %d  %s" % [
+				name, n, wins[1], wins[2], wins[0], float(rounds) / n, taken, over, drowned, head_down, mine_down, str(hows)])
 	quit()
 
 

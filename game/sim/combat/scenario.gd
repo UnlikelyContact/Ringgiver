@@ -449,7 +449,7 @@ static func build_hall_defence(seed_in: int, rules: CombatRules, bands := {}, bu
 			CombatTypes.Tier.BLOODED, rules, CombatTypes.Armor.NONE, 16, 101))
 	var hall := _night_hall(battle, rules, seed_in)
 	var c: int = hall.c
-	var our_row: int = int(hall.front_row) - (1 if how == "bar" else 3)
+	var our_row: int = int(hall.front_row) - (2 if how == "bar" else 4)
 	var their_row := our_row - rules.hall_attack_distance
 	var objective := Objective.new(Objective.Kind.FIRE if burning else Objective.Kind.THE_HALL, 1, seed_in, rules)
 	if burning:
@@ -594,7 +594,7 @@ static func _nearest_free(g: BattleGrid, from: Vector2i) -> Vector2i:
 ## narrow deck `deck_rows` men abreast (RAIL along both gunwales, planks
 ## between, the stem and stern drawn in), open sea (SEA) all round and
 ## between them but for two gangways where the hulls touch, at the bow and
-## the waist (BRIDGE: planks). The walls stand along their own rails facing
+## the waist (BRIDGE: planks, `deck_gangway` hexes wide). The walls stand along their own rails facing
 ## each other over the water and meet only at the gangways, so the ground
 ## is a few men wide there and depth tells. A man thrown back with the sea
 ## behind him goes over the side, and a broken man at the rail jumps
@@ -636,10 +636,10 @@ static func build_deck(seed_in: int, rules: CombatRules, bands := {}, attacker :
 			g.set_terrain(x, CombatTypes.Terrain.RAIL if outer or inner else CombatTypes.Terrain.FLAT)
 			(hulls[side] as Array).append(x)
 	# The gangways: planks over the water where the hulls touch, at the bow
-	# and amidships, two hexes each.
+	# and amidships, `deck_gangway` hexes each.
 	var gangways: Array[Vector2i] = []
 	for col in [3, 2 + length / 2]:
-		for k in 2:
+		for k in rules.deck_gangway:
 			var x := BattleGrid.from_offset(col + k, gap)
 			g.set_terrain(x, CombatTypes.Terrain.BRIDGE)
 			gangways.append(x)

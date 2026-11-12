@@ -473,7 +473,9 @@ func progress(battle: Battle) -> String:
 		Kind.CARGO:
 			return "cargo %d/%d" % [men_on(battle, attacker), ships_men]
 		Kind.DECK:
-			return "their deck %d/%d" % [men_aboard(battle, attacker, defender()), men_aboard(battle, defender(), defender())]
+			return "boarders %d, her crew %d" % [men_aboard(battle, attacker, defender()), men_aboard(battle, defender(), defender())]
+		Kind.PLUNDER:
+			return "in the hall %d/%d" % [men_on(battle, attacker), cells.size()]
 		Kind.FIRE:
 			return "fire %d/%d" % [fire_count, fire_rounds]
 		_:
@@ -500,6 +502,10 @@ func check(battle: Battle) -> int:
 func _decide(battle: Battle) -> int:
 	if kind == Kind.FIRE:
 		return _decide_fire(battle)
+	if kind == Kind.DECK:
+		var cleared := _decide_deck(battle)
+		if cleared >= 0:
+			return cleared
 	if clock_start < 0:
 		if battle.round >= approach_rounds:
 			reason = "side %d never comes on: %s is side %d's" % [attacker, name, defender()]
@@ -528,20 +534,25 @@ func _decide(battle: Battle) -> int:
 						else "side %d breaks into the hall and carries off the silver" % attacker
 				taken = true
 				return attacker
-		Kind.DECK:
-			for owner in [defender(), attacker]:
-				var other: int = 1 - owner
-				if men_aboard(battle, owner, owner) == 0 and men_aboard(battle, other, owner) > 0:
-					reason = "side %d clears the deck of side %d's ship from stem to stern" % [other, owner]
-					ship_taken = owner
-					taken = other == attacker
-					return other
 	if left <= 0:
 		reason = time_up_reason()
 		if kind == Kind.PLUNDER and _standing(battle, attacker) > _standing(battle, defender()):
 			reason = "the neighbours are coming: side %d takes what it can carry and goes" % attacker
 			return attacker
 		return defender()
+	return -1
+
+
+## The ship fight: a ship whose deck holds none of her own crew standing
+## and some of the enemy is taken, cleared from stem to stern; -1 else.
+func _decide_deck(battle: Battle) -> int:
+	for owner in [defender(), attacker]:
+		var other: int = 1 - owner
+		if men_aboard(battle, owner, owner) == 0 and men_aboard(battle, other, owner) > 0:
+			reason = "side %d clears the deck of side %d's ship from stem to stern" % [other, owner]
+			ship_taken = owner
+			taken = other == attacker
+			return other
 	return -1
 
 

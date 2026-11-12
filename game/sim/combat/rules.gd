@@ -488,6 +488,9 @@ var deck_rows := 4
 var deck_men_per_column := 2.0
 var deck_min_length := 9
 var deck_max_length := 16
+## Each of the two gangways (at the bow and amidships) is this many hexes
+## wide: the front a boarding party has.
+var deck_gangway := 3
 ## A man overboard drowns this often; a man in mail far more often, one in
 ## leather a little more (CombatTypes.Armor). Otherwise he swims and is
 ## hauled out.
