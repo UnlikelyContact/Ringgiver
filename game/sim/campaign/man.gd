@@ -65,6 +65,14 @@ var is_leader := false
 var is_banner := false
 var is_horn := false
 var joined_year := 0
+## A man hired for pay in summer: his wage every WorldRules.wage_days (0 for
+## a sworn man, who takes his share of the plunder), when he was last paid
+## (the summer's clock), and what kind of man he was for hire. A man lent
+## by a house (`lent_by`, its name) goes home at the summer's end.
+var wage := 0
+var paid_until := 0.0
+var hire_kind := ""
+var lent_by := ""
 
 
 func stat(s: CombatTypes.Stat) -> int:
