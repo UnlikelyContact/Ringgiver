@@ -434,7 +434,10 @@ func _status() -> void:
 		_rank_box.add_child(UiTheme.chip(str(s.rank).capitalize(), Palette.UI_GOLD))
 	UiTheme.set_stat(_stats.silver, "%d oz" % int(s.silver))
 	UiTheme.set_stat(_stats.food, str(int(s.food)), Palette.UI_BLOOD.lightened(0.2) if int(s.food) < int(s.men) * 3 else Palette.UI_TEXT)
-	UiTheme.set_stat(_stats.men, ("%d +%d hurt" % [s.men, s.hurt]) if int(s.hurt) > 0 else str(int(s.men)))
+	# The cell is a few letters wide: the hurt are shown as "+1" in the
+	# blood colour, and by name under "Your men".
+	UiTheme.set_stat(_stats.men, ("%d+%d" % [s.men, s.hurt]) if int(s.hurt) > 0 else str(int(s.men)),
+			Palette.UI_BLOOD.lightened(0.3) if int(s.hurt) > 0 else Palette.UI_TEXT)
 	UiTheme.set_stat(_stats.fame, str(int(s.fame)))
 	UiTheme.set_stat(_stats.honor, str(int(s.honor)))
 	UiTheme.set_stat(_stats.luck, str(int(s.luck)))

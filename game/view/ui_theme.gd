@@ -660,6 +660,33 @@ static func modal(host: Control, title := "", max_width := 760.0) -> UiModal:
 	return m
 
 
+## Lists a thumb can drag. Called for every node as it enters the tree
+## (view/audio.gd, the one autoload that sees them all): a button or a
+## panel inside a scroll passes the touch on to it, so a drag that begins
+## on a row scrolls the list (the engine drops the row's press when the
+## scroll begins), and the scroll forgives a thumb's tremble before it
+## takes a tap for a drag. Without this a list made of rows cannot be
+## dragged at all on a phone: a button keeps the touch to itself.
+const SCROLL_DEADZONE := 10
+static func touch_scroll(n: Node) -> void:
+	if n is ScrollContainer:
+		(n as ScrollContainer).scroll_deadzone = SCROLL_DEADZONE
+		# What the rows pass on ends here, not at whatever lies behind the list.
+		(n as ScrollContainer).mouse_filter = Control.MOUSE_FILTER_STOP
+		return
+	if not (n is BaseButton or n is PanelContainer):
+		return
+	var c := n as Control
+	if c.mouse_filter != Control.MOUSE_FILTER_STOP:
+		return
+	var p := n.get_parent()
+	while p != null:
+		if p is ScrollContainer:
+			c.mouse_filter = Control.MOUSE_FILTER_PASS
+			return
+		p = p.get_parent()
+
+
 ## A scroll that only scrolls up and down, round `child`.
 static func scroll(child: Control) -> ScrollContainer:
 	var s := ScrollContainer.new()

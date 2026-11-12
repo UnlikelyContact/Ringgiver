@@ -406,6 +406,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _on_node_added(n: Node) -> void:
+	UiTheme.touch_scroll(n)  # rows in a list let a thumb drag the list
 	if n is BaseButton and not (n as BaseButton).pressed.is_connected(_knock):
 		(n as BaseButton).pressed.connect(_knock)
 

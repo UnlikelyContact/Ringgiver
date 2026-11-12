@@ -55,6 +55,8 @@ static func spring(j: Journey) -> void:
 	var band := j.c.band
 	var wr := j.c.world_rules
 	_fate_comes(j)
+	if j.first_summer():
+		return  # the first days are the burning's and the king's word: no dream on top of them
 	var r := Landtake.fork(j, "omen")
 	if r.randf() >= wr.spring_omen_chance:
 		return
