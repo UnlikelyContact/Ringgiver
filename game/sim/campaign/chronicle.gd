@@ -293,6 +293,7 @@ static func _chapter_paragraphs(band: Band, ch: Dictionary, index: int, kin: Str
 			continue
 		var sentences := PackedStringArray()
 		var joined := 0
+		var sworn := 0
 		for l in _lines_of(band, ch, y):
 			var t := l.substr(("%d: " % y).length())
 			if kin != "":
@@ -301,8 +302,16 @@ static func _chapter_paragraphs(band: Band, ch: Dictionary, index: int, kin: Str
 				if t.contains(" swears to ") or t.contains("asked to join"):
 					joined += 1
 				continue
-			if sentences.size() < 7:
-				sentences.append(_sentence(t))
+			# Oath-brotherhoods among the men are told as a count, not pair by
+			# pair (a year could have seven of them); the leader's own is told.
+			if t.contains("mixed their blood under the turf") and not t.begins_with(name + " and "):
+				sworn += 1
+				continue
+			var said := _sentence(t)
+			if sentences.size() < 7 and not sentences.has(said):
+				sentences.append(said)
+		if sworn > 0:
+			sentences.append("%s of his men mixed their blood under the turf that year." % Journey._cap("%s %s" % [_number(sworn), "pair" if sworn == 1 else "pairs"]))
 		if joined > 0:
 			sentences.append("%s came to his benches that year." % Journey._cap("%s %s" % [_number(joined), "man" if joined == 1 else "men"]))
 		if not sentences.is_empty():

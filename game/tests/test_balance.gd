@@ -348,3 +348,20 @@ func test_the_hall_warns_when_the_band_outgrows_its_boat() -> void:
 	j.winter_choose("goto:%d" % WinterHall.STEPS.find("men"))
 	var notes := " ".join(j.winter_state().notes)
 	assert_true(notes.contains("will not put to sea"), notes)
+
+
+func test_the_saga_tells_oaths_by_the_count_and_no_line_twice() -> void:
+	var j := Journey.begin(3, "younger_son", "Egil")
+	var band := j.c.band
+	var y := j.c.cal.year
+	for pair in [["Ketil", "Orm"], ["Hrafn", "Bard"], ["Ulf", "Grim"]]:
+		band.log("%s and %s mixed their blood under the turf and swore to avenge each other." % pair)
+	band.log("Egil and Ketil mixed their blood under the turf and swore to avenge each other.")
+	band.log("Egil heeded an omen.")
+	band.log("Egil heeded an omen.")
+	var text := str(Chronicle.saga(band).text)
+	assert_true(text.contains("Three pairs of his men mixed their blood"), text)
+	assert_true(text.contains("Egil and Ketil mixed their blood"), "his own oath is told")
+	assert_eq(text.count("heeded an omen"), 1, "a line is told once a year")
+	assert_true(not text.contains("Hrafn and Bard"))
+	assert_true(y > 0)
