@@ -33,10 +33,14 @@ func _init() -> void:
 			var start := j.c.cal.year
 			var silver0 := j.c.band.silver
 			var guard := 0
+			var samples := PackedStringArray()
 			while not j.c.over and j.c.cal.year < start + span and guard < span + 5:
 				guard += 1
 				var before := j.c.cal.year
 				JourneyBot.play_year(j, way)
+				if (j.c.cal.year - start) % 5 == 0:
+					samples.append("%d: %d men, %d oz, luck %d, land %d%s%s" % [j.c.cal.year, j.c.band.living_men().size(), j.c.band.silver, j.c.band.luck,
+							j.c.band.land, ", Iceland" if j.c.band.settled_iceland else "", ", outlaw" if Outlawry.is_outlawed(j.c.band, j.c.cal) else ""])
 				if j.c.cal.year == before and not j.c.over:
 					stalls += 1
 					print("   STALL seed %d year %d day %d: decisions %d (%s) fight %s winter %s" % [seed_in + i, before, j.c.cal.day,
@@ -56,7 +60,8 @@ func _init() -> void:
 					seed_in + i, years, j.c.cal.year, chs.size(), int(j.c.tally.get("years_passed", 0)), j.c.band.silver,
 					float(j.c.band.silver - silver0) / lived, j.c.band.living_men().size(),
 					("ENDED " + str(ending.get("kind", j.c.over_reason))) if j.c.over else "going on", ""])
-			print("      " + "; ".join(names) + "   stops " + str(j.c.tally.get("years_stops", {})))
+			print("      " + "; ".join(names) + "   stops " + str(j.c.tally.get("years_stops", {})) + "   answered by the hall's word " + str(j.c.tally.get("years_answered", {})))
+			print("      by five years: " + " | ".join(samples))
 			if verbose:
 				print(j.saga().text)
 		print("let %d: mean year reached %.1f, generations %.1f, years let pass %.1f, silver %+.0f a year, stalls %d" % [

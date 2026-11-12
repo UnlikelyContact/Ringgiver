@@ -584,6 +584,12 @@ func record_killing(rules: WorldRules, band: Band, killer: String, dead: String,
 func year_end(rng: SimRng, rules: WorldRules, world: World, band: Band) -> PackedStringArray:
 	var out := PackedStringArray()
 	var year := world.year
+	if band != null:
+		for name in band.standing.keys():
+			var v := int(band.standing[name])
+			if absi(v) > rules.standing_fade_from:
+				var edge := rules.standing_fade_from * signi(v)
+				band.standing[name] = v - roundi(float(v - edge) * rules.standing_fade)
 	# Heads grow old and die; their sons follow them.
 	var deaths := 0
 	for name in names():

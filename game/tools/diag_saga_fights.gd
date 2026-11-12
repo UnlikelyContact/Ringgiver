@@ -13,7 +13,7 @@ func _init() -> void:
 	var only := args[2] if args.size() > 2 else ""
 	var show_log := args.size() > 3 and args[3] == "log"
 	var rules := CombatRules.new()
-	for name in ["plunder", "deck_board", "deck_boarded", "hall_bar", "hall_meet", "hall_wait", "fire_bar", "fire_meet", "burning", "breakout"]:
+	for name in ["plunder", "deck_board", "deck_boarded", "hall_bar", "hall_meet", "hall_wait", "deck_board_edge", "fire_bar", "fire_meet", "fire_bar_even", "fire_meet_even", "burning", "breakout"]:
 		if only != "" and only != name:
 			continue
 		var wins := [0, 0, 0]
@@ -69,12 +69,20 @@ static func _build(name: String, s: int, rules: CombatRules) -> Dictionary:
 			var sc2 := Scenario.build_deck(s, rules, _bands(s, rules, [8, 2, 2], [8, 2, 2]), 0)
 			sc2.we_come = true
 			return sc2
+		"deck_board_edge":
+			# The player's case: boarding with half as many men again.
+			var sc4 := Scenario.build_deck(s, rules, _bands(s, rules, [8, 2, 2], [6, 1, 1]), 0)
+			sc4.we_come = true
+			return sc4
 		"deck_boarded":
 			return Scenario.build_deck(s, rules, _bands(s, rules, [8, 2, 2], [8, 2, 2]), 1, LeaderAI.Doctrine.AGGRESSIVE)
 		"hall_bar", "hall_meet", "hall_wait":
 			return Scenario.build_hall_defence(s, rules, _bands(s, rules, [6, 2, 1], [5, 1, 0], CombatTypes.Tier.BLOODED), false, name.trim_prefix("hall_"))
 		"fire_bar", "fire_meet":
 			return Scenario.build_hall_defence(s, rules, _bands(s, rules, [6, 2, 1], [8, 2, 0], CombatTypes.Tier.VETERAN), true, name.trim_prefix("fire_"))
+		"fire_bar_even", "fire_meet_even":
+			# The same night between equal bands of green men.
+			return Scenario.build_hall_defence(s, rules, _bands(s, rules, [6, 2, 1], [6, 2, 1], CombatTypes.Tier.GREEN), true, name.trim_prefix("fire_").trim_suffix("_even"))
 		"burning":
 			return Scenario.build_hall_burning(s, rules, _bands(s, rules, [8, 2, 1], [6, 2, 0]))
 		"breakout":

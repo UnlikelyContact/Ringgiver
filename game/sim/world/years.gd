@@ -19,6 +19,17 @@ extends RefCounted
 ## the passed years told is left in `Journey.years_told` for the screen.
 ## Sandbox.pass_years (the AI's) is a plainer cousin: it stops on any feud.
 
+## The standing word left with the hall for offers that come while the
+## years pass (WinterHall.years_offers): wergild offered for a feud and a
+## friend's daughter offered in marriage are answered so and the years go
+## on; only a call for help from his own kin, an attack, a matter of the
+## realm, his children and his vow still stop them. "" stops for each.
+const OFFERS := {
+	"": "Send for him for every offer.",
+	"accept": "Take fair wergild and a friend's daughter.",
+	"refuse": "Let every offer lie unanswered.",
+}
+
 ## Why the years stopped, in words for the screen.
 const STOP_WORDS := {
 	"spine": "Great matters are afoot in the land, and he is needed.",
@@ -68,6 +79,11 @@ static func spring_rows(j: Journey, h: WinterHall, s: Dictionary) -> void:
 	h.years = n if why == "" else 0
 	s.rows.append(h._row("Let the years pass", detail, ("%d years" % n) if n > 1 else ("one year" if n == 1 else ""), btns))
 	if h.years > 0:
+		var obtns: Array = []
+		for k in ["", "accept", "refuse"]:
+			obtns.append(h._btn("offers:" + k, {"": "Ask me", "accept": "Accept fair offers", "refuse": "Refuse offers"}[k], true, h.years_offers == k))
+		s.rows.append(h._row("Offers while he sits at home", "Wergild offered and a friend's daughter: %s A burned hall's wergild is never taken unasked." % str(OFFERS[h.years_offers]),
+				"", obtns))
 		for line in preview(j, h.years):
 			s.notes.append(line)
 		s.next_label = "Let the years pass"
@@ -98,6 +114,8 @@ static func choose(j: Journey, h: WinterHall, key: String, arg: String) -> void:
 			h.step_down = "" if h.step_down == arg else arg
 			if h.step_down != "":
 				h.years = 0
+		"offers":
+			h.years_offers = arg if OFFERS.has(arg) else ""
 
 
 ## What `n` years at home would mean, in a few lines (an estimate: what
@@ -175,7 +193,7 @@ static func after_winter(j: Journey, h: WinterHall) -> bool:
 		return false
 	if h.years <= 0:
 		return false
-	let_pass(j, h.years, h.lodging)
+	let_pass(j, h.years, h.lodging, h.years_offers)
 	return true
 
 
@@ -183,7 +201,7 @@ static func after_winter(j: Journey, h: WinterHall) -> bool:
 ## pays his lodging each of them), and
 ## begins the summer of the year they stop at. Returns what they told (also
 ## left in `j.years_told`): {from, to, passed, stopped, why, lines, tidings}.
-static func let_pass(j: Journey, n: int, lodging := "home") -> Dictionary:
+static func let_pass(j: Journey, n: int, lodging := "home", offers := "") -> Dictionary:
 	var c := j.c
 	var band := c.band
 	var from := c.cal.year
@@ -195,7 +213,7 @@ static func let_pass(j: Journey, n: int, lodging := "home") -> Dictionary:
 		var y := c.cal.year
 		band.year = y
 		c.world.year = y
-		var stop := _stop(j, y)
+		var stop := _stop(j, y, offers)
 		if not stop.is_empty():
 			told.stopped = str(stop.kind)
 			told.why = str(stop.get("text", STOP_WORDS.get(stop.kind, "")))
@@ -237,7 +255,7 @@ static func let_pass(j: Journey, n: int, lodging := "home") -> Dictionary:
 
 ## Whether the year `y` needs him, before its summer is let pass: {} when
 ## it does not, else {kind, text, ...}.
-static func _stop(j: Journey, y: int) -> Dictionary:
+static func _stop(j: Journey, y: int, offers := "") -> Dictionary:
 	var c := j.c
 	var band := c.band
 	var rules := c.rules
@@ -272,11 +290,16 @@ static func _stop(j: Journey, y: int) -> Dictionary:
 		var wanted: Array[Dictionary] = []
 		for d in asks:
 			# Wergild offered, a friend's daughter, or a call for help from a
-			# house bound to his by blood, marriage or fostering will not wait;
-			# other houses' asks can go unheard for a year.
-			var bound := not (band.house_ties.get(str(d.house), []) as Array).is_empty()
-			if str(d.ask) == "compensation" or (str(d.ask) == "marry" and Families.is_friend(wr, band, str(d.house))) \
-					or (str(d.ask) == "help" and bound):
+			# house bound to his by blood or marriage will not wait (unless he
+			# left word for offers, OFFERS); a fostering house's call and other
+			# houses' asks can go unheard for a year.
+			var ties: Array = band.house_ties.get(str(d.house), [])
+			var bound := ties.has("kin") or ties.has("marriage")
+			var offer := str(d.ask) == "compensation" or (str(d.ask) == "marry" and Families.is_friend(wr, band, str(d.house)))
+			if offer and offers != "" and not (str(d.ask) == "compensation" and str(d.house) == band.vengeance):
+				_standing_answer(j, d, offers)
+				continue
+			if offer or (str(d.ask) == "help" and bound):
 				wanted.append(d)
 		if not wanted.is_empty():
 			return {"kind": "house", "asks": wanted, "text": "In %d %s sends word." % [y, str(wanted[0].house)]}
@@ -287,6 +310,28 @@ static func _stop(j: Journey, y: int) -> Dictionary:
 	if band.silver + band.land * wr.land_silver_per_unit < cost:
 		return {"kind": "stores"}
 	return {}
+
+
+## An offer answered by the word left with the hall: wergild taken (or let
+## lie, the feud still open), a marriage made or declined with thanks.
+static func _standing_answer(j: Journey, d: Dictionary, offers: String) -> void:
+	var band := j.c.band
+	var who := band.leader.display_name
+	match str(d.ask):
+		"compensation":
+			if offers == "accept":
+				j._answer_house(d, "take")
+			else:
+				band.log("%s let the wergild offered by %s lie unanswered" % [who, str(d.house)])
+		"marry":
+			if offers == "accept" and band.wife == "":
+				j._answer_house(d, "accept")
+				band.log("%s married into %s while he sat at home" % [who, str(d.house)])
+			else:
+				j._answer_house(d, "decline")
+	var answered: Dictionary = j.c.tally.get("years_answered", {})
+	answered[str(d.ask)] = int(answered.get(str(d.ask), 0)) + 1
+	j.c.tally["years_answered"] = answered
 
 
 ## One summer at home and its winter.

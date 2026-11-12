@@ -360,6 +360,7 @@ static func pardon(j: Journey, line: String) -> void:
 	band.log(line)
 	lift(band, j.said)
 	tick(j)
+	Landtake.outlaw_land(j)
 
 
 ## What a fight did for an outlaw: hunters beaten (the price goes up with
@@ -484,6 +485,20 @@ static func _king_of(j: Journey, p: Place) -> Faction:
 	return f
 
 
+## Where a stand-in outlaw goes to make his peace: the nearest king's hall he
+## knows in Norway while he has the silver for the pardon (and some over)
+## or the men to offer his sword; "" when he has neither or none is near.
+static func pardon_road(j: Journey, bent: int) -> String:
+	var band := j.c.band
+	if int(band.law.get("pardon_asked", -1)) == j.c.cal.year:
+		return ""
+	var can_pay := band.silver >= pardon_price(j.c.world_rules, band) + 30
+	var can_serve := band.fighters(j.c.rules).size() >= 6 and bent != Way.Id.TRADER
+	if not can_pay and not can_serve:
+		return ""
+	return JourneyBot._nearest(j, func(q: Place) -> bool: return reaches(q) and _king_of(j, q) != null)
+
+
 ## A stand-in player's answer to the law's questions (none of its own: the
 ## outlaw's choices are deeds, JourneyBot.law_deed).
 static func bot_deed(j: Journey, bent: int, ids: Dictionary) -> String:
@@ -494,6 +509,11 @@ static func bot_deed(j: Journey, bent: int, ids: Dictionary) -> String:
 		return "pardon_silver"
 	if ids.has("pardon_service") and band.fighters(j.c.rules).size() >= 6 and bent != Way.Id.TRADER:
 		return "pardon_service"
+	# Not at a king's hall where he may ask it: on to the nearest.
+	var here_king := j.here() != null and _king_of(j, j.here()) != null and reaches(j.here())
+	var go := pardon_road(j, bent) if not here_king else ""
+	if go != "" and go != band.location and JourneyBot._go(j, go):
+		return "*"
 	if band.outlawry == WorldTypes.Outlawry.FULL or (int(band.law.get("exile_by", 9999)) <= j.c.cal.year and j.days_left() < 60):
 		if in_realm(j) and ids.has("west_passage") and j.sail_speed() <= 0.0:
 			return "west_passage"

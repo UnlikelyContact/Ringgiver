@@ -64,6 +64,38 @@ static func add_holding(band: Band, at: String, units: int, how: String, year: i
 	return h2
 
 
+## A full outlaw's land in Norway (docs/design/notes/balance.md): with a
+## wife, her kin hold it for him (it yields him nothing until his peace is
+## made, then it is his again); without, the king takes it. Land abroad
+## and in Iceland is his still. A pardon gives back what kin held.
+static func outlaw_land(j: Journey) -> void:
+	var band := j.c.band
+	var full := band.outlawry == WorldTypes.Outlawry.FULL
+	for h in band.holdings.duplicate():
+		var p := j.c.world.place(str(h.at))
+		if p == null or not Families.HOME_REGIONS.has(p.region):
+			continue
+		if not full:
+			if bool(h.get("held", false)):
+				h.erase("held")
+				band.land += int(h.units)
+				j._say("With his peace made, the land at %s is %s's again; his wife's kin give it back." % [p.display_name, band.leader.display_name])
+			continue
+		if bool(h.get("held", false)):
+			continue
+		if band.wife != "":
+			h["held"] = true
+			band.land -= int(h.units)
+			j._say("An outlaw holds no land in Norway: his wife's kin take the land at %s into their keeping until his peace is made." % p.display_name)
+		else:
+			band.holdings.erase(h)
+			band.land -= int(h.units)
+			if band.hall_at == str(h.at):
+				band.hall_at = str(band.holdings[0].at) if not band.holdings.is_empty() else ""
+			j._say("An outlaw holds no land in Norway: the king's men take the land at %s." % p.display_name)
+			band.log("%s's land at %s was forfeit" % [band.leader.display_name, p.display_name])
+
+
 ## Land given to the band on the map: the holding, the telling, the men
 ## who wanted land the nearer it.
 static func grant(j: Journey, at: String, units: int, how: String, name := "") -> Dictionary:
@@ -127,6 +159,8 @@ static func thaw_yield(rules: WorldRules, band: Band, year: int, log: PackedStri
 	var food := 0
 	var silver := 0
 	for h in band.holdings:
+		if bool(h.get("held", false)):
+			continue  # kept by kin while he is an outlaw
 		var u := float(h.units) * share
 		if year - int(h.year) >= rules.odal_years or bool(h.get("odal", false)):
 			u *= 1.0 + rules.odal_bonus
@@ -325,6 +359,7 @@ static func spring(j: Journey) -> void:
 	var wr := j.c.world_rules
 	var r := fork(j, "land_spring")
 	watch(j)
+	outlaw_land(j)
 	var liege := str(band.law.get("liege", ""))
 	if liege != "" and not j.first_summer() and not Outlawry.is_outlawed(band, j.c.cal):
 		var f: Faction = j.c.world.factions.get(liege, null)

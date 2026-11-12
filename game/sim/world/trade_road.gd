@@ -274,7 +274,9 @@ static func escort_offer(j: Journey) -> Dictionary:
 	if not cands.is_empty():
 		var to := cands[j._fork("escort_to").randi_range(0, cands.size() - 1)]
 		var d := j.days_to(to)
-		out = {"to": to, "pay": wr.escort_pay_base + roundi(wr.escort_pay_day * d), "days": ceili(d * wr.escort_slack) + 3}
+		# A guard nobody cares to cross is worth more (the berserk's dread).
+		var pay := roundi(float(wr.escort_pay_base + roundi(wr.escort_pay_day * d)) * float(j.c.band.gift("escort_pay", 1.0)))
+		out = {"to": to, "pay": pay, "days": ceili(d * wr.escort_slack) + 3}
 	j.life[key] = out
 	return out
 
@@ -289,7 +291,8 @@ static func check_escort(j: Journey) -> void:
 	if band.location == str(e.to):
 		band.silver += int(e.pay)
 		j._shift(str(e.family), wr.standing_rescued / 2)
-		Way.add_deed(band, Way.Id.TRADER, 1)
+		# A guard nobody cared to cross is told as the berserk's deed.
+		Way.add_deed(band, Way.Id.BERSERK if float(band.gift("escort_pay", 1.0)) > 1.0 else Way.Id.TRADER, 1)
 		j._say("The merchant comes safe to %s and pays %s %d oz for the guard." % [j.c.world.place(str(e.to)).display_name, band.leader.display_name, int(e.pay)])
 		end_escort(j)
 	elif j.roam.clock > float(e.by) or j.days_left() <= 0:

@@ -271,6 +271,19 @@ var omen_chance := 0.3
 var luck_omen := 1
 var luck_high := 7
 var luck_low := 3
+## Luck wanders (docs/design/notes/balance.md). A plain win at
+## `luck_crest` or more seldom adds luck (a man so lucky is expected to
+## win; `luck_crest_chance`); a win against the odds, a vow kept or a sign
+## heeded lifts it higher. Each thaw luck drifts a point toward `luck_start` from above
+## `luck_drift_high` or below `luck_drift_low`: what a year did not renew
+## is forgotten. Burning men in their hall costs `luck_burning`.
+var luck_crest := 7
+## At the crest a plain win still lifts luck now and then: this chance at
+## the crest, its square a point above, and so on.
+var luck_crest_chance := 0.25
+var luck_drift_high := 6
+var luck_drift_low := 4
+var luck_burning := 1
 var fame_per_recruit := 20
 
 # --- Drill (winter.gd, bridge.gd) ------------------------------------------
@@ -395,6 +408,25 @@ var challenge_stat_margin := 2
 var challenge_bond := 10
 var challenge_buyoff_ounces := 30
 var challenge_won_fame := 5
+## The heir's honest ways to meet the challenge (docs/design/notes/
+## balance.md): a champion of the band may stand for him on the island
+## (honor -`challenge_champion_honor`: men say he would not stand
+## himself); when `challenge_backing_share` of the men (his rival and his
+## oath brothers not counted) hold loyalty `challenge_backing_loyalty` or
+## more to a son of the blood, the challenger backs down before them
+## (loyalty -`challenge_backed_down`); and the price of his goodwill is
+## `challenge_buyoff_ounces` and `challenge_buyoff_per_tier` a tier,
+## times `challenge_buyoff_ambition` for what he wants (a man who wants
+## fame wants the seat itself).
+var challenge_champion_honor := 5
+var challenge_backing_loyalty := 60
+var challenge_backing_share := 0.6
+var challenge_backed_down := 10
+var challenge_buyoff_per_tier := 10
+var challenge_buyoff_ambition := {
+	CampaignTypes.Ambition.SILVER: 0.7, CampaignTypes.Ambition.FAME: 2.0, CampaignTypes.Ambition.LAND: 1.2,
+	CampaignTypes.Ambition.VENGEANCE: 1.0, CampaignTypes.Ambition.WIFE: 1.0, CampaignTypes.Ambition.HOME: 0.8,
+}
 
 # --- Campaign loop (Module I) -----------------------------------------------
 var battles_per_summer := 3
@@ -412,6 +444,17 @@ var vow_wins_needed := 2
 var grave_ale_ounces := 20
 var leader_start_bonus := 1
 var recruit_cap := 16
+## On the map the band's real ceiling is its benches and its thwarts
+## (Campaign.room, docs/design/notes/balance.md): the most men it can keep
+## is its hall's seats or its hull's crew, whichever is more, never under
+## `room_min` (a lord's or a host's benches take that many) nor over
+## `room_max` (a longship's crew). Men who would come beyond it are turned
+## away; `recruit_cap` is the plain campaign's ceiling without a map.
+var room_min := 8
+var room_max := 40
+## Below a hersir the ceiling is a snekkja's crew, whatever the benches:
+## no hull a karl can buy carries more, and a great band is a lord's.
+var room_max_karl := 24
 var old_leader_death_chance := 0.15
 
 # --- The winter hall, played (winter_hall.gd) --------------------------------
@@ -442,6 +485,11 @@ var fame_open_hand := 2
 var honor_open_hand := 1
 var miser_ounces := 1
 var miser_chest := 20
+## The benches judge by the chest (docs/design/notes/balance.md): no more is
+## expected than `miser_chest_share` of what it holds (a thin chest is
+## forgiven a thin Yule), and a man of great deeds does not take it ill to
+## be given nothing from a chest under `miser_chest`.
+var miser_chest_share := 0.1
 var loyalty_miser := 6
 var honor_miser := 2
 ## A man sent home for the winter does not eat at the band's board, cools

@@ -52,13 +52,14 @@ static func _captives_decision(j: Journey, place: Place, named: String) -> Dicti
 	var wr := j.c.world_rules
 	var n := band.captives
 	var house := place.family
-	var ransom := ransom_for(j, n, named != "")
+	# Their kin ransom their own people, not the rest of the summer's.
+	var ransom := ransom_for(j, _of_house(band, house), named != "")
 	var opts: Array[Dictionary] = []
 	if house != "":
 		opts.append({"id": "ransom", "label": "Send to their kin for ransom (%d oz)" % ransom,
 				"hint": "%s pay to have their people back, and think the better of you for it. Three days." % house})
 	opts.append({"id": "bound", "label": "Keep them bound for the market",
-			"hint": "Dublin pays %d a head, Hedeby and Birka %d. %s will not forgive their people sold abroad." % [wr.captive_price_dublin, wr.captive_price,
+			"hint": "Dublin pays %d a head, Hedeby and Birka %d, less for each the market has lately bought. Bound people must be watched and fed, slow the march and slip away; men think the less of a slaver. %s will not forgive their people sold abroad." % [wr.captive_price_dublin, wr.captive_price,
 					house if house != "" else "Their kin"]})
 	if not band.holdings.is_empty():
 		opts.append({"id": "thralls", "label": "Take them home as thralls",
@@ -102,9 +103,10 @@ static func _decide(j: Journey, d: Dictionary, id: String) -> void:
 	var who := band.leader.display_name
 	match id:
 		"ransom":
+			n = _of_house(band, house)
 			var silver := ransom_for(j, n, named != "")
 			band.silver += silver
-			band.captives = 0
+			band.captives -= n
 			band.law.erase("named")
 			_clear_from(band, house, n)
 			j._shift(house, wr.ransom_standing + (wr.ransom_standing if named != "" else 0))
@@ -117,6 +119,15 @@ static func _decide(j: Journey, d: Dictionary, id: String) -> void:
 			let_go(j)
 		_:
 			j._say("%s keeps the captives bound, for the market." % who)
+
+
+## How many of the captives held were taken from `house` (all of them when
+## the band has no count by house).
+static func _of_house(band: Band, house: String) -> int:
+	var from: Dictionary = band.law.get("captives_from", {})
+	if not from.has(house):
+		return band.captives
+	return clampi(int(from[house]), 0, band.captives)
 
 
 static func _clear_from(band: Band, house: String, n: int) -> void:
@@ -160,7 +171,7 @@ static func let_go(j: Journey) -> void:
 	band.law.erase("named")
 	band.law.erase("captives_from")
 	j._say("%s lets %d captives go home; they will speak of it." % [band.leader.display_name, n])
-	if band.living_men().size() < j.c.rules.recruit_cap:
+	if band.living_men().size() < j.c.room():
 		var r := Landtake.fork(j, "freed")
 		var m := Recruits.make(r, j.c.rules, CampaignTypes.Origin.FREEDMAN, 22, Recruits.NAMES[r.randi_range(0, Recruits.NAMES.size() - 1)], band.next_id())
 		m.loyalty = maxi(m.loyalty, 70)
@@ -168,6 +179,53 @@ static func let_go(j: Journey) -> void:
 		band.add_man(m)
 		j.c._arm_new_men()
 		j._say("One of them, %s, will not go home: he asks to follow the man who freed him." % m.display_name)
+
+
+## The days pass with captives held: the slave markets' glut mends a head
+## every `captive_mend_days`, and bound people slip away, the more when
+## there are too few men to watch them.
+static func _captives_tick(j: Journey, days: float) -> void:
+	var wr := j.c.world_rules
+	var mend := float(j.life.get("captive_mend", 0.0)) + days
+	while mend >= float(wr.captive_mend_days):
+		mend -= float(wr.captive_mend_days)
+		for id in wr.slave_markets:
+			var p := j.c.world.place(str(id))
+			if p != null and p.captives_sold > 0:
+				p.captives_sold -= 1
+	j.life["captive_mend"] = mend
+	var band := j.c.band
+	if band.captives <= 0:
+		return
+	var chance := wr.captive_flight_day * days
+	if band.captives > band.fighters(j.c.rules).size() * wr.captives_per_guard:
+		chance *= 2.0
+	var r := Landtake.fork(j, "flight")
+	var gone := 0
+	for i in band.captives:
+		if r.randf() < chance:
+			gone += 1
+	if gone <= 0:
+		return
+	var before := band.captives
+	band.captives -= gone
+	var from: Dictionary = band.law.get("captives_from", {})
+	for h in from.keys():
+		from[h] = int(floor(float(from[h]) * float(band.captives) / float(before)))
+	if band.captives <= 0:
+		band.law.erase("named")
+		band.law.erase("captives_from")
+	j._say("In the night %s of the captives slip their bonds and are gone." % (str(gone) if gone > 1 else "one"))
+
+
+## The march's pace with captives in tow: more of them than men slow it by
+## `captive_slow` a head over, to at least `captive_slow_floor`.
+static func captive_pace(j: Journey) -> float:
+	var wr := j.c.world_rules
+	var over := j.c.band.captives - j.c.band.fighters().size()
+	if over <= 0:
+		return 1.0
+	return maxf(wr.captive_slow_floor, 1.0 - wr.captive_slow * over)
 
 
 ## Sells the band's captives at a market that deals in people: the glut
@@ -191,6 +249,9 @@ static func sell(j: Journey, place: Place) -> int:
 	band.captives -= sold
 	band.silver += earned
 	band.law["sold"] = int(band.law.get("sold", 0)) + sold
+	band.law["sold_oz"] = int(band.law.get("sold_oz", 0)) + earned
+	if sold > 0:
+		band.honor = clampi(band.honor - ceili(float(sold) / maxf(1.0, wr.sell_honor_heads)), 0, 100)
 	var from: Dictionary = band.law.get("captives_from", {})
 	var houses: Array = from.keys()
 	houses.sort()
@@ -387,6 +448,7 @@ static func spring(j: Journey) -> void:
 ## While the band is away: a rising, when the unrest is at its worst and
 ## the watch too thin.
 static func tick(j: Journey, days: float) -> void:
+	_captives_tick(j, days)
 	var band := j.c.band
 	var wr := j.c.world_rules
 	if band.thralls.is_empty() or band.unrest < wr.unrest_revolt or band.holdings.is_empty():
@@ -509,7 +571,7 @@ static func bot(j: Journey, d: Dictionary, bent: int) -> String:
 			ids[str(o.id)] = true
 	match str(d.step):
 		"captives":
-			if bent == Way.Id.VIKING:
+			if bent == Way.Id.VIKING and JourneyBot.slaver(j):
 				return "bound"
 			if ids.has("thralls") and j.c.band.thralls.size() < 6:
 				return "thralls"

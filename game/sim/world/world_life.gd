@@ -397,7 +397,9 @@ static func meet(j: Journey, p: Roam.Party) -> bool:
 			var toll := toll_for(j)
 			j.decisions.append({"kind": "world", "what": "toll", "party": p, "toll": toll,
 					"text": "%s hail you: the king's waters are not crossed for nothing, they say, and want %d oz for your passage." % [Journey._cap(p.name), toll],
-					"options": [{"id": "pay", "label": "Pay %d oz" % toll, "enabled": j.c.band.silver >= toll}, {"id": "refuse", "label": "Refuse"}]})
+					"options": [{"id": "pay", "label": "Pay %d oz" % toll, "enabled": j.c.band.silver >= toll,
+							"hint": "The king thinks the better of you for it." if j.c.band.silver >= toll else "You have not the silver."},
+						{"id": "refuse", "label": "Refuse", "hint": "The king's men will remember it, and as often as not they come on."}]})
 			return true
 		"ship_thieves":
 			p.rest_until = j.roam.clock + 3.0
@@ -450,7 +452,7 @@ static func answer(j: Journey, d: Dictionary, id: String) -> bool:
 						band.cargo[g] = int(band.cargo.get(g, 0)) + n
 				var lines := "%s takes what the fight left" % who
 				var room := band.ship == null or not roam.afloat() or band.fighters().size() < band.ship.crew_capacity(wr)
-				if bool(lv.get("survivor", false)) and band.living_men().size() < j.c.rules.recruit_cap and room:
+				if bool(lv.get("survivor", false)) and band.living_men().size() < j.c.room() and room:
 					var m := Recruits.random(j._fork("survivor"), j.c.rules, band.next_id())
 					band.add_man(m)
 					j.c._arm_new_men()

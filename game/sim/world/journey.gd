@@ -23,7 +23,8 @@ const SPINE_LABELS := {"serve": "Serve him", "resist": "Resist him", "ignore": "
 	"back_eric": "Back Eric", "betray_eric": "Betray Eric", "acclaim": "Acclaim him",
 	"sail_iceland": "Make for Iceland", "send_settlers": "Let the men who want land go", "hear": "So be it"}
 ## The hulls a man can buy, smallest first.
-const HULLS := [WorldTypes.ShipKind.FAERING, WorldTypes.ShipKind.KARVE, WorldTypes.ShipKind.KNARR, WorldTypes.ShipKind.SNEKKJA]
+const HULLS := [WorldTypes.ShipKind.FAERING, WorldTypes.ShipKind.KARVE, WorldTypes.ShipKind.KNARR, WorldTypes.ShipKind.SNEKKJA,
+		WorldTypes.ShipKind.LONGSHIP]
 
 var c: Campaign
 var roam: Roam
@@ -69,6 +70,11 @@ var _was_at := ""  # the place the band was last seen to be at
 ## the offers rolled at each place, what was done where this year, the
 ## merchant under guard, the stolen ship, the watch on the beach.
 var life := {}
+## For tools (tools/saga_trace.gd): when on, every `act` is written to
+## `acts` as "id" or "id (not offered)" / "id (greyed)" when the id was not
+## among the enabled actions at that moment.
+var trace_acts := false
+var acts := PackedStringArray()
 
 
 ## A new saga: a man of the given origin (Origins key) and name, where his
@@ -488,6 +494,8 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 			_pass(float(wr.holmgang_days))
 		"champion":
 			var came := -1 if result == null or result.winner < 0 else (1 if won else 0)
+			if came == 0:
+				life["island_lost"] = c.cal.year  # the summer he was beaten on the island
 			Callings.after_champion(wr, c.world, c.band, ctx.place, came, said)
 			_pass(float(wr.holmgang_days))
 		"house_fight", "blood", "reckoning":
@@ -563,11 +571,68 @@ func _vengeance() -> void:
 	offer_ending("vengeance")
 
 
+## The burned hall's vengeance as it stands, for the screen (docs/design/
+## notes/balance.md): {owed: false} when none is owed; else {owed, house,
+## ours, theirs, ready (the Thing will hear it), short (spears still
+## wanted there), friends (houses that would send men), allies (houses
+## that would stand with them), could_win: [{house, men, standing, need}]
+## (their enemies not yet his friends: win them and they send men, or
+## take an ally of theirs away), reckoning_men (they would stand at their
+## hall), your_men, reckoning_ready (the band is a match for them there),
+## lines: what he still lacks, in words}.
+func vengeance_outlook() -> Dictionary:
+	var band := c.band
+	var fs := c.world.families if c.world != null else null
+	if band.vengeance == "" or fs == null or fs.house(band.vengeance) == null:
+		return {"owed": false}
+	var wr := c.world_rules
+	var name := band.vengeance
+	var men := band.fighters(c.rules).size()
+	var vb := fs.vengeance_backing(wr, band, name, men)
+	var t := fs.reckoning_terms(wr, band, name)
+	var short := maxi(0, ceili(float(vb.theirs) * wr.vengeance_backing_ratio) - int(vb.ours))
+	var could: Array[Dictionary] = []
+	var seen := {}
+	var foes := fs.enemies_of(name)
+	for a in fs.allies_of(name):
+		foes.append_array(fs.enemies_of(a))
+	for e in foes:
+		if e == name or seen.has(e) or Families.is_friend(wr, band, e) or Families.is_foe(wr, band, e) or fs.abroad(e):
+			continue
+		seen[e] = true
+		could.append({"house": e, "men": wr.friend_men_sent, "standing": Families.standing(band, e), "need": wr.standing_friend - Families.standing(band, e)})
+	var lines := PackedStringArray()
+	if bool(vb.ready):
+		lines.append("At the Thing you could bring %d men to their %d: %s must answer for the burning there." % [int(vb.ours), int(vb.theirs), name])
+	else:
+		lines.append("At the Thing you could bring %d men to their %d: %d more spears and they would have to answer." % [int(vb.ours), int(vb.theirs), short])
+	if not (t.allies as Array).is_empty():
+		lines.append("%s stand with them." % ", ".join(t.allies))
+	for d in could.slice(0, 3):
+		lines.append("%s are their enemies and would send %d men as your friends (standing %d, %d to go)." % [str(d.house), int(d.men), int(d.standing), int(d.need)])
+	var ready := int(t.men) <= men * wr.raid_odds_max
+	lines.append("At their hall they would stand %d men against your %d%s." % [int(t.men), men, ": you are a match for them" if ready else ""])
+	# A king who thinks well of his hersir may judge it (Journey._king_justice).
+	var best_king := -100
+	for f in c.world.factions.values():
+		if f.alive and f.kind == WorldTypes.FactionKind.KING:
+			best_king = maxi(best_king, FactionAI.relation(c.world, f.id, FactionAI.BAND))
+	var king_ready := band.rank >= wr.king_justice_rank and best_king >= wr.king_justice_relation
+	if king_ready:
+		lines.append("A king thinks well enough of you to judge the burning, if you ask it at his hall.")
+	elif best_king > -100:
+		lines.append("A king would judge it for his %s if he thought well of him (his regard %d of %d%s)." % [WorldTypes.RANK_NAMES[wr.king_justice_rank],
+				best_king, wr.king_justice_relation, "" if band.rank >= wr.king_justice_rank else "; you are not yet one"])
+	return {"owed": true, "house": name, "ours": int(vb.ours), "theirs": int(vb.theirs), "ready": bool(vb.ready), "short": short,
+		"friends": t.friends, "allies": t.allies, "could_win": could, "reckoning_men": int(t.men), "your_men": men,
+		"reckoning_ready": ready, "king_ready": king_ready, "lines": lines}
+
+
 # --- Going about ------------------------------------------------------------------
 
 ## Leagues a day on foot.
 func foot_speed() -> float:
-	return c.world_rules.foot_speed
+	return c.world_rules.foot_speed * Thralls.captive_pace(self)
 
 
 ## Leagues a day in the band's ship, or 0 when it has none it can use: no
@@ -789,6 +854,8 @@ func _weather(days: float) -> void:
 		band.known_places[best] = true
 		_look_about()
 		_was_at = band.location
+		# Ashore where the merchant he guards was bound: that guard is done.
+		TradeRoad.check_escort(self)
 
 
 ## Another party has come up with the band.
@@ -864,8 +931,11 @@ func actions() -> Array[Dictionary]:
 		for o in _work_here():
 			var label := "%s (%d oz)" % [_cap(str(o.text)), roundi(float(o.pay) * float(band.gift("contract_pay", 1.0)))]
 			var reach: bool = not o.has("to_place") or days_to(str(o.to_place)) >= 0
+			var fight_words := ""
+			if o.has("battle"):
+				fight_words = " It is a fight: about %d %s men against your %d." % [int(o.battle.attackers), CombatTypes.TIER_NAMES[int(o.battle.tier)], band.fighters(c.rules).size()]
 			out.append({"id": "work:%d" % i, "label": label,
-					"hint": ("A lord's work: about %d days." % int(o.get("days", 10))) if reach else "You have no way to get there: it needs a ship.",
+					"hint": ("A lord's work: about %d days.%s" % [int(o.get("days", 10)), fight_words]) if reach else "You have no way to get there: it needs a ship.",
 					"enabled": contract.is_empty() and reach})
 			i += 1
 		if Callings.can_verse(c.world, band, p):
@@ -875,8 +945,9 @@ func actions() -> Array[Dictionary]:
 				wr.counsel_difficulty + (wr.counsel_thing_harder if p.kind == WorldTypes.PlaceKind.THING_SITE else 0), p.family]})
 	if Callings.can_champion(wr, c.world, band, p):
 		out.append({"id": "champion", "label": "Stand in the farmer's place",
-				"hint": "A berserk has called %s out for their land. Meet him on the island yourself: %d oz, honor and their friendship if you blood him." % [
-						p.family, roundi(float(wr.champion_fee + p.wealth / wr.champion_wealth_per_oz) * float(band.gift("champion_fee", 1.0)))]})
+				"hint": "A berserk has called %s out for their land. Meet him on the island yourself: %d oz, honor and their friendship if you blood him. He is a seasoned man with the fury on him%s; beaten, you pay to leave the island." % [
+						p.family, roundi(float(wr.champion_fee + p.wealth / wr.champion_wealth_per_oz) * float(band.gift("champion_fee", 1.0))),
+						": few who are not seasoned themselves come back from it whole" if band.leader.tier < CombatTypes.Tier.VETERAN else ""]})
 	# The burners will not stake a burning on the island.
 	if Callings.can_challenge(wr, c.world, band, p) and p.family != band.vengeance:
 		var t := Callings.holmgang_terms(wr, c.world, band, p)
@@ -941,8 +1012,55 @@ func actions() -> Array[Dictionary]:
 			hint = "The door of %s is shut to you." % p.family
 		out.append({"id": "winter", "label": "Winter here", "enabled": door != "shut" and (band.silver >= cost or not guest), "hint": hint})
 	out.append_array(_law_land_actions())
+	var kj := _king_justice()
+	if not kj.is_empty():
+		out.append(kj)
 	Outlawry.gate(self, out)
 	return out
+
+
+## The king's man's road to his vengeance: at a king's hall, a hersir the
+## king thinks well of may ask him for justice against the burners.
+## {} when there is nothing to ask, else the action (greyed with why).
+func _king_justice() -> Dictionary:
+	var band := c.band
+	var wr := c.world_rules
+	var p := here()
+	if band.vengeance == "" or p == null or Outlawry.is_outlawed(band, c.cal) or c.world.families == null:
+		return {}
+	var king := Outlawry._king_of(self, p)
+	if king == null or int(band.law.get("king_justice", -1)) == c.cal.year:
+		return {}
+	var rel := FactionAI.relation(c.world, king.id, FactionAI.BAND)
+	var why := ""
+	if band.rank < wr.king_justice_rank:
+		why = "%s hears such a matter only from his great men: you are not yet his %s." % [king.leader, WorldTypes.RANK_NAMES[wr.king_justice_rank]]
+	elif rel < wr.king_justice_relation:
+		why = "%s does not think well enough of you to take your quarrel up." % king.leader
+	return {"id": "king_justice", "label": "Ask %s for justice against %s" % [king.leader, band.vengeance], "enabled": why == "",
+			"hint": why if why != "" else "He will summon them to his hall and make them pay for the burning, and keep half of it. Your feud is ended by his word; the favour is spent."}
+
+
+func _act_king_justice() -> void:
+	var band := c.band
+	var wr := c.world_rules
+	var king := Outlawry._king_of(self, here())
+	if king == null or band.vengeance == "":
+		return
+	band.law["king_justice"] = c.cal.year
+	var fam := band.vengeance
+	var oz := roundi(float(wr.king_justice_ounces) * (1.0 - wr.king_justice_share))
+	band.silver += oz
+	FactionAI.shift(c.world, king.id, FactionAI.BAND, -wr.king_justice_cost)
+	var f := Feud.find(band, fam)
+	if not f.is_empty():
+		f["settled"] = true
+		f["verdict"] = "the king's judgment"
+	_pass(float(wr.king_justice_days))
+	_say("%s summons %s to his hall and, before his men, makes them pay %d oz for the burning; %d of it go to %s. The matter is ended by the king's word." % [
+			king.leader, fam, wr.king_justice_ounces, oz, band.leader.display_name])
+	band.log("%s had the king's judgment against %s" % [band.leader.display_name, fam])
+	Way.add_deed(band, Way.Id.KINGS_MAN, wr.deed_contract)
 
 
 ## Turns of healing the band still has to do, all its men together.
@@ -962,6 +1080,9 @@ func hulls_for_sale() -> Array[int]:
 	var shown_dear := false
 	for i in HULLS.size():
 		if i <= have:
+			continue
+		# A longship is built for a lord (WorldRules.longship_rank).
+		if HULLS[i] == WorldTypes.ShipKind.LONGSHIP and band.rank < c.world_rules.longship_rank:
 			continue
 		if band.silver >= hull_cost(HULLS[i]):
 			out.append(HULLS[i])
@@ -1011,6 +1132,12 @@ func passages() -> Array[Dictionary]:
 func act(id: String) -> void:
 	if not can_act():
 		return
+	if trace_acts:
+		var note := " (not offered)"
+		for a in actions():
+			if str(a.id) == id:
+				note = "" if a.get("enabled", true) else " (greyed)"
+		acts.append(id + note)
 	var wr := c.world_rules
 	var p := here()
 	var band := c.band
@@ -1083,6 +1210,8 @@ func act(id: String) -> void:
 				"" if _healing() > 0 else ": every man is whole again"])
 	elif id == "winter":
 		wintering = true
+	elif id == "king_justice":
+		_act_king_justice()
 	elif TradeRoad.act(self, id) or Hiring.act(self, id) or WorldLife.act(self, id) or _act_law_land(id):
 		pass
 	elif _act_house(id, p):
@@ -1094,7 +1223,7 @@ func act(id: String) -> void:
 func _buy_hull(kind: int) -> void:
 	var band := c.band
 	var cost := hull_cost(kind)
-	if band.silver < cost or not HULLS.has(kind):
+	if band.silver < cost or not HULLS.has(kind) or (kind == WorldTypes.ShipKind.LONGSHIP and band.rank < c.world_rules.longship_rank):
 		return
 	band.silver -= cost
 	var old: String = WorldTypes.SHIP_NAMES[band.ship.kind] if band.ship != null else ""
@@ -1143,6 +1272,7 @@ func invest(way: int) -> bool:
 func _work_here() -> Array:
 	var p := here()
 	if Families.is_foe(c.world_rules, c.band, p.family):
+		_offers[p.id] = []  # an ill-wisher has no work for him this summer
 		return []
 	if not _offers.has(p.id):
 		_offers[p.id] = Contracts.offers(_fork("work"), c.world_rules, c.world, c.band, p.id)
@@ -1188,9 +1318,10 @@ func _holmgang(p: Place) -> void:
 	_duel(opponent, {"kind": "duel", "place": p, "terms": terms})
 
 
-## The leader alone against `opponent`, to first blood.
-func _duel(opponent: Warrior, ctx: Dictionary) -> void:
-	var built := c.build_duel(opponent, _fork("duel").seed_value)
+## The leader alone against `opponent`, to first blood (or `champion` in
+## his place).
+func _duel(opponent: Warrior, ctx: Dictionary, champion: Man = null) -> void:
+	var built := c.build_duel(opponent, _fork("duel").seed_value, champion)
 	if quick:
 		var result: BattleResult = (built.battle as Battle).run()
 		var told := c.conclude_fight(null, built, result)
@@ -1481,7 +1612,7 @@ func _house_actions(p: Place) -> Array[Dictionary]:
 		out.append({"id": "heal", "label": "Rest your hurt men with %s" % h.name,
 				"hint": "%d days in their hall: the hurt mend %d turns." % [wr.heal_days, wr.heal_turns]})
 	var lend := int(wr.men_lent.get(Families.support_step(wr, band, h.name), 0))
-	if lend > 0 and int(favour.get("men", -1)) != year and band.living_men().size() < c.rules.recruit_cap:
+	if lend > 0 and int(favour.get("men", -1)) != year and band.living_men().size() < c.room():
 		out.append({"id": "men", "label": "Ask %s for men" % h.head, "hint": "Your friends will lend you %d of their men for the summer and after." % lend})
 	var f := Feud.find(band, h.name)
 	if not f.is_empty():
@@ -1528,7 +1659,7 @@ func _act_house(id: String, p: Place) -> bool:
 		"men":
 			favour["men"] = year
 			band.favours[h.name] = favour
-			var lend := int(wr.men_lent.get(Families.support_step(wr, band, h.name), 0))
+			var lend := mini(int(wr.men_lent.get(Families.support_step(wr, band, h.name), 0)), maxi(0, c.room() - band.living_men().size()))
 			for i in lend:
 				var m := Recruits.random(_fork("lent"), c.rules, band.next_id())
 				m.lent_by = h.name
@@ -1963,8 +2094,22 @@ func _answer_saga(d: Dictionary, id: String) -> void:
 					_say("%s and %s go out to the island to settle who holds the high seat." % [band.leader.display_name, ch.display_name])
 					_duel(ch.to_warrior(1, rules, 0), {"kind": "challenge", "man": ch.id})
 					return
+				"champion":
+					var champ := Succession.champion_for(c, ch)
+					if champ != null:
+						band.honor = clampi(band.honor - rules.challenge_champion_honor, Leader.REP_MIN, Leader.REP_MAX)
+						_say("%s will not go out himself: %s takes up his shield and goes to the island in his place, and some say the less of %s for it." % [
+								band.leader.display_name, champ.display_name, band.leader.display_name])
+						_duel(ch.to_warrior(1, rules, 0), {"kind": "challenge", "man": ch.id}, champ)
+						return
+				"back":
+					Loyalty.adjust(ch, -rules.challenge_backed_down)
+					band.remove_meta(Succession.PENDING_CHALLENGE_META)
+					_say("%s looks along the benches and sees where the men stand: with %s, of the old leader's blood. He sits down again and drinks the oath cup, and says no more of it." % [
+							ch.display_name, band.leader.display_name])
+					band.log("%s backed down before the men, and drank to %s" % [ch.display_name, band.leader.display_name])
 				"pay":
-					var oz := mini(rules.challenge_buyoff_ounces, band.silver)
+					var oz := mini(Succession.buyoff_price(c, ch), band.silver)
 					band.silver -= oz
 					Loyalty.adjust(ch, rules.challenge_bond)
 					band.remove_meta(Succession.PENDING_CHALLENGE_META)
@@ -2046,12 +2191,38 @@ func _hold_ale(vow_id: String) -> void:
 			decisions.push_front({"kind": "saga", "step": "challenge", "man": ch.id, "title": "A challenge",
 					"text": "%s would not drink to %s. He stands up at the grave-ale and says the high seat should be his, and that he will hold the island against any man who says otherwise. He is %s, and the men listen to him." % [
 							ch.display_name, band.leader.display_name, Potential.hint(c.rules, ch, Potential.best_stat(ch), 2)],
-					"options": [{"id": "fight", "label": "Meet him on the island"},
-						{"id": "pay", "label": "Buy his goodwill (%d oz)" % mini(c.rules.challenge_buyoff_ounces, band.silver), "enabled": band.silver > 0},
-						{"id": "go", "label": "Let him go"}]})
+					"options": _challenge_options(ch)})
 			return
 		band.remove_meta(Succession.PENDING_CHALLENGE_META)
 	decisions.push_front(_told_card())
+
+
+## The heir's answers to a challenge for the high seat: the island himself,
+## a champion in his place, the men's loyalty to a son of the blood (only
+## when it is enough, else greyed with why), his goodwill bought at the
+## price of what he wants, or letting him go.
+func _challenge_options(ch: Man) -> Array[Dictionary]:
+	var band := c.band
+	var rules := c.rules
+	var out: Array[Dictionary] = [{"id": "fight", "label": "Meet him on the island",
+			"hint": "First blood decides it. He is %s; you are %s." % [Potential.hint(rules, ch, Potential.best_stat(ch), 2),
+					Potential.hint(rules, band.leader, Potential.best_stat(band.leader), 2)]}]
+	var champ := Succession.champion_for(c, ch)
+	if champ != null:
+		out.append({"id": "champion", "label": "Let %s stand for you" % champ.display_name,
+				"hint": "%s goes to the island in your place. If he wins the seat is yours; men will say you would not stand yourself (honor -%d)." % [
+						champ.display_name, rules.challenge_champion_honor]})
+	var back := Succession.backing(c, ch)
+	if Succession.line_holds(band):
+		out.append({"id": "back", "label": "Look to the men", "enabled": bool(back.enough),
+				"hint": ("%d of %d men hold to the old leader's blood: he will not go against them." % [int(back.ours), int(back.all)]) if bool(back.enough)
+						else ("Only %d of %d men hold to you strongly enough; he would laugh at it." % [int(back.ours), int(back.all)])})
+	var price := Succession.buyoff_price(c, ch)
+	out.append({"id": "pay", "label": "Buy his goodwill (%d oz)" % price, "enabled": band.silver >= price,
+			"hint": "A man who wants %s is bought %s." % [CampaignTypes.AMBITION_NAMES[ch.ambition],
+					"dear" if price > rules.challenge_buyoff_ounces + rules.challenge_buyoff_per_tier * ch.tier else "cheaply enough"]})
+	out.append({"id": "go", "label": "Let him go", "hint": "He leaves the band, and his oath brothers with him."})
+	return out
 
 
 ## The holmgang for the high seat is fought.
@@ -2349,6 +2520,8 @@ func _after_burning(ctx: Dictionary, result: BattleResult) -> void:
 	var f := Feud.find(band, fam)
 	var burned_first := not f.is_empty() and str(f.get("cause", "")).contains("burning")
 	var lines := PackedStringArray()
+	band.luck = clampi(band.luck - c.rules.luck_burning, Leader.LUCK_MIN, Leader.LUCK_MAX)
+	lines.append("Men say no luck comes of a burning.")
 	fs.burned(wr, c.world, _fork("burned"), band, fam, head_fell, burned_first, lines)
 	for line in lines:
 		_say(line)

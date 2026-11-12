@@ -92,7 +92,7 @@ static func sell_price(rules: WorldRules, place: Place, band: Band, good: WorldT
 
 ## Free cargo room: the ship's hold, or what the men can carry without one.
 static func cargo_room(rules: WorldRules, band: Band) -> int:
-	return maxi(0, cargo_capacity(rules, band) - band.cargo_units() - band.felag_units())
+	return maxi(0, cargo_capacity(rules, band) - band.cargo_units() - band.felag_units() - ceili(float(band.captives) / maxf(1.0, rules.captive_load)))
 
 
 ## What the band can carry: its men's loads on their backs (the leader's

@@ -71,6 +71,30 @@ static func winter(j: Journey, bent: int) -> void:
 			for m in men:
 				if int(h.gifts.get(m.id, 0)) == 0 and h.silver_after(j) >= 30:
 					j.winter_choose("gift+:%d" % m.id)
+	# Never a miser's Yule when the chest can spare the little expected:
+	# a ring for the man with the greatest deeds, then the least loyal.
+	if not men.is_empty():
+		var line := WinterHall.miser_line(c.rules, men.size(), band.silver)
+		var by_need := men.duplicate()
+		by_need.sort_custom(func(a: Man, b: Man) -> bool:
+			var da := WinterHall.great_deed(c.rules, a)
+			var db := WinterHall.great_deed(c.rules, b)
+			return (da and not db) or (da == db and (a.loyalty < b.loyalty or (a.loyalty == b.loyalty and a.id < b.id))))
+		for m in by_need:
+			if h.gifts_total(j) >= line or band.silver < c.rules.miser_chest or h.silver_after(j) < c.rules.hall_gift_ounces[0]:
+				break
+			if int(h.gifts.get(m.id, 0)) == 0:
+				j.winter_choose("gift+:%d" % m.id)
+	# At his own hall a man with silver builds: benches before the men
+	# outgrow them, then a storehouse and a byre.
+	if h.can_build():
+		var B := CampaignTypes.Building
+		var costs: Dictionary = c.rules.building_costs
+		if men.size() + 2 >= (band.hall as Hall).seats and men.size() < _band_wanted(bent) and h.silver_after(j) >= int(costs.get(B.BENCHES, 0)) + 40:
+			j.winter_choose("build:%d" % B.BENCHES)
+		for b in [B.STOREHOUSE, B.BYRE]:
+			if h.silver_after(j) >= int(costs.get(b, 0)) + 150:
+				j.winter_choose("build:%d" % b)
 	if bent == Way.Id.VIKING or bent == Way.Id.BERSERK:
 		j.winter_choose("shape:boar's snout")
 		if band.custom_shouts.is_empty():
@@ -100,6 +124,47 @@ static func winter(j: Journey, bent: int) -> void:
 			j.winter_choose("talk:%d:ask" % i)
 		elif kind == "thralls":
 			j.winter_choose("talk:%d:%s" % [i, "free" if bent == Way.Id.LAWMAN or bent == Way.Id.SKALD else ("press" if bent == Way.Id.BERSERK else "watch")])
+	# No more men than a man of his bent wants about him (a trader does not
+	# feed forty), and no more than his hull will carry unless he can pay
+	# for a bigger one: a band too big for its boat is stranded.
+	var wanted := _band_wanted(bent)
+	var keep := band.fighters().size()
+	for i in h.candidates.size():
+		if bool(h.candidates[i].taken):
+			if keep >= wanted:
+				j.winter_choose("take:%d" % i)
+			else:
+				keep += 1
+	if band.ship != null:
+		var carry := band.ship.crew_capacity(c.world_rules)
+		var next_hull := 0
+		for kind in Journey.HULLS:
+			if int(c.world_rules.ship_crew[kind]) > carry and (next_hull == 0 or int(c.world_rules.ship_price[kind]) < next_hull):
+				next_hull = int(c.world_rules.ship_price[kind])
+		if band.silver < next_hull:
+			var count := band.fighters().size()  # the leader takes a thwart too
+			for i in h.candidates.size():
+				if bool(h.candidates[i].taken):
+					if count >= carry:
+						j.winter_choose("take:%d" % i)
+					else:
+						count += 1
+	# More men than benches and thwarts, or than a man of his bent wants
+	# about him (the quiet years' recruits fill every bench): the least
+	# loyal go, never his second, his war-leader or a son of the house.
+	var over := maxi(men.size() - c.room(), men.size() + 1 - _band_wanted(bent))
+	if over > 0:
+		var sons := {}
+		for ch in band.sons:
+			sons[int(ch.get("man_id", -1))] = true
+		var spare: Array[Man] = []
+		for m in men:
+			if m.id != band.sworn_second_id and m.id != band.war_leader_id and not sons.has(m.id) \
+					and m.lent_by == "" and int(h.gifts.get(m.id, 0)) == 0:
+				spare.append(m)
+		spare.sort_custom(func(a: Man, b: Man) -> bool: return a.loyalty < b.loyalty or (a.loyalty == b.loyalty and a.id < b.id))
+		for m in spare.slice(0, over):
+			j.winter_choose("let:%d" % m.id)
 	var guard := 0
 	while j.in_winter() and not h.resolved and guard < 10:
 		guard += 1
@@ -115,7 +180,32 @@ static func winter(j: Journey, bent: int) -> void:
 					break
 		if let_years > 0 and h.step_down == "" and Years.blocked(j) == "":
 			j.winter_choose("years:%d" % let_years)
+			j.winter_choose("offers:accept")
 	j.winter_end()
+
+
+## How many men a man of his bent wants about him, at most.
+static func _band_wanted(bent: int) -> int:
+	match bent:
+		Way.Id.VIKING:
+			return 40
+		Way.Id.KINGS_MAN:
+			return 30
+		Way.Id.BERSERK:
+			return 20
+		Way.Id.SKALD:
+			return 18
+		Way.Id.LAWMAN:
+			return 16
+	return 14
+
+
+## Whether the raider keeps his captives bound for the slave markets; a
+## tool may set `life["bot_ransom"]` on a saga to have him ransom them to
+## their kin like anyone else (to measure one living against the other,
+## docs/design/notes/balance.md).
+static func slaver(j: Journey) -> bool:
+	return not bool(j.life.get("bot_ransom", false))
 
 
 ## Points go down his own path first, then wherever they will.
@@ -233,6 +323,18 @@ static func _answer_saga(j: Journey, d: Dictionary, _bent: int) -> String:
 					return str(id)
 			return "peace"
 		"challenge":
+			# The men first, then silver he can spare, then a champion who is
+			# the better man, else the island himself.
+			if ids.has("back"):
+				return "back"
+			var ch := j.c.band.man_by_id(int(d.man))
+			if ids.has("pay") and ch != null and j.c.band.silver >= 2 * Succession.buyoff_price(j.c, ch):
+				return "pay"
+			var champ := Succession.champion_for(j.c, ch)
+			if ids.has("champion") and ch != null and champ != null and j.c.band.leader != null \
+					and champ.total_stats() + 2 * int(champ.tier) > j.c.band.leader.total_stats() + 2 * int(j.c.band.leader.tier) \
+					and champ.total_stats() + 2 * int(champ.tier) >= ch.total_stats() + 2 * int(ch.tier):
+				return "champion"
 			return "fight"
 		"arc":
 			return "end" if ends else "go_on"
@@ -292,13 +394,24 @@ static func _act(j: Journey, bent: int) -> void:
 	# land he can buy, the men he left at home, a man held for sale.
 	if _law_land(j, bent, ids):
 		return
+	# A watch on the ship where she lies, once he has learned what a strange
+	# beach costs (she was taken from him before), or when it is nothing to him.
+	if ids.has("watch") and band.ship != null and (band.silver >= 120 or (j.life.has("stolen") and band.silver >= 20)) \
+			and int(j.life.get("bot_watched:" + here.id, -1)) != c.cal.year:
+		j.life["bot_watched:" + here.id] = c.cal.year  # once a place a summer
+		j.act("watch")
+		return
 	# A ship too battered to trust is mended first.
 	if ids.has("mend") and band.ship.damage >= wr.ship_unsailable_damage - 1:
 		j.act("mend")
 		return
 	# A hull, when he has none he can use and can pay for one that will
-	# carry his men; a knarr for a trader who can afford the hold.
-	var men := band.fighters().size()
+	# carry his men; a knarr for a trader who can afford the hold. Men lent
+	# for the summer are not counted: they go home in the autumn.
+	var men := 0
+	for m in band.fighters():
+		if m.lent_by == "":
+			men += 1
 	for kind in Journey.HULLS:
 		var id := "hull:%d" % kind
 		if not ids.has(id):
@@ -307,12 +420,20 @@ static func _act(j: Journey, bent: int) -> void:
 		var want := carries and j.sail_speed() <= 0.0 and band.silver >= j.hull_cost(kind) + 8
 		if bent == Way.Id.TRADER and kind == WorldTypes.ShipKind.KNARR and carries and band.silver >= j.hull_cost(kind) + 40:
 			want = true
+		# A lord with a great band and the silver for it gets his longship.
+		if kind == WorldTypes.ShipKind.LONGSHIP and carries and band.silver >= j.hull_cost(kind) + 100 \
+				and (bent == Way.Id.VIKING or bent == Way.Id.KINGS_MAN):
+			want = true
 		if want:
 			j.act(id)
 			return
-	# A farmer to stand up for, for a man who can fight.
+	# A farmer to stand up for, for a man who can fight: whole, blooded,
+	# strong, and not beaten on the island already this summer.
 	var fighter: bool = band.leader.stat(CombatTypes.Stat.MIGHT) + band.leader.stat(CombatTypes.Stat.SKILL) >= 9
-	if ids.has("champion") and fighter:
+	var champion: bool = band.leader.stat(CombatTypes.Stat.MIGHT) + band.leader.stat(CombatTypes.Stat.SKILL) >= 10 \
+			and band.leader.tier >= CombatTypes.Tier.BLOODED and band.leader.healing_turns == 0 \
+			and int(j.life.get("island_lost", -1)) != c.cal.year
+	if ids.has("champion") and champion:
 		j.act("champion")
 		return
 	# A feud to plead when at a Thing, or a house he promised to speak for;
@@ -378,9 +499,16 @@ static func _act(j: Journey, bent: int) -> void:
 			if ids.has("escort") and band.fighters(c.rules).size() >= 2:
 				j.act("escort")
 				return
-			# While men still speak well enough of him.
-			if band.honor > wr.holmgang_outlaw_honor + 2 * wr.holmgang_honor:
+			# A farmer's champion is the honest half of his living.
+			if ids.has("champion") and band.leader.healing_turns == 0 and int(j.life.get("island_lost", -1)) != c.cal.year:
+				j.act("champion")
+				return
+			# While men still speak well enough of him, and not every week:
+			# a few overbearing challenges a summer, not a country's worth.
+			var called := int(j.life.get("bot_called:%d" % c.cal.year, 0))
+			if band.honor > wr.holmgang_outlaw_honor + 3 * wr.holmgang_honor and called < 3:
 				if ids.has("holmgang"):
+					j.life["bot_called:%d" % c.cal.year] = called + 1
 					j.act("holmgang")
 					return
 				var who := _nearest(j, func(q: Place) -> bool: return Callings.can_challenge(wr, c.world, band, q))
@@ -394,7 +522,7 @@ static func _act(j: Journey, bent: int) -> void:
 			if hall != "" and _go(j, hall):
 				return
 		Way.Id.KINGS_MAN:
-			if ids.has("work:0"):
+			if ids.has("work:0") and _work_fits(j):
 				j.act("work:0")
 				return
 			# A merchant's guard is service too, and pays.
@@ -410,11 +538,11 @@ static func _act(j: Journey, bent: int) -> void:
 				return
 	# Whatever is to hand: counsel, a lord's work, a verse.
 	for id in ["counsel", "work:0", "verse"]:
-		if ids.has(id):
+		if ids.has(id) and (id != "work:0" or _work_fits(j)):
 			j.act(id)
 			return
 	var living := _nearest(j, func(q: Place) -> bool:
-		return Callings.can_counsel(wr, c.world, band, q) or (fighter and Callings.can_champion(wr, c.world, band, q)) \
+		return Callings.can_counsel(wr, c.world, band, q) or (champion and Callings.can_champion(wr, c.world, band, q)) \
 				or ((q.kind == WorldTypes.PlaceKind.HALL or q.kind == WorldTypes.PlaceKind.TOWN) and not j._offers.has(q.id)))
 	if living != "" and _go(j, living):
 		return
@@ -424,14 +552,23 @@ static func _act(j: Journey, bent: int) -> void:
 		if ids.has(id):
 			j.act(id)
 			return
+	# A man with little in his chest does not sit listening for weeks: he
+	# goes where there are fields to work.
+	if band.silver < 80:
+		var fields := _nearest(j, func(q: Place) -> bool: return Journey.SETTLED.has(q.kind) and not TradeRoad._done(j, "labour", q.id) \
+				and not Families.is_foe(wr, band, q.family))
+		if fields != "" and _go(j, fields):
+			return
 	var cheapest := ""
 	var cost := 1 << 20
 	for o in j.passages():
-		if band.ship == null and ids.has("passage:" + str(o.id)) and int(o.cost) < cost and int(o.cost) * 3 <= band.silver:
+		if j.sail_speed() <= 0.0 and ids.has("passage:" + str(o.id)) and int(o.cost) < cost and int(o.cost) * 3 <= band.silver:
 			cost = int(o.cost)
 			cheapest = "passage:" + str(o.id)
-	if cheapest != "" and int(j.life.get("bot_passage", -1)) != c.cal.day:
-		j.life["bot_passage"] = c.cal.day
+	# Not back and forth: a passage, then a fortnight's living where it lands.
+	var today := c.cal.year * 400 + c.cal.day
+	if cheapest != "" and today - int(j.life.get("bot_passage", -100)) >= 15:
+		j.life["bot_passage"] = today
 		j.act(cheapest)
 		return
 	j.act("listen")
@@ -449,9 +586,15 @@ static func _houses(j: Journey, bent: int, ids: Dictionary) -> bool:
 	var fs := c.world.families
 	if fs == null:
 		return false
-	for id in ["heal", "men"]:
-		if ids.has(id):
-			j.act(id)
+	if ids.has("heal"):
+		j.act("heal")
+		return true
+	# Men from friends, while his hull will still carry them all.
+	if ids.has("men"):
+		var crew := band.ship.crew_capacity(wr) if band.ship != null else 1 << 20
+		var lend := int(wr.men_lent.get(Families.support_step(wr, band, j.here().family), 0))
+		if band.fighters(c.rules).size() + lend <= crew and (bent != Way.Id.TRADER or band.fighters(c.rules).size() < 4):
+			j.act("men")
 			return true
 	var here := j.here()
 	if ids.has("reckoning"):
@@ -494,6 +637,16 @@ static func _houses(j: Journey, bent: int, ids: Dictionary) -> bool:
 					return true
 				if _go(j, fs.house(want).seat):
 					return true
+	# The king's man takes his quarrel to the king.
+	if ids.has("king_justice"):
+		j.act("king_justice")
+		return true
+	if bent == Way.Id.KINGS_MAN and band.vengeance != "" and band.rank >= wr.king_justice_rank and int(band.law.get("king_justice", -1)) != c.cal.year:
+		var court := _nearest(j, func(q: Place) -> bool:
+			var k := Outlawry._king_of(j, q)
+			return k != null and FactionAI.relation(c.world, k.id, FactionAI.BAND) >= wr.king_justice_relation)
+		if court != "" and _go(j, court):
+			return true
 	if not band.pledges.is_empty() or _thing_due(j):
 		var thing := _nearest(j, func(q: Place) -> bool: return q.kind == WorldTypes.PlaceKind.THING_SITE)
 		if thing != "" and _go(j, thing):
@@ -511,10 +664,23 @@ static func _houses(j: Journey, bent: int, ids: Dictionary) -> bool:
 ## Sets off for a place. True when he is on his way (or there, or stopped
 ## by something to answer): the turn is spent.
 static func _go(j: Journey, to: String) -> bool:
-	if not j.go_to_place(to):
+	# Already there: going would pass no time, and he would ask again.
+	if to == j.c.band.location or not j.go_to_place(to):
 		return false
 	j.travel()
 	return true
+
+
+## Whether the lord's first work here is one his band can do: a fight only
+## with men enough for it.
+static func _work_fits(j: Journey) -> bool:
+	var list := j._work_here()
+	if list.is_empty():
+		return false
+	var o: Dictionary = list[0]
+	if not o.has("battle"):
+		return true
+	return int(o.battle.attackers) <= j.c.band.fighters(j.c.rules).size() * j.c.world_rules.raid_odds_max
 
 
 ## A place worth raiding with the men in hand.
@@ -527,8 +693,11 @@ static func _raidable(j: Journey, p: Place) -> bool:
 	# He does not raid his own friends and kin.
 	if Families.is_friend(c.world_rules, c.band, p.family):
 		return false
+	# Green farmers at the odds he will take; seasoned men only when he has
+	# the better numbers, as a man who read his scout's report would.
 	var a := Raiding.assess(c.world_rules, c.world, p, c.band)
-	return a.defenders <= c.band.fighters(c.rules).size() * c.world_rules.raid_odds_max
+	var odds := c.world_rules.raid_odds_max if int(a.tier) <= CombatTypes.Tier.GREEN else (0.8 if int(a.tier) == CombatTypes.Tier.BLOODED else 0.6)
+	return a.defenders <= c.band.fighters(c.rules).size() * odds
 
 
 ## The nearest known, open place other than this one that `want` accepts
@@ -689,7 +858,7 @@ static func _hire(j: Journey, bent: int, ids: Dictionary) -> bool:
 ## else lets them be ransomed where he can, the law-wise man and the
 ## skald set them free.
 static func _captives(j: Journey, bent: int, ids: Dictionary) -> bool:
-	if j.c.band.captives <= 0 or bent == Way.Id.VIKING:
+	if j.c.band.captives <= 0 or (bent == Way.Id.VIKING and slaver(j)):
 		return false
 	if (bent == Way.Id.LAWMAN or bent == Way.Id.SKALD) and ids.has("free"):
 		j.act("free")
@@ -726,6 +895,8 @@ static func _law_land(j: Journey, bent: int, ids: Dictionary) -> bool:
 	var c := j.c
 	var band := c.band
 	var od := Outlawry.bot_deed(j, bent, ids)
+	if od == "*":
+		return true  # on his way to a king's hall for his peace
 	if od != "":
 		j.act(od)
 		return true
@@ -748,7 +919,7 @@ static func _law_land(j: Journey, bent: int, ids: Dictionary) -> bool:
 	if ids.has("landtake"):
 		j.act("landtake")
 		return true
-	if ids.has("buy_land") and band.land < 3 and band.silver >= 200 + 60 * band.land:
+	if ids.has("buy_land") and band.land < 6 and band.silver >= 200 + 60 * band.land:
 		j.act("buy_land")
 		return true
 	if ids.has("keepers") and band.thralls.size() >= 3 and band.keepers.is_empty():

@@ -18,7 +18,7 @@ const REP_MAX := 100
 ## costs `honor_withdrew` and no luck, and nothing at all when the odds
 ## were long (below `long_odds`); both drawing off costs nothing.
 static func on_battle(rules: CampaignRules, band: Band, won: bool, led_from_front: bool,
-		odds: float, log: PackedStringArray, outcome := -1) -> void:
+		odds: float, log: PackedStringArray, outcome := -1, rng: SimRng = null) -> void:
 	var who := _name(band)
 	var O := BattleResult.Outcome
 	if outcome == O.WITHDREW:
@@ -33,11 +33,11 @@ static func on_battle(rules: CampaignRules, band: Band, won: bool, led_from_fron
 	elif outcome == O.ESCAPED:
 		log.append("%s got out of the fire, and it is told of him" % who)
 	elif won and odds < rules.long_odds:
-		_add(band, rules.luck_long_odds, rules.fame_long_odds, 0)
+		_add(band, rules.luck_long_odds - (1 if band.luck >= rules.luck_crest else 0), rules.fame_long_odds, 0)
 		log.append("%s won against the odds: his luck is talked of" % who)
 	elif won:
 		var extra := rules.fame_rout if outcome == O.ROUTED_THEM else 0
-		_add(band, rules.luck_win, rules.fame_win + extra, 0)
+		_add(band, _win_luck(rules, band, rng), rules.fame_win + extra, 0)
 		log.append("%s won the day" % who if extra == 0 else "%s routed them, and the rout is talked of" % who)
 	else:
 		_add(band, -rules.luck_loss, 0, 0)
@@ -85,6 +85,28 @@ static func on_omen_ignored(rng: SimRng, rules: CampaignRules, band: Band, log: 
 		log.append("%s ignored the omen, and it came true" % _name(band))
 	else:
 		log.append("%s ignored the omen, and nothing came of it" % _name(band))
+
+
+## A plain win's luck: `luck_win` below the crest; at it and above, only
+## now and then (`luck_crest_chance`, the rarer the higher), and never
+## without `rng` (the old callers).
+static func _win_luck(rules: CampaignRules, band: Band, rng: SimRng) -> int:
+	if band.luck < rules.luck_crest:
+		return rules.luck_win
+	if rng == null:
+		return 0
+	return 1 if rng.randf() < pow(rules.luck_crest_chance, band.luck - rules.luck_crest + 1) else 0
+
+
+## At the thaw luck drifts a point toward the middle from above
+## `luck_drift_high` or below `luck_drift_low`: luck is kept by deeds.
+static func winter_drift(rules: CampaignRules, band: Band, log: PackedStringArray) -> void:
+	if band.luck > rules.luck_drift_high:
+		band.luck -= 1
+		log.append("%s's luck is talked of less over the winter" % _name(band))
+	elif band.luck < rules.luck_drift_low:
+		band.luck += 1
+		log.append("the talk of %s's ill luck dies down over the winter" % _name(band))
 
 
 ## -1, 0 or +1 for the leader's rolls and the band's events.

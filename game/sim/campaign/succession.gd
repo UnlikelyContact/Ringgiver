@@ -13,6 +13,49 @@ extends RefCounted
 
 const DEATH_CAUSES_META := &"death_causes"
 const PENDING_CHALLENGE_META := &"pending_challenge"
+## The man who would stand on the island for the heir against `challenger`:
+## the best fighter of the band, loyal (`stay_threshold` or more), whole,
+## neither the heir nor the challenger nor his oath brother; null if none.
+static func champion_for(c: Campaign, challenger: Man) -> Man:
+	var band := c.band
+	var best: Man = null
+	for m in band.fighters(c.rules):
+		if m == band.leader or m == challenger or m.loyalty < c.rules.stay_threshold or m.healing_turns > 0:
+			continue
+		if challenger != null and band.bond_kind(challenger, m) == CampaignTypes.BondKind.OATH_BROTHER:
+			continue
+		if best == null or m.tier > best.tier or (m.tier == best.tier and m.total_stats() > best.total_stats()):
+			best = m
+	return best
+
+
+## How the men stand at the grave-ale when `challenger` disputes the seat:
+## {ours, all, enough}: the men (not he nor his oath brothers) whose
+## loyalty is `challenge_backing_loyalty` or more, of all of them; enough
+## when they are `challenge_backing_share` of them.
+static func backing(c: Campaign, challenger: Man) -> Dictionary:
+	var band := c.band
+	var ours := 0
+	var all := 0
+	for m in band.living_men():
+		if m == band.leader or m == challenger:
+			continue
+		if challenger != null and band.bond_kind(challenger, m) == CampaignTypes.BondKind.OATH_BROTHER:
+			continue
+		all += 1
+		if m.loyalty >= c.rules.challenge_backing_loyalty:
+			ours += 1
+	return {"ours": ours, "all": all, "enough": all > 0 and float(ours) >= c.rules.challenge_backing_share * float(all)}
+
+
+## What a challenger's goodwill costs: the base and a sum a tier, times what
+## he wants (a man who wants fame wants the seat itself).
+static func buyoff_price(c: Campaign, challenger: Man) -> int:
+	var r := c.rules
+	var mult := float(r.challenge_buyoff_ambition.get(challenger.ambition, 1.0))
+	return roundi(float(r.challenge_buyoff_ounces + r.challenge_buyoff_per_tier * int(challenger.tier)) * mult)
+
+
 ## Whether the high seat last passed by blood (`line_holds`).
 const LINE_META := &"line_holds"
 

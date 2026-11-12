@@ -504,11 +504,13 @@ func line_men() -> Array[Man]:
 ## A holmgang: the leader alone against `opponent`, to first blood
 ## (Scenario.build_duel). Returns the same dictionary as `build_fight`,
 ## with `duel` true; `conclude_fight` takes it with a null offer.
-func build_duel(opponent: Warrior, seed_in: int) -> Dictionary:
+func build_duel(opponent: Warrior, seed_in: int, champion: Man = null) -> Dictionary:
 	tally.battles += 1
 	tally.duels = tally.get("duels", 0) + 1
-	var fighters: Array[Man] = [band.leader]
-	var ours: Array[Warrior] = [band.leader.to_warrior(0, rules, 0)]
+	# A champion may stand on the island in the leader's place.
+	var who: Man = champion if champion != null else band.leader
+	var fighters: Array[Man] = [who]
+	var ours: Array[Warrior] = [who.to_warrior(0, rules, 0)]
 	var theirs: Array[Warrior] = [opponent]
 	var built := Scenario.build_duel(seed_in, combat_rules, ours, theirs)
 	(built.battle as Battle).set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
@@ -589,6 +591,8 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 		battle_logs.append(battle.log.duplicate())
 	var won := result.winner == 0
 	var outcome := result.outcome(0)
+	if not is_escape:
+		tally["outcome:%d" % outcome] = int(tally.get("outcome:%d" % outcome, 0)) + 1
 	var seed_in: int = built.get("seed_value", offer.seed_value if offer != null else 0)
 	if is_escape:
 		log.append("%s: the burning of the hall, against %d men: %s (%s)" % [cal.describe(), enemy.size(), result.summary(), result.outcome_text(0)])
@@ -601,7 +605,7 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 
 	# Growth, wounds, deaths, loot, a man who asks to join.
 	var on_land: bool = is_escape or (not is_duel and not offer.at_sea)
-	var told := Aftermath.apply(rules, band, ours, result, SimRng.new(seed_in).fork("aftermath"), on_land, log)
+	var told := Aftermath.apply(rules, band, ours, result, SimRng.new(seed_in).fork("aftermath"), on_land, log, room())
 	tally.recruits += told.joined.size()
 	_count_the_year(ours)
 	_arm_new_men()
@@ -639,7 +643,7 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 		var fame_before := band.fame
 		var luck_before := band.luck
 		var front := led_from_front(built, result)
-		Leader.on_battle(rules, band, won, front, built.odds, log, outcome)
+		Leader.on_battle(rules, band, won, front, built.odds, log, outcome, SimRng.new(seed_in).fork("luck"))
 		# Under the war-leader the fight is his as much as the leader's.
 		if int(built.get("war_leader", -1)) >= 0 and band.fame > fame_before:
 			band.fame -= (band.fame - fame_before) - roundi((band.fame - fame_before) * rules.war_leader_fame_share)
@@ -662,6 +666,21 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 		_killer = killer
 		succession("battle")
 	return told
+
+
+## The most men the band can keep (CampaignRules.room_min/room_max): the
+## seats of its hall or the crew of its hull, whichever is more. Without a
+## map, the plain campaign's `recruit_cap`. A man who would come beyond it
+## (a recruit, a hired man, one who saw the fight) is turned away.
+func room() -> int:
+	if world == null or world_rules == null:
+		return rules.recruit_cap
+	var seats := rules.hall_base_seats
+	if band.hall != null:
+		seats = maxi(seats, (band.hall as Hall).seats)
+	var crew := band.ship.crew_capacity(world_rules) if band.ship != null else 0
+	var most := rules.room_max if band.rank >= WorldTypes.Rank.HERSIR else rules.room_max_karl
+	return clampi(maxi(seats, crew), rules.room_min, most)
 
 
 ## Whether the leader stood in the front rank (concept.md, "Your
@@ -822,7 +841,7 @@ func _apply_report(plan: WinterPlan, report: WinterReport) -> void:
 		# A skald's praise-poem and an envoy's regard are fame.
 		if int(ev.get("fame", 0)) != 0:
 			band.fame = clampi(band.fame + int(ev.fame), Leader.REP_MIN, Leader.REP_MAX)
-		if ev.get("recruit_request", false) and band.living_men().size() < rules.recruit_cap:
+		if ev.get("recruit_request", false) and band.living_men().size() < room():
 			var m := Recruits.make(rng.fork("outlaw:%d:%d" % [cal.year, cal.winter_turn]), rules,
 					CampaignTypes.Origin.OUTLAW, 24, Recruits.NAMES[rng.fork("outlaw_name:%d" % cal.year).randi_range(0, Recruits.NAMES.size() - 1)], band.next_id())
 			band.add_man(m)
@@ -855,6 +874,8 @@ func _thaw(opts := {}) -> void:
 		Growth.winter_age(rng.fork("age:%d:%d" % [cal.year, m.id]), rules, m, log)
 		Growth.apply_growth(rules, m, log)
 	Bonds.winter_drift(rng.fork("bonds:%d" % cal.year), rules, band, log)
+	if world != null:
+		Leader.winter_drift(rules, band, log)
 	# A shape not drilled all winter fades a point in every man who sat it out.
 	for m in band.fighters():
 		if m.drilled_year != cal.year and not m.drill.is_empty():
@@ -892,7 +913,7 @@ func _thaw(opts := {}) -> void:
 	# Fame draws new men in spring (unless they came to the hall in winter).
 	var wanted := Leader.recruits_drawn(rules, band) if opts.get("recruits", true) else 0
 	for i in wanted:
-		if band.living_men().size() >= rules.recruit_cap:
+		if band.living_men().size() >= room():
 			break
 		var m := Recruits.random(rng.fork("recruit:%d:%d" % [cal.year, i]), rules, band.next_id())
 		band.add_man(m)

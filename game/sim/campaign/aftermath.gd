@@ -13,7 +13,7 @@ extends RefCounted
 ## loot, joined, lines}: the bridge's lists, the silver taken, the names
 ## of men who joined, and `lines` ready to read out.
 static func apply(rules: CampaignRules, band: Band, warriors: Array[Warrior], result: BattleResult,
-		rng: SimRng, on_land: bool, log: PackedStringArray) -> Dictionary:
+		rng: SimRng, on_land: bool, log: PackedStringArray, room := 1 << 20) -> Dictionary:
 	var told := BattleBridge.after_battle(rules, band, warriors, result, log)
 	var won := result.won(0)
 	var outcome := result.outcome(0)
@@ -29,7 +29,8 @@ static func apply(rules: CampaignRules, band: Band, warriors: Array[Warrior], re
 	told.loot = loot
 	# A man who saw it asks to join.
 	told.joined = []
-	if won and on_land:
+	# Not when the band has no bench for him (Campaign.room).
+	if won and on_land and band.living_men().size() < room:
 		var chance := rules.recruit_after_rout_chance if outcome == BattleResult.Outcome.ROUTED_THEM else rules.recruit_after_win_chance
 		if rng.fork("join").randf() < chance:
 			var m := Recruits.random(rng.fork("recruit"), rules, band.next_id())
