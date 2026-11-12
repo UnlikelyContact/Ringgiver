@@ -368,3 +368,16 @@ func test_the_saga_tells_oaths_by_the_count_and_no_line_twice() -> void:
 	assert_eq(text.count("heeded an omen"), 1, "a line is told once a year")
 	assert_true(not text.contains("Hrafn and Bard"))
 	assert_true(y > 0)
+
+
+## The stall found in the batches: ashore by shipwreck at the very place a
+## guarded merchant was bound, the stand-in "went" there for ever. Going
+## where he already is is no going, and the guard is paid off there.
+func test_no_going_where_he_already_is() -> void:
+	var j := _quiet(3, "younger_son", "orkney")
+	assert_true(not JourneyBot._go(j, "orkney"), "already there")
+	j.life["escort"] = {"to": "orkney", "pay": 20, "by": 999.0, "family": "", "party": null}
+	var silver := j.c.band.silver
+	TradeRoad.check_escort(j)
+	assert_true(j.life.get("escort", {}).is_empty(), "the guard is done")
+	assert_eq(j.c.band.silver, silver + 20)
