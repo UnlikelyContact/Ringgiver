@@ -216,12 +216,59 @@ departures, old-age death).
 
 ## Measured
 
-(See the report for the exact runs and figures.)
+`tools/batch_ways.gd -- 6 4 1 all burned_hall`, before and after (silver a
+year; sagas ended of 6; deaths a saga). No stalls either way. The stand-in
+players now hold the grave-ale themselves (`played_succession`), so a
+leader's death is a played succession; no income was added.
+
+| Bent | before | after |
+|---|---|---|
+| Viking | +184, 0/6, 2.8 deaths | +184, 0/6, 3.2 |
+| Trader | +32, 1/6 ended, 0.8 | +28, 0/6, 1.0 |
+| Law-wise man | +46, 0/6, 1.5 | +53, 0/6, 1.2 |
+| Berserk | +55, 0/6, 0.3 | +55, 0/6, 0.3 |
+| Skald | +107, 0/6, 1.2 | +99, 0/6, 1.2 |
+| King's man | +14, 0/6, 1.3 | +19, 0/6, 1.2 |
+
+The trader saga that ended in 867 (its leader and second fell in one
+fight) now goes on: the best of his men takes up the name.
+
+`tools/batch_generations.gd -- 3 35 1 <let> viking burned_hall` (three
+sagas, 35 calendar years, the Viking stand-in):
+
+| | year reached | generations | years let pass | silver a year | stalls |
+|---|---|---|---|---|---|
+| lets 10 years each spring | 901, 901, 901 | 4, 4, 3 (3.7) | 3, 2, 10 (5.0) | +35, +75, +2 (+38) | 0 |
+| lets 3 years each spring | 901 x 3 | 3.7 | 4.7 | +38 | 0 |
+| plays every summer | 901 x 3 | 4, 3, 2 (3.0) | 0 | +2, -0, +141 (+47) | 0 |
+
+Every saga reaches 901 with a second generation (deaths in battle,
+old age in the 890s, stepping down, one high seat lost on the island).
+Sitting out the years is not richer: +38 oz a year against +47 for the
+sagas that play (per saga it swings both ways with what the summers
+bring). The years stop often for this stand-in: the Viking has open feuds
+and wergild offers most springs (stops over the three sagas: houses 40,
+sons 14, spine 14, attacks 11, daughters 6, death 1), so most lets end
+after a year or none; the saga with fewer quarrels let ten years pass.
+`test_passing_years_is_not_richer` pins the bound: a year at home brings
+in no more than the land yields, and a saga that sits three years out of
+four ends poorer than the one that plays them (671 against 248 oz).
+
+Screens at 844 x 390, zero SCRIPT ERROR lines in each: the death card,
+the heir, the feast, the bragarfull, a challenge, the heir's telling, the
+spring step with years chosen, the spring with stepping down, the
+household rows of the year told, the household cards in the talk, the
+years told, the saga, the ending card, the title with "Read the last
+saga" and the saga read there, an old man's death card. Suite: 445 tests,
+0 failed.
 
 ## Open
 
 - Bands of the stand-in Viking grow past `recruit_cap` over long runs
-  (men who ask to join after a fight are not capped; not this package's).
+  (29 to 104 men by 901; men who ask to join after a fight are not
+  capped; not this package's).
+- The years stop for any wergild offer or friend's marriage; a busy
+  raider rarely gets more than a year. Worth tuning once played.
 - The holmgang for the high seat is the existing first-blood duel; with a
   much stronger second it is nearly always lost.
 - A son at home who is made leader at the grave-ale is built then (weak,

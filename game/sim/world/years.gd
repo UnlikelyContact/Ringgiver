@@ -271,11 +271,12 @@ static func _stop(j: Journey, y: int) -> Dictionary:
 		var asks := c.world.families.asks(r.fork("asks"), wr, c.world, band, y)
 		var wanted: Array[Dictionary] = []
 		for d in asks:
-			# Wergild offered, a marriage, or a call for help from a house
-			# bound to his by blood, marriage or fostering will not wait;
+			# Wergild offered, a friend's daughter, or a call for help from a
+			# house bound to his by blood, marriage or fostering will not wait;
 			# other houses' asks can go unheard for a year.
 			var bound := not (band.house_ties.get(str(d.house), []) as Array).is_empty()
-			if str(d.ask) == "compensation" or str(d.ask) == "marry" or (str(d.ask) == "help" and bound):
+			if str(d.ask) == "compensation" or (str(d.ask) == "marry" and Families.is_friend(wr, band, str(d.house))) \
+					or (str(d.ask) == "help" and bound):
 				wanted.append(d)
 		if not wanted.is_empty():
 			return {"kind": "house", "asks": wanted, "text": "In %d %s sends word." % [y, str(wanted[0].house)]}
