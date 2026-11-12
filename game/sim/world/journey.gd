@@ -163,6 +163,7 @@ func begin_summer() -> void:
 	c.band.year = cal.year
 	c.world.year = cal.year
 	cal.day = 1
+	Omens.short_summer(self)  # the year's early winter, known (and saved) from its first day
 	c._summer_wins = 0
 	_rng = c.rng.fork("journey:%d" % cal.year)
 	_n = 0

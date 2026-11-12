@@ -202,7 +202,7 @@ the pace when a caller gives no haul), `FLAT_COST`.
 
 - A trader with a hold of 6 or more, 150 oz and the summer for it (the
   road there fits with 20 days to spare) sets out east in 35% of the
-  springs he could, once in three years at most: he buys ivory, amber
+  springs he could (`EAST_CHANCE` 0.25), once in three years at most: he buys ivory, amber
   and furs for half his silver at the first market on his way, goes stop
   by stop to Miklagard, sells everything, buys silk with two thirds of
   his silver while it would sell at Kaupang for half as much again, and
@@ -213,15 +213,102 @@ the pace when a caller gives no haul), `FLAT_COST`.
   35% of his summers, if he knows them and they are raidable with his men.
 - An outlaw (any bent) with 30 days left winters in Shetland if he knows
   it and can reach it.
+- The other ways' stand-ins do not look for "the nearest" living on the
+  river road or in the Isles (`_nearest`: the far east only once there,
+  the Isles only as an outlaw), take no passage up the river road, and a
+  man in a færing goes no further than `FAERING_REACH` (30) days for the
+  nearest anything: the new southern shore of the Baltic lets a færing
+  creep round to Orkney in about 110 days, and the stand-ins took it.
+  The world keeps the home waters' work on their side too: a lord's
+  escort (`Contracts`), a merchant's guard, a félag and a place at the
+  oars (`TradeRoad`) never cross between the river road and the home
+  waters; the road is a summer's venture, not an errand.
 - Their dice are their own (`c.rng.fork(label)`, not `Journey._fork`), so
   the choice does not shift the rest of the saga's dice.
 
-MEASURED
+## What was measured
+
+Battles unchanged (before and after, the same lines):
+`diag_mixed.gd -- 40 1`: `TOTAL 40 fights, 13 wins (32%)`;
+`diag_identity.gd -- 20 1`: `ALL 1946475587`.
+
+The save: `save_check.gd -- 2 all trader,viking all 1`:
+`== 201 OK, 0 DIFF, 3 never came to the point`. A pre-existing lazy
+cache (`Omens.short_summer` writes the year's early-winter flag into
+`Journey.life` the first time it is asked, which `SaveStore.write`'s
+summary did after encoding) made `test_store_writes_reads_and_refuses_the_bad`
+fail once the stand-ins' path changed; `Journey.begin_summer` now asks
+it on the first day.
+
+The ways, `batch_ways.gd -- N 4 1 all younger_son`, worth a year (silver
++ land + hull; the trader's unsold silk is not counted):
+
+| Way | before, 6 sagas | after, 6 | before, 12 | after, 12 |
+|---|---|---|---|---|
+| Viking | +181 | +214 | +206 | +204 |
+| Trader | +170 | +130 | +173 | +124 |
+| Law-wise man | +134 | +151 | +140 | +149 |
+| Berserk | +128 | +183 | +146 | +172 |
+| Skald | +146 | +118 | +130 | +121 |
+| King's man | +177 | +152 | +168 | +149 |
+| richest / poorest | 1.41 | 1.81 | 1.58 | 1.69 |
+
+No STALL in any run. The trader went from second-richest to fifth: in
+12 sagas of 4 years he went east 5 times (all reached Miklagard, 4 took
+the guard and wintered there, 21 hauls, 9 sales of silk at home), and a
+summer on the road is worth about one at home while the silk still in
+his hold at the year's end counts for nothing in the batch. The 6-saga
+batch swings a lot with the seed (the berserk +55 there, +26 over 12).
+The viking raided Skye 4 times in 12 sagas.
+
+Before tightening the stand-ins (above) the batch had the king's man
+escorting merchants to Koenugard for 25 oz, færings creeping round the
+Baltic, and the trader wintering in the Isles: richest/poorest 2.1.
 
 ## Open
 
-OPEN
+- The trader's venture is a fair summer, not a better one, and the
+  batch does not count cargo; whether a player finds it worth the
+  summer wants a person playing it. Prices to tune: `place_factor`
+  (Miklagard 2.4 for furs, amber, ivory), `place_depth`, `guard_pay`.
+- A lord at Miklagard still offers the generic work (hunt outlaws,
+  escort a merchant to Koenugard) and the generic hires (a Dane who lost
+  his ship): the east has no work or men of its own yet (Varangian
+  recruits, Rus hirelings).
+- The portage ambushers are fought as outlaws on the strand; the
+  Pechenegs have no horse and no steppe ground of their own.
+- Raiding Miklagard is offered (24 champions): it is suicide, and says
+  so, but perhaps it should not be offered at all.
+- Tidings between the halves are kept apart by a line on the map
+  (`EAST_FROM_X`); news from Miklagard is never told at home.
+- `MapArt` builds 1.8x the cells: on a phone that is about twice the
+  build hitch the map-art notes measured. Long paths (Norway to
+  Miklagard) are 250-320 ms searches; `days_to` from the wilds is not
+  kept, so tapping far places from open water costs that each time.
+- The Faroes are not on the map (the "Faroes-ward sea" is open water).
+- A færing can creep round the Baltic to the west in about 110 days;
+  the stand-ins are kept from it, a player is not.
 
 ## Commands for the shots
 
-COMMANDS
+From `game/`, `timeout 300 xvfb-run -a godot --path . --rendering-driver opengl3 --resolution 844x390 -s tools/screenshot_map.gd -- <out.png> younger_son 7 answer:ignore` and:
+
+```
+1_whole_z4       knowall zoom:4 cam:110:72
+2_west_z8        knowall zoom:8 cam:-6:50
+3_east_road_z8   knowall zoom:8 cam:168:80
+4_black_sea_z6   knowall zoom:6 cam:170:135
+5_lakes_z12      knowall zoom:12 cam:166:52
+```
+
+and with `tools/screenshot_game.gd -- <out.png> younger_son <seed> answer:ignore`:
+
+```
+6_on_the_rollers    (seed 8) men:6 knarr at:holmgard go:koenugard days:3 answer:pass days:3 answer:pass days:3 answer:pass days:2 answer:pass zoom:16
+7_hebrides_panel    (seed 7) men:6 knarr at:hebrides zoom:10 place:3000
+8_miklagard_guard   (seed 7) men:6 knarr at:miklagard zoom:12 place:1130
+9_miklagard_panel   (seed 7) men:6 knarr at:miklagard zoom:12 place:3000
+```
+
+(The hint card over 9 and 7, "here your saga begins", is the tool's `at:`
+putting the band there on its first day.)

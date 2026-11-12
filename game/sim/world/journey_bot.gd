@@ -716,8 +716,12 @@ static func _nearest(j: Journey, want: Callable) -> String:
 		var p := c.world.place(id)
 		if p == null or id == c.band.location or not p.is_open(c.world.year) or not want.call(p):
 			continue
-		# The river road is a venture of its own (_east), not the nearest anything.
+		# The river road is a venture of its own (_east), not the nearest anything;
+		# and the Isles are raiders' and outlaws' country (_wider), not where a
+		# man of the other ways looks for his living.
 		if Roam.far_east(p) and not Roam.far_east_at(j.roam.pos):
+			continue
+		if ISLES.has(p.id) and not Outlawry.is_outlawed(c.band, c.cal):
 			continue
 		var d := j.days_to(id)
 		if d < 0 or d >= best_days or d + 10 > j.days_left():
@@ -951,6 +955,8 @@ static func _law_land(j: Journey, bent: int, ids: Dictionary) -> bool:
 
 # --- The wider world (docs/design/notes/wider-world.md) ------------------------------
 
+## The western isles of the wider world.
+const ISLES := ["shetland", "hebrides", "skye"]
 ## Days a man in a færing will go for "the nearest" anything (_nearest).
 const FAERING_REACH := 30
 ## The stops of the road east, Baltic end first.
@@ -962,7 +968,7 @@ const SILK_HOMES := ["kaupang", "lade", "bjarkoy", "hedeby", "ribe"]
 ## A trader with a hold and the silver for it sets out on the road east in
 ## this share of the springs he could (once in `EAST_EVERY` years at most);
 ## a viking turns west for the Hebrides in this share of his summers.
-const EAST_CHANCE := 0.35
+const EAST_CHANCE := 0.25
 const EAST_EVERY := 3
 const WEST_RAID_CHANCE := 0.35
 
