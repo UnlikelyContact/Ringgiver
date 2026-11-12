@@ -34,7 +34,8 @@ var last_saga := {}
 ## the band is under way (`autosave_travel`), and when the window loses the
 ## player (closed, hidden, put behind another). Never while the battle
 ## screen is up: a saga saved in a fight resumes at the fight's start, the
-## save made as it began. Tools turn it off, or point SaveStore.dir away.
+## save made as it began. Off in a tool's run (fixed_seed or no config);
+## the screenshot tool turns it on into its own SaveStore.dir.
 var autosave_on := true
 ## The least time between two autosaves; a beat inside it is saved when it
 ## has passed.
@@ -59,8 +60,8 @@ func _ready() -> void:
 	UiTheme.motion = not fixed_seed  # a repeatable run (the tools) takes its stills at once
 	layer = CanvasLayer.new()
 	add_child(layer)
-	if not use_config:
-		autosave_on = false
+	if not use_config or fixed_seed:
+		autosave_on = false  # a tool's run: never the player's saves
 	show_title()
 
 

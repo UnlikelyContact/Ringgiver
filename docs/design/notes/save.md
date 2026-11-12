@@ -239,7 +239,10 @@ closed), each winter step (`WinterScreen._press`), a fight concluded
 `NOTIFICATION_APPLICATION_PAUSED`, `NOTIFICATION_APPLICATION_FOCUS_OUT` and
 `NOTIFICATION_WM_WINDOW_FOCUS_OUT` (never while the battle screen is up).
 Loading a slot writes the autosave at once (the saga taken up is the one
-Continue finds). Tools run with `use_config` off have autosave off.
+Continue finds). A tool's run (`use_config` off or `fixed_seed`) has
+autosave off, so `screenshot_map.gd` and the like never touch the
+player's saves; `screenshot_game.gd` turns it on into `user://shot_saves/`
+for the save's own shots.
 
 ## Measured
 
