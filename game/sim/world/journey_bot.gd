@@ -260,6 +260,10 @@ static func _answer(j: Journey, d: Dictionary, bent: int) -> String:
 			return Thralls.bot(j, d, bent)
 		"omen":
 			return Omens.bot(j, d, bent)
+		"men_silver":
+			# A woman's oath when there is room (else she is sent on); a house's suit given.
+			if str(d.get("step", "")) == "maiden":
+				return "take" if d.options[0].get("enabled", true) else "refuse"
 	return str(d.options[0].id)
 
 

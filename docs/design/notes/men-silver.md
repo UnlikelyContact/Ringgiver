@@ -196,7 +196,87 @@ All in `CampaignRules`, section "Men and silver": `nature_growth`,
   `tools/batch_ways.gd` (a "silver laid out" line),
   `tools/batch_generations.gd` (laid out by five years and by kind).
 
-MEASURED
+## What was measured
+
+**Ordinary battles and the escape, unchanged.** Before (main 25ab03c) and
+after, the final lines are identical: `diag_mixed -- 40 1` "TOTAL 40
+fights, 13 wins (32%)"; `diag_identity -- 20 1` "ALL 1946475587" (mixed
+3670634342, hold 1561442230, ambush 3427121816, ambushed 4243098782,
+escape 1252941125); `diag_escape -- 30` tutorial 30/30 out (6.0 rounds),
+skip 30/30 (5.3), nothing 0/30 (14.5), charge 27/30 (7.7). The escape
+renders `escape 7 tut:3` with no script error.
+
+**The five-year table, the younger son, seed 1** (`batch_ways -- 8 5 1 all
+younger_son`; before is main 25ab03c, which gives exactly balance.md's
+"after" for this block). "Laid out" is the new line: ounces a year spent on
+arms and works, which the worth (silver, land at its price, the hull) does
+not count; worth and laid out together is the band's earning.
+
+| Bent | worth/yr before | after | laid out/yr | worth + laid out | silver y5 before / after | land before / after | men y5 before / after | most men | luck before / after | honor before / after | fights a saga |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Viking | +168 | +138 | 26 | +164 | 595 / 482 | 1.2 / 1.0 | 25.0 / 25.1 | 30 / 30 | 5.6 / 5.4 | 13 / 11 | 48.5 / 48.6 |
+| Trader | +191 | +181 | 10 | +191 | 537 / 499 | 5.9 / 5.6 | 8.9 / 8.9 | 10 / 10 | 6.0 / 6.9 | 48 / 48 | 5.0 / 5.0 |
+| Law-wise man | +130 | +161 | 10 | +170 | 325 / 429 | 4.6 / 5.2 | 9.9 / 11.1 | 11 / 13 | 5.4 / 6.0 | 98 / 99 | 5.2 / 5.9 |
+| Berserk | +146 | +138 | 14 | +151 | 513 / 464 | 3.1 / 3.1 | 10.8 / 11.0 | 12 / 12 | 5.9 / 5.9 | 32 / 47 | 20.5 / 19.6 |
+| Skald | +133 | +130 | 3 | +133 | 428 / 352 | 2.9 / 3.1 | 12.9 / 14.9 | 16 / 17 | 6.1 / 5.8 | 61 / 64 | 6.0 / 5.0 |
+| King's man | +174 | +165 | 8 | +173 | 458 / 397 | 4.5 / 4.5 | 18.1 / 18.2 | 25 / 25 | 6.2 / 6.2 | 47 / 50 | 14.8 / 14.8 |
+
+No stall, no saga ended, no shieldmaiden in these 48 five-year sagas (she
+needs fame 15 and then comes in 5 of 100 summers). The richest bent earns
+1.39 times the poorest (before 1.47). What moved: the law-wise man's
+stand-in is silver-tongued now (one better at every counsel), and earns a
+quarter more, the clearest single effect of a nature; the trader is
+deep-minded and close-fisted, his luck ends higher (6.9, from 6.0); the
+Viking's worth is a fifth lower because he spends (helmets for his men,
+26 oz a year), and his worth with what he laid out is as before. The
+first stand-in (reserve 200 + 10 a man) spent half again as much and
+bought less land (Viking +101 worth a year, land 0.6; trader +152, land
+4.4): the reserve was raised to 350 + 15 a man so a young band buys land
+and a hull first, as a person would.
+
+**What a saga can afford at 5, 10 and 20 years** (`batch_generations -- 3
+20 1 0 <bent> younger_son`, playing every summer; silver in hand and
+ounces laid out so far, at the springs of 871, 876 and 886, three sagas
+each):
+
+| Bent | y5 in hand / laid out | y10 | y20 | laid out in 20 years, by kind (mean) |
+|---|---|---|---|---|
+| Trader | 400-670 / 10-260 | 980-1020 / 810-950 | 660-2160 / 2850-3440 | feasts 1275, ship 800, arms 800, hall 240, skald 30 |
+| Viking | 240-460 / 0-120 | 130-820 / 0-590 | 780-1470 / 1170-2830 | arms 1220, the dead 320, feasts 185, hall 80 |
+| Law-wise man | 180-660 / 0-340 | 660-940 / 90-1210 | 250-1750 / 390-2160 | arms 1110, feasts 205, ship 105, hall 40 |
+
+In words: at five years a band has a few hundred ounces and buys helmets
+and perhaps a sail; nothing at the hall is yet worth its reserve. At ten
+it has about a thousand, and the choices are real: the next step of the
+hall (60, 180, 500), a skald (30 and 20 a winter), feasts for the houses
+it wants (60-120 each, once a year each), mail for its veterans (45-56 a
+man), a sword with a name (150), a stone or a mound for each of its dead
+(40, 150). The whole of it for a band of fifteen is some 3000 to 4000 oz
+of one-off things and 300 to 600 a year of feasts and the skald, more
+than a ten-year band has: it must choose. At twenty a trader has laid out
+about 3000 and still holds 700 to 2200; a Viking with 24 to 40 men has
+laid out 1200 to 2800, most of it on arms for them. Before this branch a
+forty-year trader or law-wise man ended with thousands and nothing to buy
+(balance.md, "Still off"); now the trader's twenty-year chest is spent as
+it fills. A rich band still runs short when it keeps feasting every
+house: the stand-in's two feasts a summer cost 150 to 250 a year.
+
+Shieldmaidens: none came in these nine twenty-year sagas, which showed
+that the first rule (she came only when the band had a bench for her)
+kept her from every full band; she now comes whatever the benches and
+"Take her oath" is greyed with why when there is no room (the stand-in
+then sends her on). With that, `batch_generations -- 3 20 11 0 <bent>
+burned_hall`: three shieldmaidens took the oath in six twenty-year sagas
+(trader 2 of 3 sagas, Viking 1 of 3), about one in a forty-year saga, and
+the same sagas laid out 2100-3500 oz (trader) and 1360-2240 (Viking) in
+twenty years with 900-2000 still in hand.
+
+The save: `save_check -- 2 <origin> all all 1` for each origin (run as
+three, side by side, since the whole matrix does not finish in 1500 s on
+this shared machine; the one run of `-- 2 all all all 1` was cut off by its
+timeout at 346 OK, 0 DIFF): younger son "== 201 OK, 0 DIFF, 3 never came
+to the point", burned hall "== 203 OK, 0 DIFF, 1 never came to the point",
+freedman "== 196 OK, 0 DIFF, 8 never came to the point". 600 OK, 0 DIFF.
 
 ## Tests
 
@@ -210,3 +290,60 @@ the adornment's honor and warmth; feasts; a stone that says "her", the
 skald paid at the winter; the sail and a new hull bare, the boathouse; a
 shieldmaiden and the saga's words for her; how rare they are; the suit for
 her hand; the stand-in spends; the estate and her sword saved and loaded.
+
+## Files changed outside this package's ownership
+
+- `sim/world/journey.gd` (shared): a new section at the end; one line
+  each in `begin_summer` (`_men_silver_spring()`), `actions`
+  (`_men_silver_actions()`), `act` (`or _act_men_silver(id)`), `answer`
+  (the `men_silver` kind), `sail_speed` (`* Estate.sail_mult(self)`).
+- `sim/world/journey_bot.gd` (shared): a new section at the end; one line
+  in `play_year` (`_nature`), one call in `_act` after `_law_land`
+  (`_men_silver`), one case in `_answer` (`men_silver`).
+- `view/map_screen.gd` (shared): two lines in `_add_actions` (the smith
+  and works open their panel).
+- `tools/screenshot_game.gd` (shared): a new function `_men_silver` and
+  the `nature` screen, one `elif` to call it.
+- `sim/world/callings.gd` (nobody's): `holmgang_terms`' honor cost times
+  the nature's `challenge_honor`.
+- `sim/world/thralls.gd`, `sim/world/voyage.gd` (nobody's): one line each,
+  the pronoun of a man of the band taken or drowned.
+- `tools/batch_ways.gd`, `tools/batch_generations.gd`: the laid-out lines.
+- `tests/test_generations.gd`: `test_saga_text_tells_each_generation`
+  asks for two chapters at least, not exactly two (with the stand-in's new
+  play the heir of seed 90 falls in his own first summer).
+
+## Still open, and doubtful
+
+- **The battle log says "his" of a shieldmaiden.** `sim/combat/*` belongs
+  to battles-2. The lines: attack.gd 225, 228 ("his luck holds/is out");
+  battle.gd 1055 ("he drops back behind"), 1316 ("dies of his wounds"),
+  1527 ("in his mail"); decision.gd 134 ("freezes behind his shield"), 849
+  ("looks for his place"); objective.gd 620 (a leader). A `Warrior.woman`
+  set in `Man.to_warrior` and a `he()`/`his()` on Warrior would do it;
+  left to battles-2. The fight's rules are untouched for her.
+- **Shieldmaidens are rare**: three in six twenty-year stand-in sagas
+  after the room rule was loosened, none in the 48 five-year sagas (fame
+  15 comes late for most bents). Their reactions, the suit and the words
+  are tested; a player may go a whole saga without one, which is the
+  design, but it means few players will see her.
+- **A non-son heir has no nature.** A sworn second or a man of the band
+  who takes the high seat has his personality but no chosen nature, and
+  the band's nature edges go with the old leader. A son brings a mix.
+- **The skald is paid and sings only when the band winters at its own
+  hall**; a band that winters abroad keeps him without paying him and
+  without his fame. Simple, perhaps too kind.
+- **Fittings are lost with the hull**, so a trader who changes ships
+  twice pays for three sails (800 oz in twenty years in the measurement).
+  That is a sink, and true, but the stand-in may buy a sail on a boat he
+  will sell next spring.
+- **The view's "For a man..." list** shows only those who lack the piece
+  (a sword for the front rank, a bow takes a man to the bows); the hint
+  says so, but a player who wants a second rank man to have a sword must
+  move him to the front first (in the winter's yard).
+- **The winter ring-giving does not offer the chest's arms**: the chest is
+  given from the men panel in summer. The winter ladder still sells arms
+  at the hall's prices.
+- **The nature screen is not on the burned hall's skip path's tools**:
+  `tools/screenshot_game.gd escape` begins without a nature (as tools
+  should), so `diag_escape` and the escape render are untouched.

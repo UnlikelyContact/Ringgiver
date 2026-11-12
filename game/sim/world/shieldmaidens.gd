@@ -34,7 +34,7 @@ static func spring(j: Journey) -> void:
 	var r := c.rng.fork("maiden:%d" % c.cal.year)
 	var at := j.here()
 	if e.maidens < rules.maiden_max and band.fame >= rules.maiden_fame and at != null and Journey.SETTLED.has(at.kind) \
-			and band.living_men().size() + 1 < c.room() and r.randf() < rules.maiden_chance:
+			and r.randf() < rules.maiden_chance:
 		_offer(j, r, at)
 		return
 	for m in band.living_men():
@@ -50,11 +50,13 @@ static func _offer(j: Journey, r: SimRng, at: Place) -> void:
 	var her := str(c.rules.maiden_names[r.randi_range(0, c.rules.maiden_names.size() - 1)])
 	var brother := str(Recruits.NAMES[r.randi_range(0, Recruits.NAMES.size() - 1)])
 	var text := str(story.text) % [at.display_name, brother, her, band.leader.display_name]
+	var full := band.living_men().size() >= c.room()
 	j.decisions.append({"kind": "men_silver", "step": "maiden", "title": "A woman asks to swear", "text": text,
 			"name": her, "brother": brother, "story": str(story.key), "trait": str(story.trait), "at": at.id,
 			"detail": "She would stand in the line as any of your men: nothing in the fight is different for her. Some of your men may take it ill.",
 			"options": [
-				{"id": "take", "label": "Take her oath", "hint": "She joins the band."},
+				{"id": "take", "label": "Take her oath", "enabled": not full,
+					"hint": "You have no bench or oar for another: let a man go first." if full else "She joins the band."},
 				{"id": "gift", "label": "Send her home with a gift (5 oz)", "enabled": band.silver >= 5, "hint": "No one thinks the less of you."},
 				{"id": "refuse", "label": "Send her away", "hint": "She goes to find a better man."}]})
 
@@ -101,7 +103,7 @@ static func _answer_maiden(j: Journey, d: Dictionary, id: String) -> void:
 		band.silver -= 5
 		j._say("%s gives %s five ounces and sends her home to her kin; she goes without a word." % [who, her])
 		return
-	if id != "take" or band.living_men().size() + 1 >= c.room():
+	if id != "take" or band.living_men().size() >= c.room():
 		j._say("%s will not take her oath. %s goes on along the shore to find a better man." % [who, her])
 		return
 	var m := Recruits.make(c.rng.fork("maiden_man:%d" % c.cal.year), rules, CampaignTypes.Origin.YOUNGER_SON,
