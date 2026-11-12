@@ -517,7 +517,7 @@ func _show_ways() -> void:
 		var r := Way.rank(band, way)
 		var head := HBoxContainer.new()
 		head.add_theme_constant_override("separation", 10)
-		var name := _text("%s  %s%s   %s" % [str(d.name), "●".repeat(r), "○".repeat(Way.MAX_RANK - r), d.blurb], 15, Palette.GOLD)
+		var name := _text("%s (%d of %d)   %s" % [str(d.name), r, Way.MAX_RANK, d.blurb], 15, Palette.GOLD)
 		name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(name)
 		var cost := Way.next_cost(band, way)
