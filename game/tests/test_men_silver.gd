@@ -442,3 +442,15 @@ func test_the_estate_is_saved() -> void:
 			found = true
 	assert_true(found, "she and her sword come back")
 	assert_eq(float(back.c.band.gift("dread", 0.0)), float(j.c.band.gift("dread", 0.0)), "the edges come back")
+
+
+## The fight's own lines turn for a woman of the band, and are untouched
+## for a man (the battle log is byte for byte what it was).
+func test_the_fight_says_she_of_a_woman() -> void:
+	var w := Warrior.new()
+	w.display_name = "Hervor"
+	var line := "Hervor cannot hold himself: he runs at them, his shield before him."
+	assert_eq(w.said(line), line)
+	w.woman = true
+	assert_eq(w.said(line), "Hervor cannot hold herself: she runs at them, her shield before her.")
+	assert_eq(w.said("Hervor looks for his place in the shield wall"), "Hervor looks for her place in the shield wall")

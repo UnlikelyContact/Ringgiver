@@ -920,7 +920,7 @@ func _face_about(side: int, leader: Warrior) -> void:
 	leader.line_axis = s[0]
 	leader.line_facing = s[1]
 	leader.facing = s[1]
-	log.append("%s turns his men to face the ambush" % leader.display_name)
+	log.append(leader.said("%s turns his men to face the ambush" % leader.display_name))
 
 
 ## Whether a side can withdraw: none of its standing men has an enemy at
@@ -1117,7 +1117,7 @@ func _relieve_shieldless(side: int, leader: Warrior) -> void:
 		w.spend_breath(rules.breath_cost_move)
 		swapped[w] = true
 		swapped[relief] = true
-		log.append("%s's shield is gone: %s steps up into the line and he drops back behind" % [w.display_name, relief.display_name])
+		log.append(w.said("%s's shield is gone: %s steps up into the line and he drops back behind" % [w.display_name, relief.display_name]))
 
 
 ## Each man in the wall minds his own front. With an enemy before him he
@@ -1391,7 +1391,7 @@ func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.
 			match f:
 				CombatTypes.Fate.DEAD:
 					result.dead[w.side] += 1
-					log.append("%s dies of his wounds" % w.display_name)
+					log.append(w.said("%s dies of his wounds" % w.display_name))
 				CombatTypes.Fate.MAIMED:
 					result.maimed[w.side] += 1
 					log.append("%s lives, maimed" % w.display_name)
@@ -1543,9 +1543,9 @@ func set_luck(side: int, luck: int) -> void:
 	for w in side_warriors(side):
 		w.morale = clampi(w.morale + l.luck * rules.luck_morale, 0, 10)
 	if l.luck > 0:
-		log.append("%s's men say his luck holds" % l.display_name)
+		log.append(l.said("%s's men say his luck holds" % l.display_name))
 	else:
-		log.append("%s's men mutter that his luck is out" % l.display_name)
+		log.append(l.said("%s's men mutter that his luck is out" % l.display_name))
 
 
 ## Every man standing with an enemy at arm's length after the blows has
@@ -1602,7 +1602,7 @@ func _sea_takes(r: SimRng, w: Warrior) -> void:
 		w.fate = CombatTypes.Fate.DEAD
 		result.dead[w.side] += 1
 		result.drowned[w.side] += 1
-		log.append("%s goes down%s and does not come up" % [w.display_name, " in his mail" if w.armor == CombatTypes.Armor.MAIL else ""])
+		log.append(w.said("%s goes down%s and does not come up" % [w.display_name, " in his mail" if w.armor == CombatTypes.Armor.MAIL else ""]))
 	else:
 		w.fate = CombatTypes.Fate.RECOVERED
 		log.append("%s swims, and is hauled out of the sea" % w.display_name)

@@ -242,7 +242,7 @@ func _think(battle: Battle) -> void:
 				line = "%s's men on the %s stand hard" % [lt.display_name, hand_name()]
 				battle.log.append(line)
 			if temper == Temper.RASH and not acting and _wavering(near, rules.wing_waver[Temper.RASH]):
-				_act(battle, CombatTypes.Shout.BREAK_THEM, "%s cannot keep to it: he takes the %s in" % [lt.display_name, hand_name()])
+				_act(battle, CombatTypes.Shout.BREAK_THEM, lt.said("%s cannot keep to it: he takes the %s in" % [lt.display_name, hand_name()]))
 			elif acting and heart <= rules.wing_quit_morale:
 				_rejoin(battle, "the %s is thrown back, and %s brings it in again" % [hand_name(), lt.display_name])
 		Word.PRESS:
@@ -259,7 +259,7 @@ func _think(battle: Battle) -> void:
 					rest_until = battle.round + rules.wing_fallback_rest
 					_rejoin(battle, "%s's men stand again on the %s" % [lt.display_name, hand_name()])
 			elif engaged and battle.round >= rest_until and heart <= rules.wing_pressed[temper]:
-				_act(battle, CombatTypes.Shout.TO_ME, "%s calls the %s back on him" % [lt.display_name, hand_name()])
+				_act(battle, CombatTypes.Shout.TO_ME, lt.said("%s calls the %s back on him" % [lt.display_name, hand_name()]))
 				Morale.rally(rules, battle.grid, lt, battle.warriors, battle.log)
 		Word.ROUND_FLANK:
 			if acting:

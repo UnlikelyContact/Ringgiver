@@ -222,10 +222,10 @@ static func _close_call(rules: CombatRules, r: ExchangeResult, log: PackedString
 	var m := absi(r.margin)
 	if r.loser.luck > 0 and r.tier == OpposedRoll.Tier.HIT and m <= rules.luck_close_margin:
 		r.tier = OpposedRoll.Tier.GLANCING
-		log.append("the blow turns on %s's helm: the men say his luck holds" % r.loser.display_name)
+		log.append(r.loser.said("the blow turns on %s's helm: the men say his luck holds" % r.loser.display_name))
 	elif r.loser.luck < 0 and r.tier == OpposedRoll.Tier.GLANCING and m >= rules.luck_close_margin - 1:
 		r.tier = OpposedRoll.Tier.HIT
-		log.append("a blow that should have glanced bites into %s: his luck is out" % r.loser.display_name)
+		log.append(r.loser.said("a blow that should have glanced bites into %s: his luck is out" % r.loser.display_name))
 
 
 static func _apply_glancing(rules: CombatRules, grid: BattleGrid, r: ExchangeResult) -> void:

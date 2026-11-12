@@ -131,7 +131,7 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	var together := objective != null and objective.keeps_together(w)
 	if w.tier == CombatTypes.Tier.GREEN and w.morale <= rules.morale_break_threshold \
 			and not together and rng.randf() < rules.green_panic_ignore_chance:
-		var froze := "%s freezes behind his shield" % w.display_name
+		var froze := w.said("%s freezes behind his shield" % w.display_name)
 		log.append(froze)
 		w.last_reason = froze
 		w.last_option = "freeze"
@@ -246,8 +246,8 @@ static func _alternatives(m: Mind, order: CombatTypes.Shout, plain: Action, opts
 		var why := ""
 		if reckless:
 			s += rules.dm_reckless_charge
-			why = ("%s cannot hold himself: he runs at them" if w.tier == CombatTypes.Tier.GREEN
-					else "%s will not wait: he goes at them") % _nm(w)
+			why = w.said(("%s cannot hold himself: he runs at them" if w.tier == CombatTypes.Tier.GREEN
+					else "%s will not wait: he goes at them") % _nm(w))
 		if superstitious and omen > 0:
 			s += rules.dm_omen_charge
 			why = "%s sees their banner fall and goes at them" % _nm(w)
@@ -306,8 +306,8 @@ static func _alternatives(m: Mind, order: CombatTypes.Shout, plain: Action, opts
 			var res := _drop_back(m)
 			if not res.is_empty():
 				var friend: Warrior = res[1]
-				var why := ("%s is hurt and falls back behind %s" if w.tier <= CombatTypes.Tier.BLOODED
-						else "%s, badly cut, gives his place and drops behind %s") % [_nm(w), _nm(friend)]
+				var why := w.said(("%s is hurt and falls back behind %s" if w.tier <= CombatTypes.Tier.BLOODED
+						else "%s, badly cut, gives his place and drops behind %s") % [_nm(w), _nm(friend)])
 				_add(m, opts, order, Opt.DROP_BACK, hurt, res[0], why)
 
 	# An end man turns to meet a flanker coming round his open side.
@@ -324,12 +324,12 @@ static func _alternatives(m: Mind, order: CombatTypes.Shout, plain: Action, opts
 	if m.reads_intent() and adj.is_empty() and plain.kind != CombatTypes.ActionKind.BRACE:
 		var volley := _throw(rules, m.grid, w, m.enemies)
 		if volley != null:
-			_add(m, opts, order, Opt.THROW, rules.dm_read_throw, volley, "%s looses his spear before they close" % _nm(w))
+			_add(m, opts, order, Opt.THROW, rules.dm_read_throw, volley, w.said("%s looses his spear before they close" % _nm(w)))
 		var rush := _rush_coming(m)
 		if rush != null:
 			_add(m, opts, order, Opt.BRACE_FOR_CHARGE, rules.dm_read_brace,
 					Action.brace(BattleGrid.direction_to(w.pos, rush.pos)),
-					"%s reads the rush and sets his shield" % _nm(w))
+					w.said("%s reads the rush and sets his shield" % _nm(w)))
 
 	# A greedy man goes for the gear of a fallen leader or banner man, once.
 	if w.has_personality(CombatTypes.Personality.GREEDY) and not w.looted and adj.is_empty():
@@ -351,7 +351,7 @@ static func _alternatives(m: Mind, order: CombatTypes.Shout, plain: Action, opts
 			if step != null:
 				step.new_facing = BattleGrid.direction_to(step.target_cell, their.pos)
 				_add(m, opts, order, Opt.STEP_OUT, rules.dm_boast_step, step,
-						"%s steps out where %s can see him" % [_nm(w), _nm(their)])
+						w.said("%s steps out where %s can see him" % [_nm(w), _nm(their)]))
 
 	# A veteran on his own goes for a hurt man two cells off.
 	if m.sees_flank() and adj.is_empty() and m.grid.line_neighbors(w).is_empty():
@@ -846,7 +846,7 @@ static func _form(m: Mind, wedge: bool) -> Action:
 		# A shape he has not drilled: he fumbles for his place some rounds.
 		if template != null and template.learned \
 				and m.blur.randf() < (1.0 - w.familiar(template, m.rules.drill_points_full)) * m.rules.drill_fumble_chance:
-			w.last_reason = "%s looks for his place in the %s" % [w.display_name, template.name]
+			w.last_reason = w.said("%s looks for his place in the %s" % [w.display_name, template.name])
 			return Action.brace(leader.wall_facing())
 		var step := _step_toward(grid, w, plan[w], leader.wall_facing())
 		if step != null:
@@ -1139,7 +1139,7 @@ static func _pressing(m: Mind, e: Warrior) -> Array[Warrior]:
 static func _mark_reason(m: Mind, e: Warrior) -> String:
 	var w := m.w
 	if w.has_personality(CombatTypes.Personality.BOASTFUL) and (e.is_leader or e.tier == CombatTypes.Tier.CHAMPION):
-		return "%s seeks out %s, where all can see him" % [_nm(w), _nm(e)]
+		return w.said("%s seeks out %s, where all can see him" % [_nm(w), _nm(e)])
 	if BattleGrid.chebyshev(w.pos, e.pos) >= 2:
 		var pressed := _pressing(m, e)
 		var friend: Warrior = null
@@ -1156,7 +1156,7 @@ static func _mark_reason(m: Mind, e: Warrior) -> String:
 			return "%s's spear goes for the man on %s" % [_nm(w), _nm(friend)]
 	if not e.shield_usable():
 		return "%s picks %s, whose shield is gone" % [_nm(w), _nm(e)]
-	return "%s picks his man: %s" % [_nm(w), _nm(e)]
+	return w.said("%s picks his man: %s" % [_nm(w), _nm(e)])
 
 
 static func _less(a: Array, b: Array) -> bool:

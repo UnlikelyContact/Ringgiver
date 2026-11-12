@@ -75,6 +75,9 @@ var drill := {}
 ## A berserk: the fury is on him while his breath lasts (CombatRules.fury_*);
 ## `fury_level` 2 strikes one better again.
 var fury := false
+## A woman of the band (Man.woman): the fight's lines say "she" and "her"
+## of her (`said`). Nothing in the fight reads it.
+var woman := false
 var fury_level := 1
 ## The leader's luck carried into the fight (Leader.luck_modifier through
 ## the campaign): -1, 0 or +1. Zero for every other man and every fight
@@ -234,3 +237,19 @@ func describe() -> String:
 		display_name, CombatTypes.TIER_NAMES[tier], side, might, skill, grit, nerve, wits,
 		CombatTypes.WOUND_NAMES[wound], pos, morale, breath,
 	]
+
+
+## `line` as the saga says it of this warrior: the words for a man turned
+## for a woman when this is one. For lines that speak of this warrior
+## alone ("freezes behind his shield"), not of the man he fights.
+func said(line: String) -> String:
+	if not woman:
+		return line
+	var turn := {"he": "she", "his": "her", "him": "her", "himself": "herself"}
+	var words := line.split(" ")
+	for i in words.size():
+		var word := words[i]
+		var bare := word.rstrip(":,.;")
+		if turn.has(bare):
+			words[i] = str(turn[bare]) + word.substr(bare.length())
+	return " ".join(words)

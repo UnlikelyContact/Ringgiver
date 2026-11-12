@@ -165,6 +165,7 @@ func too_hurt_to_fight(rules: CampaignRules) -> bool:
 func to_warrior(side: int, rules: CampaignRules = null, javelins := 1) -> Warrior:
 	var w := Warrior.make(display_name, side, stats.duplicate(), tier)
 	w.id = id
+	w.woman = woman
 	w.personality = personality.duplicate()
 	w.role = role
 	w.weapon = weapon
