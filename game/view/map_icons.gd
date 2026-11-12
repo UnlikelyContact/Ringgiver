@@ -152,8 +152,11 @@ static func church(ci: CanvasItem, at: Vector2, k: float, cloister: bool) -> voi
 ## down, as she lies beached.
 static func ship(ci: CanvasItem, at: Vector2, k: float, facing: float, hull: Color, sail: Color, stripe: Color, shields := Color(0, 0, 0, 0)) -> void:
 	var f := Vector2(facing, 1.0)
-	var hp := [Vector2(-14, -7), Vector2(-12.5, -3), Vector2(-9, -1), Vector2(9, -1), Vector2(12.5, -3), Vector2(15, -8.5),
-			Vector2(13.5, -4), Vector2(10, 2), Vector2(4, 3.6), Vector2(-4, 3.6), Vector2(-10, 2), Vector2(-13, -4)]
+	# The hull without her stems: the thin spikes of prow and stern made the
+	# outline fail to fill at about one size in three, so they are drawn as
+	# strokes after it.
+	var hp := [Vector2(-13, -4), Vector2(-9, -1), Vector2(9, -1), Vector2(13.5, -4), Vector2(10, 2), Vector2(4, 3.6),
+			Vector2(-4, 3.6), Vector2(-10, 2)]
 	var pts := []
 	for v in hp:
 		pts.append(v * f)
@@ -174,6 +177,8 @@ static func ship(ci: CanvasItem, at: Vector2, k: float, facing: float, hull: Col
 	else:
 		ci.draw_line(at + Vector2(-9, -3) * k, at + Vector2(9, -4) * k, INK, 1.8 * k)
 	_poly(ci, at, k, pts, hull, INK, 1.3)
+	ci.draw_line(at + Vector2(12.6, -3.2) * f * k, at + Vector2(15, -8.5) * f * k, INK, 2.2 * k, true)
+	ci.draw_line(at + Vector2(-12.4, -3.2) * f * k, at + Vector2(-14, -7) * f * k, INK, 2.0 * k, true)
 	ci.draw_line(at + Vector2(-11, 0.5) * k, at + Vector2(11, 0.5) * k, Color(hull.lightened(0.3), 0.8), 1.0)
 	if shields.a > 0.0:
 		for i in 5:
