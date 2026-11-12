@@ -362,11 +362,13 @@ func test_the_saga_tells_oaths_by_the_count_and_no_line_twice() -> void:
 	band.log("Egil and Ketil mixed their blood under the turf and swore to avenge each other.")
 	band.log("Egil heeded an omen.")
 	band.log("Egil heeded an omen.")
+	band.log("An outlaw came through the snow asking shelter, and was taken in.")
 	var text := str(Chronicle.saga(band).text)
 	assert_true(text.contains("Three pairs of his men mixed their blood"), text)
 	assert_true(text.contains("Egil and Ketil mixed their blood"), "his own oath is told")
 	assert_eq(text.count("heeded an omen"), 1, "a line is told once a year")
 	assert_true(not text.contains("Hrafn and Bard"))
+	assert_true(not text.contains("asking shelter"), "a man taken in is one who came to his benches")
 	assert_true(y > 0)
 
 

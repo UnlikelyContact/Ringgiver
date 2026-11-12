@@ -298,8 +298,9 @@ static func _chapter_paragraphs(band: Band, ch: Dictionary, index: int, kin: Str
 			var t := l.substr(("%d: " % y).length())
 			if kin != "":
 				t = t.replace("your father's hall", "the hall at %s" % kin)
-			if t.contains(" swears to ") or t.contains("asked to join") or t.contains(" effort in ") or t.begins_with("the year passed quietly"):
-				if t.contains(" swears to ") or t.contains("asked to join"):
+			var came := t.contains(" swears to ") or t.contains("asked to join") or t.contains("asking shelter, and was taken in")
+			if came or t.contains(" effort in ") or t.begins_with("the year passed quietly"):
+				if came:
 					joined += 1
 				continue
 			# Oath-brotherhoods among the men are told as a count, not pair by
