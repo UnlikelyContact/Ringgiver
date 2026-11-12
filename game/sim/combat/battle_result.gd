@@ -44,6 +44,9 @@ var objective_kind := -1
 var objective_attacker := -1
 var taken := false
 var ship_taken := -1
+## The strandhogg (Objective.Kind.CATTLE): head of cattle the band got away
+## with (0 unless it won).
+var cattle := 0
 var log := PackedStringArray()
 
 

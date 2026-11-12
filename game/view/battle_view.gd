@@ -159,6 +159,7 @@ func step() -> void:
 	pending_action = null
 	pending_advance = false
 	battle.run_round()
+	_admit_new(before)
 	var lines := PackedStringArray()
 	for i in range(_log_seen, battle.log.size()):
 		lines.append(battle.log[i])
@@ -624,6 +625,7 @@ func _draw() -> void:
 	if is_night():
 		_draw_night()
 	draw_objective()
+	_draw_battles_2()
 	_draw_guide()
 	_draw_wall_slots()
 	_draw_shield_locks()
@@ -1057,3 +1059,128 @@ func _draw_masts() -> void:
 		draw_circle(at, s * 0.15, STRAKE)
 		draw_line(at + Vector2(0, -s * 1.1), at + Vector2(0, s * 1.1), Palette.OUTLINE, 5.0)
 		draw_line(at + Vector2(0, -s * 1.1), at + Vector2(0, s * 1.1), Color("c9b48a"), 3.0)
+
+
+# --- Battles 2 (docs/design/notes/battles-2.md) ---------------------------------
+
+## Men who came onto the field this round (Battle.arrivals): a token each,
+## standing where they came in.
+func _admit_new(before: Dictionary) -> void:
+	for w in battle.warriors:
+		if tokens.has(w):
+			continue
+		var t := Token.new()
+		t.setup(w, rules, w == player)
+		add_child(t)
+		tokens[w] = t
+		_by_name[w.display_name] = w
+		t.position = _spot(w, w.pos)
+		before[w] = w.pos
+
+
+## The new fights' marks: the strandhogg's herd and boats, the great
+## battle's neighbours along the line and the king's banner, and each named
+## man's pennant with his word (gold-ringed while he acts on it).
+func _draw_battles_2() -> void:
+	var obj := battle.objective
+	if obj != null and obj.kind == Objective.Kind.CATTLE:
+		_draw_herd(obj)
+	if battle.sector != null:
+		_draw_sector(battle.sector)
+	for wing in battle.wings:
+		var lt := wing.lieutenant
+		if not lt.is_active() or not tokens.has(lt):
+			continue
+		var at: Vector2 = (tokens[lt] as Token).position
+		var col := Palette.side_color(wing.side)
+		var pole := at + Vector2(Token.R + 2, -Token.R - 4)
+		draw_line(pole, pole + Vector2(0, -24), Palette.OUTLINE, 3.0)
+		draw_line(pole, pole + Vector2(0, -24), Palette.BONE, 1.5)
+		var flag := PackedVector2Array([pole + Vector2(0, -24), pole + Vector2(18, -19), pole + Vector2(0, -13)])
+		draw_colored_polygon(flag, col)
+		draw_polyline(flag + PackedVector2Array([flag[0]]), Palette.OUTLINE, 1.5)
+		if wing.side == 0 or wing.acting:
+			var word: String = Wing.WORD_SHORT[wing.word]
+			if word != "":
+				var font := ThemeDB.fallback_font
+				var p := pole + Vector2(21, -14)
+				draw_string_outline(font, p, word, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Palette.OUTLINE)
+				draw_string(font, p, word, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.GOLD if wing.acting else Palette.BONE)
+		if wing.acting:
+			draw_arc(at, Token.R + 6, 0, TAU, 28, Palette.GOLD, 2.5)
+
+
+## The herd still in the pasture (a beast on each of the first hexes not
+## stood on) and the boats drawn up on the strand.
+func _draw_herd(obj: Objective) -> void:
+	var g := battle.grid
+	var left := obj.herd - obj.gathered
+	var placed := 0
+	var i := 0
+	while placed < left and i < obj.cells.size():
+		var c: Vector2i = obj.cells[(i * 7) % obj.cells.size()]
+		i += 1
+		if g.occupant(c) != null:
+			continue
+		var p := Iso.to_screen(c) + Iso.jitter(i) * 0.5
+		draw_circle(p + Vector2(-6, 2), 6.5, Palette.OUTLINE)
+		draw_rect(Rect2(p + Vector2(-9, -4), Vector2(17, 9)), Color("6b4a32"))
+		draw_circle(p + Vector2(10, -2), 4.0, Color("5a3d29"))
+		draw_line(p + Vector2(-7, 5), p + Vector2(-7, 10), Palette.OUTLINE, 2.0)
+		draw_line(p + Vector2(5, 5), p + Vector2(5, 10), Palette.OUTLINE, 2.0)
+		placed += 1
+	for b in obj.boats:
+		var p2 := Iso.to_screen(b)
+		var hull := PackedVector2Array([p2 + Vector2(-24, -4), p2 + Vector2(24, -4), p2 + Vector2(16, 8), p2 + Vector2(-16, 8)])
+		draw_colored_polygon(hull, Palette.TIMBER)
+		draw_polyline(hull + PackedVector2Array([hull[0]]), Palette.OUTLINE, 2.0)
+	# The sea below the strand.
+	var last := Iso.to_screen(BattleGrid.from_offset(0, g.height - 1))
+	var right := Iso.to_screen(BattleGrid.from_offset(g.width - 1, g.height - 1))
+	draw_rect(Rect2(Vector2(last.x - Iso.SIZE, last.y + Iso.SIZE * 0.9), Vector2(right.x - last.x + Iso.SIZE * 2, Iso.SIZE * 1.4)), SEA_DEEP)
+
+
+## The line beyond the band's sector: at each end of the field, the
+## neighbour's name and state in its colour (holding bone, wavering and
+## pressing gold, broken blood, won the side's), and the king's banner
+## where it stands.
+func _draw_sector(s: Sector) -> void:
+	var g := battle.grid
+	var font := ThemeDB.fallback_font
+	var mid := g.height / 2
+	for n in s.neighbours:
+		var hand := int(n.hand)
+		var c := BattleGrid.from_offset(0 if hand < 0 else g.width - 1, mid)
+		var p := Iso.to_screen(c) + Vector2(-Iso.SIZE * 0.2 if hand < 0 else Iso.SIZE * 0.2, 0)
+		var state := int(n.state)
+		var col: Color = Palette.BONE
+		match state:
+			-2:
+				col = Palette.BLOOD
+			-1, 1:
+				col = Palette.GOLD
+			2:
+				col = Palette.side_color(0)
+		var bar := Rect2(p + Vector2(-5, -Iso.SIZE * 3), Vector2(10, Iso.SIZE * 6))
+		draw_rect(bar, Palette.OUTLINE)
+		draw_rect(bar.grow(-2), col)
+		var text := "%s: %s" % [str(n.name), Sector.STATE_SHORT[state]]
+		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+		# Inside the field's edge, under the bar, so the camera keeps it.
+		var tp := p + Vector2(10 if hand < 0 else -w - 10, Iso.SIZE * 3.6)
+		draw_string_outline(font, tp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, 5, Palette.OUTLINE)
+		draw_string(font, tp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, col)
+		if hand == s.banner_hand:
+			_draw_banner(p + Vector2(0, -Iso.SIZE * 3.2), col)
+	if s.banner_hand == 0:
+		var l := battle.sworn_leader(0)
+		if l != null and tokens.has(l):
+			_draw_banner((tokens[l] as Token).position + Vector2(-Token.R - 10, -Token.R - 6), Palette.GOLD)
+
+
+func _draw_banner(at: Vector2, col: Color) -> void:
+	draw_line(at, at + Vector2(0, -34), Palette.OUTLINE, 4.0)
+	draw_line(at, at + Vector2(0, -34), Palette.BONE, 2.0)
+	var cloth := PackedVector2Array([at + Vector2(1, -34), at + Vector2(22, -30), at + Vector2(16, -24), at + Vector2(22, -18), at + Vector2(1, -16)])
+	draw_colored_polygon(cloth, Palette.side_color(0) if col == Palette.GOLD else col)
+	draw_polyline(cloth + PackedVector2Array([cloth[0]]), Palette.OUTLINE, 1.5)

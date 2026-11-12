@@ -518,6 +518,13 @@ func _init() -> void:
 			elif _law_land(j, map, cmd):
 				if cmd == "landmodal":
 					continue
+			elif _battles_2(j, cmd):
+				# Battles 2's fights (docs/design/notes/battles-2.md): a
+				# decision or a fight now waits; show it.
+				map.refresh()
+				for k in 3:
+					await process_frame
+				continue
 			elif cmd == "offer" or cmd == "fightnow":
 				# Raiders come down on the band: the offer (and its hint), or
 				# straight onto the battle screen.
@@ -594,6 +601,68 @@ func _init() -> void:
 	print("saved %s %dx%d" % [out, img.get_width(), img.get_height()])
 	quit(0)
 
+
+
+## Battles 2's commands (docs/design/notes/battles-2.md): `wings` names a
+## second and gives the band men enough for a wing, then raiders come and
+## the fight goes to the battle screen (the named men's sheet up);
+## `strand:<place>` puts the band at that farmstead and offers the
+## strandhogg (`strandnow:<place>` goes straight to its battle screen);
+## `mercy` rings the vengeance's hall for the burning and asks before the
+## fire (a burned-hall saga); `hafrsfjord` (for Harald) and
+## `hafrsfjord:against` put the great battle on the battle screen. True
+## when `cmd` was one.
+func _battles_2(j: Journey, cmd: String) -> bool:
+	if cmd == "wings":
+		j.decisions.clear()
+		while j.c.band.fighters().size() < 10:
+			j.c.band.add_man(Recruits.random(SimRng.new(700 + j.c.band.men.size()), j.c.rules, j.c.band.next_id()))
+		j.c._arm_new_men()
+		j.c._name_second_if_needed()
+		j._offer_fight("raiders", CombatTypes.Tier.GREEN, j.c.band.fighters().size(), false, 3, false, false,
+				{"kind": "world_fight", "what": "raiders"}, "Raiders come down on you out of the hills.", true)
+		j.answer(str(FightOffer.Choice.TAKE_THE_FIELD))
+		return true
+	if cmd.begins_with("strand:") or cmd.begins_with("strandnow:"):
+		var pid := cmd.split(":")[1]
+		var p := j.c.world.place(pid)
+		if p == null:
+			return true
+		j.decisions.clear()
+		j.c.band.location = pid
+		j.roam.pos = MapGrid.centre(j.roam.grid.place_cell[pid])
+		while j.c.band.fighters().size() < 6:
+			j.c.band.add_man(Recruits.random(SimRng.new(800 + j.c.band.men.size()), j.c.rules, j.c.band.next_id()))
+		j.c._arm_new_men()
+		j._strandhogg(p)
+		if cmd.begins_with("strandnow:"):
+			j.answer(str(FightOffer.Choice.TAKE_THE_FIELD))
+		return true
+	if cmd == "mercy":
+		j.decisions.clear()
+		var name := j.c.band.vengeance
+		var ctx := {"kind": "reckoning", "family": name}
+		var about := j._about_fight(ctx)
+		var o := j.c.offer_fight("the reckoning", CombatTypes.Tier.GREEN, 8, true, 3, false, false, "farm", about)
+		o.they_know_first = false
+		j._answer_fight({"kind": "fight", "offer": o, "ctx": ctx}, FightOffer.Choice.BURN)
+		return true
+	if cmd.begins_with("hafrsfjord"):
+		j.decisions.clear()
+		var ev := {}
+		for e in j.c.world_rules.spine:
+			if str(e.id) == "hafrsfjord":
+				ev = e
+		while j.c.band.fighters().size() < 10:
+			j.c.band.add_man(Recruits.random(SimRng.new(600 + j.c.band.men.size()), j.c.rules, j.c.band.next_id()))
+		j.c._arm_new_men()
+		j.c._name_second_if_needed()
+		var choice := "fight_against" if cmd.ends_with(":against") else "fight_for_harald"
+		j._offer_fight("spine", CombatTypes.Tier.VETERAN, j.c.band.fighters().size(), choice == "fight_for_harald", j.c.world_rules.spine_stat,
+				false, false, {"kind": "spine", "event": ev, "choice": choice}, str(ev.text), true)
+		j.answer(str(FightOffer.Choice.TAKE_THE_FIELD))
+		return true
+	return false
 
 
 ## Waits for the battle view to finish animating a round.

@@ -50,7 +50,7 @@ static func summer_events(rng: SimRng, rules: WorldRules, world: World, band: Ba
 			log.append(text)
 		# The house that wronged him (the burned hall) owes, it does not
 		# ask: no demand for silver comes from the men he has vengeance on.
-		if family != band.vengeance and rng.randf() < rules.demand_chance:
+		if family != band.vengeance and not bool(f.get("no_silver", false)) and rng.randf() < rules.demand_chance:
 			var ask := offer_settlement(rules, band, family)
 			var text := "%s demand %d oz of wergild to end the feud." % [family, ask]
 			out.append({"kind": "demand", "family": family, "ounces": ask, "text": text})
@@ -73,6 +73,9 @@ static func offer_settlement(rules: WorldRules, band: Band, family: String) -> i
 static func settle(rules: WorldRules, band: Band, family: String, ounces: int, log: PackedStringArray) -> bool:
 	var f := find(band, family)
 	if f.is_empty():
+		return false
+	if bool(f.get("no_silver", false)):
+		log.append("%s will take no silver for this feud." % family)
 		return false
 	var ask := offer_settlement(rules, band, family)
 	if ounces < ask or band.silver < ounces:

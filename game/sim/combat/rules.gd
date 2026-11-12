@@ -576,3 +576,113 @@ var ai_route_lookahead := 3
 ## < fate_maimed_below -> maimed, else recover.
 var fate_dead_below := 7
 var fate_maimed_below := 8
+
+# --- Battles 2 (docs/design/notes/battles-2.md) ----------------------------
+## Named lieutenants (Wing): a wing is about this share of the line's men
+## who are not bowmen, never fewer than `wing_min_men`, nearest its end.
+var wing_share := 0.34
+var wing_min_men := 3
+## A lieutenant sees the enemy within this many hexes of his wing's men,
+## and his men within this many hexes of him hear his word.
+var wing_sight := 4
+var wing_voice := 4
+## "Press when they waver": the enemy before him waver when one of them has
+## broken or their mean heart is at or under this, by his temper (plain,
+## rash, steady, cunning): a rash man sees them waver too soon, a steady
+## one too late.
+var wing_waver := [5.0, 7.0, 4.0, 5.5]
+## A pressing (or flanking) wing whose own mean heart falls to this gives
+## it up and goes back to the leader's word.
+var wing_quit_morale := 3.5
+## "Fall back on me": the wing is hard pressed when its mean heart is at or
+## under this, by temper (a rash man waits too long, a steady one goes
+## early); it gives ground for `wing_fallback_rounds` rounds while he
+## rallies it, then stands again, and not again for `wing_fallback_rest`.
+var wing_pressed := [6.0, 5.0, 7.0, 6.0]
+var wing_fallback_rounds := 2
+var wing_fallback_rest := 4
+## "Go round their flank": the rest go when the enemy is within
+## `wing_flank_range` hexes of the wing and it is not yet in the fight (a
+## cunning man only if their line does not reach past his); a steady man
+## waits this many rounds of contact; a rash one goes once the wall is
+## formed.
+var wing_flank_range := 3
+var wing_flank_wait := 3
+## "Guard the archers": the wing stands within this many hexes of the
+## bowmen and goes for any enemy within `wing_guard_radius` of one (a rash
+## man farther, `wing_guard_rash`).
+var wing_guard_keep := 2
+var wing_guard_radius := 3
+var wing_guard_rash := 5
+## A named man steadies the men of his wing near him (and not near their
+## leader): this much heart a round, up to `wing_heart_cap`; holding the
+## line in contact, up to `wing_hold_cap`; acting on his word, out of
+## their leader's sight, without a cap.
+var wing_heart := 1
+var wing_heart_cap := 8
+## A wing pressing men who waver takes this much heart a round from each
+## enemy at arm's length of its men.
+var wing_press_dread := -1
+var wing_hold_cap := 8
+## The lieutenant falls or breaks: every man of his wing loses this much
+## heart, and the wing goes back to the leader's word.
+var wing_leaderless_morale := -1
+## How many men the line needs before the leader gives wings their words.
+var wing_min_line := 8
+
+## Men who come onto the field during a fight (Battle.arrivals): the
+## district's men at a strandhogg, a friendly house at a barred hall, the
+## enemy over a broken neighbour's flank. They come on as Break them.
+
+## The strandhogg (Objective.Kind.CATTLE, Scenario.build_strandhogg): the
+## herd's head of cattle, a man in the pasture with nobody at arm's length
+## rounds up one beast every `cattle_gather_men` men a round, and the
+## district's men come in parties of `strand_party` (at least one) every
+## `strand_party_every` rounds from the first at `strand_first_party`,
+## `strand_parties` parties in all, scaled by the place's defences.
+var cattle_herd := 12
+var cattle_gather_men := 2
+var strand_first_party := 3
+var strand_party_every := 2
+var strand_parties := 5
+var strand_party := 2
+## ... and each party is this many men bigger than the one before: the
+## longer the band stays, the more of the district is up.
+var strand_party_growth := 1
+## The herd slows the drive: a beast is lost for every man of the band who
+## goes down or runs, and every `cattle_lost_per_round` ...
+var cattle_lost_per_man := 1
+## The field: width, height; the boats along the bottom two rows.
+var strand_width := 16
+var strand_height := 14
+var strand_rounds := 30
+
+## The barred hall against fire (Scenario._bar_the_door): the band inside,
+## the hall's floor `bar_floor_rows` deep; the burners need `bar_fire_rounds`
+## rounds at the walls (the thatch is wet with snow); and the fire is a
+## clock: the torches on the roof take it at `bar_smoke_rounds` of smoke
+## after the lines meet (two a round while they hold the walls), whatever
+## the yard holds. A friendly house's men come `bar_help_round` rounds
+## after the lines meet.
+var bar_floor_rows := 3
+var bar_fire_rounds := 14
+var bar_smoke_rounds := 24
+var bar_help_round := 4
+## The burners' heart when a friendly house's men come out of the dark at
+## their backs.
+var bar_help_dread := -2
+
+## The great battle's sector (Sector, Scenario.build_sector): the
+## neighbours' state moves a step a round with this chance, leaning on the
+## kings' strengths and on how the band's own sector goes
+## (`sector_weight` of its standing share); a neighbour that breaks lets
+## `sector_flank_men` of the enemy onto the band's flank (allied men when
+## it wins), the day is `sector_day_rounds` long, and the band's own sector
+## counts `sector_own_weight` and the king's banner `sector_banner_weight`
+## in the verdict.
+var sector_drift := 0.3
+var sector_weight := 0.6
+var sector_flank_men := 3
+var sector_day_rounds := 26
+var sector_own_weight := 2.0
+var sector_banner_weight := 1.0

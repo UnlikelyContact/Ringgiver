@@ -260,6 +260,7 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	offer_panel.dim = 0.35
 	root.add_child(offer_panel)
 	_show_offer()
+	_show_wings()
 	root.resized.connect(_layout_top)
 
 	view.round_played.connect(_on_round)
@@ -514,6 +515,12 @@ func _on_finished(result: BattleResult) -> void:
 		at = "You fought ship to ship, the hulls lashed together."
 	elif obj != null and obj.kind == Objective.Kind.FIRE:
 		at = "You stood to keep the fire from your hall."
+	elif obj != null and obj.kind == Objective.Kind.CATTLE:
+		at = "You went up from the boats for their cattle, and got away with %d head." % result.cattle if result.cattle > 0 \
+				else "You went up from the boats for their cattle."
+	if view.battle.sector != null:
+		at = "You held your part of the line at %s. The day went %s." % [view.battle.sector.battle_name,
+				"your side's way" if result.winner == 0 else ("against you" if result.winner == 1 else "to nobody")]
 	elif obj != null:
 		at = "You %s %s." % ["came for" if obj.attacker == 0 else "stood to hold", obj.name]
 	var why := _why(result)
@@ -885,6 +892,8 @@ func _refresh() -> void:
 		var clock := b.objective.clock_text(b)
 		if clock != "":
 			top += "  [color=#%s]%s[/color]" % [COLORS.muted, clock]
+	if b.sector != null:
+		top += "    [color=#%s]%s[/color]" % [COLORS.gold, b.sector.line_text()]
 	if not calls.is_empty():
 		top += "    " + "  ".join(calls)
 	_line_round.text = top
@@ -908,6 +917,7 @@ func _refresh() -> void:
 			c.disabled = not _may(id)
 	withdraw_btn.tooltip_text = "Break contact first: fall back, then withdraw" if not b.can_withdraw(0) \
 			else "Lead your men off the field, out of contact: a choice, not a rout"
+	_label_withdraw(b)
 	var warn := ""
 	if view.player.is_active() and b.round > 0 and view.wall_count(0)[0] < 2:
 		warn = "   (nobody stands with you)"
@@ -961,3 +971,57 @@ func settings_changed(key: String) -> void:
 
 func settings_closed() -> void:
 	pass
+
+
+# --- Battles 2 (docs/design/notes/battles-2.md) ---------------------------------
+
+## The named men's sheet, before the first round of a fight of the saga
+## with wings (Campaign._give_wings): each man's wing and temper, one wide
+## button that steps through the words (Wing.WORDS) with what the word asks
+## under it, and To the fight. The sim already holds a sensible word; the
+## player need not touch it.
+func _show_wings() -> void:
+	var b := view.battle
+	if b.round > 0 or offer_panel.visible:
+		return
+	var ours: Array[Wing] = []
+	for wing in b.wings:
+		if wing.side == 0:
+			ours.append(wing)
+	if ours.is_empty():
+		return
+	offer_panel.open("Your named men")
+	offer_panel.body.add_child(UiTheme.label("Give each his word before the fight. He acts on it when he judges the time has come.", "BodyLabel"))
+	for wing in ours:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", UiTheme.S2)
+		var t: String = Wing.TEMPER_NAMES[wing.temper]
+		var who := UiTheme.label("%s, the %s%s" % [wing.lieutenant.display_name, wing.hand_name(), (" (%s)" % t) if t != "" else ""], "StrongLabel")
+		who.custom_minimum_size = Vector2(230, 0)
+		who.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(who)
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 0)
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var btn := UiTheme.button(Wing.WORD_TITLES[wing.word], Callable(), "", Vector2(300, 62))
+		var hint := UiTheme.label(Wing.WORD_HINTS[wing.word], "SmallLabel")
+		btn.pressed.connect(func() -> void:
+			var i := Wing.WORDS.find(wing.word)
+			wing.word = Wing.WORDS[(i + 1) % Wing.WORDS.size()]
+			btn.text = Wing.WORD_TITLES[wing.word]
+			hint.text = Wing.WORD_HINTS[wing.word]
+			view.queue_redraw())
+		col.add_child(btn)
+		col.add_child(hint)
+		row.add_child(col)
+		offer_panel.body.add_child(row)
+	offer_panel.add_button("To the fight", func() -> void:
+		offer_panel.visible = false
+		_refresh(), "PrimaryButton", 200.0)
+
+
+## The Withdraw button says what leaving is in a strandhogg: getting aboard.
+func _label_withdraw(b: Battle) -> void:
+	if b.objective != null and b.objective.kind == Objective.Kind.CATTLE:
+		withdraw_btn.text = "To the boats"
+		withdraw_btn.tooltip_text = "Get aboard with the cattle you have: your leader by the boats and nobody at arm's length"

@@ -58,6 +58,22 @@ var last_actions := {}
 var after_movement := {}
 var after_melee := {}
 var _over := false
+## Battles 2 (docs/design/notes/battles-2.md): the named lieutenants' wings
+## (Wing), men who come onto the field during the fight (`arrivals`), and
+## the great battle's line beyond the band's own part of it (Sector). All
+## empty or null in every ordinary fight, which never sees these rules.
+var wings: Array[Wing] = []
+var _wing_of := {}  # Warrior -> Wing: the men acting on their lieutenant's word this round
+## {round, side, men: Array[Warrior], cells: Array[Vector2i], facing, order, line}:
+## men who come at the start of `round` onto the first free of `cells`.
+var arrivals: Array[Dictionary] = []
+var sector: Sector = null
+## The barred hall (Scenario._bar_the_door): the band's leader AI holds its
+## posts until friends come out of the dark.
+var bar_hold := false
+## The barred hall's fight is at its doors: no heave of one wall against
+## another carries through a doorway, so no push is resolved.
+var barred := false
 
 
 func _init(p_rules: CombatRules, seed_in: int, p_grid: BattleGrid = null) -> void:
@@ -186,6 +202,13 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	if order == CombatTypes.Shout.FALL_BACK and escaping(side):
 		_turn_to_pursuers(side, leader)
 	var members := wall_members(side)
+	if not _wing_of.is_empty():
+		# A wing acting on its lieutenant's word is out of the wall.
+		var kept: Array[Warrior] = []
+		for w in members:
+			if not _wing_of.has(w):
+				kept.append(w)
+		members = kept
 	if members.size() < 2:
 		return
 	var back := order == CombatTypes.Shout.FALL_BACK
@@ -403,7 +426,8 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 		var ax2 := leader.wall_axis()
 		for w in targets:
 			var m := grid.occupant(w.pos + BattleGrid.forward(w.pos, ax2, back_facing))
-			if m == null or m.side != side or members.has(m) or not m.is_active() or m.broken or m.role == CombatTypes.Role.MISSILE:
+			if m == null or m.side != side or members.has(m) or not m.is_active() or m.broken or m.role == CombatTypes.Role.MISSILE \
+					or _wing_of.has(m):
 				continue
 			var his: Vector2i = m.pos + (targets[w] - w.pos)
 			if his == w.pos or (grid.is_free(his) and not claimed.has(his)):
@@ -602,9 +626,17 @@ func run_round() -> void:
 			if _ai.has(side) and escaping(side) and round > 0 and can_withdraw(side):
 				withdraw(side)
 				return
+	if objective != null and objective.kind == Objective.Kind.CATTLE:
+		# The leader AI's strandhogg gets aboard the moment it can.
+		var cs := objective.attacker
+		if _ai.has(cs) and round > 0 and objective.leaving and can_withdraw(cs):
+			withdraw(cs)
+			return
 	round += 1
 	log.append("--- round %d ---" % round)
 	var round_log_start := log.size()
+	if not arrivals.is_empty():
+		_arrive()
 	var rr := rng.fork("round:%d" % round)
 
 	# 1. Shouts. A leader who turned to strike last round faces his wall again.
@@ -631,6 +663,15 @@ func run_round() -> void:
 				log.append("%s's men are taken by surprise: no order comes" % leader.display_name)
 		elif _ai.has(side) and leader != null and ai_breaks_out and escaping(side):
 			shout = CombatTypes.Shout.SHIELD_WALL if round == 1 else Objective.escape_order(self, side)
+		elif _ai.has(side) and leader != null and objective != null and objective.kind == Objective.Kind.CATTLE and side == objective.attacker:
+			shout = Objective.cattle_order(self, side)
+		elif _ai.has(side) and leader != null and objective != null and objective.kind == Objective.Kind.CATTLE:
+			# The district's men run at the raiders as they come, every man
+			# for the cattle: there is no wall to form in a cow field.
+			shout = CombatTypes.Shout.BREAK_THEM if last_shout(side) != CombatTypes.Shout.BREAK_THEM else CombatTypes.Shout.NONE
+		elif _ai.has(side) and leader != null and barred and objective != null and side == objective.defender():
+			# The doors are held until friends come; then out to them.
+			shout = CombatTypes.Shout.HOLD if bar_hold else CombatTypes.Shout.BREAK_THEM
 		elif _ai.has(side) and leader != null:
 			if round == surprised_until(side) + 1 and surprised_until(side) > 0:
 				_face_about(side, leader)
@@ -665,6 +706,10 @@ func run_round() -> void:
 			if shout == CombatTypes.Shout.TO_ME:
 				Morale.rally(rules, grid, leader, warriors, log)
 
+	# 1a. The named lieutenants read the field and act on their words.
+	if not wings.is_empty():
+		Wing.think(self)
+
 	# 1b. The walls decide as units: one test per wall, everyone steps or nobody.
 	for side in 2:
 		_plan_wall(rr.fork("wall:%d" % side), side, leaders[side])
@@ -692,7 +737,13 @@ func run_round() -> void:
 		if leader == null:
 			leader = _leaders.get(w.side, w)
 		var a: Action
-		if w.is_leader and _player_action.has(w.side) and _player_action[w.side] != null:
+		var wing: Wing = _wing_of.get(w, null)
+		if wing != null and not (w.is_leader and _player_action.has(w.side)):
+			# A man of an acting wing: his lieutenant's word, and his eyes.
+			a = wing.action_for(self, w)
+			if a == null:
+				a = Decision.choose(rr.fork("decide:%d" % w.id), rules, grid, w, wing.lieutenant if w != wing.lieutenant else leader, warriors, log, objective)
+		elif w.is_leader and _player_action.has(w.side) and _player_action[w.side] != null:
 			a = _player_action[w.side]
 			_player_action.erase(w.side)
 			if a.kind == CombatTypes.ActionKind.ATTACK and (a.target == null or not a.target.is_active()
@@ -718,7 +769,7 @@ func run_round() -> void:
 	after_melee = _positions()
 	_count_contact()
 	# 3d. The push: a heave happens only when a leader has called for it.
-	if _push_called():
+	if _push_called() and not barred:
 		var may_advance := {}
 		var wall_facing := {}
 		var wall_axis := {}
@@ -744,6 +795,8 @@ func run_round() -> void:
 		if push.winning_side >= 0:
 			log.append("the push goes to side %d" % push.winning_side)
 	# 3e. Morale.
+	if not wings.is_empty():
+		Wing.hearten(self)
 	var broke := Morale.round_update(rr.fork("morale"), rules, grid, warriors, leaders, any_attacks, log, _unbreakable())
 	for w in broke:
 		result.broken[w.side] += 1
@@ -765,6 +818,11 @@ func run_round() -> void:
 
 	if objective != null and objective.first_fight:
 		_first_fight_give_way()
+	if sector != null:
+		sector.round_end(self)
+		if sector.decided(self):
+			_finish(sector.verdict(self), sector.reason, BattleResult.End.OBJECTIVE)
+			return
 
 	# 4. End check. The objective first: its decision stands over the rest.
 	if objective != null:
@@ -797,7 +855,7 @@ func run_round() -> void:
 		for w in active(side):
 			if not w.broken:
 				standing += 1
-		if standing == 0:
+		if standing == 0 and not _more_coming(side):
 			_finish(1 - side, "side %d has no one left standing" % side, BattleResult.End.ROUT)
 			return
 	# An AI leader only calls "fall back" when he is beaten, so his falling
@@ -805,14 +863,14 @@ func run_round() -> void:
 	# re-form, come again. For him the fight ends only by the other rules
 	# (nobody standing, the field's edge, the objective's clock, the stall).
 	for side in 2:
-		if _ai.has(side) and last_shout(side) == CombatTypes.Shout.FALL_BACK and _withdrawn(side):
+		if _ai.has(side) and last_shout(side) == CombatTypes.Shout.FALL_BACK and _withdrawn(side) and not _driving_cattle(side):
 			_finish(1 - side, "side %d draws off and leaves the field" % side, BattleResult.End.DRAW_OFF)
 			return
 		if _ai.has(side) and last_shout(side) == CombatTypes.Shout.FALL_BACK and objective != null \
 				and objective.kind == Objective.Kind.DECK and objective.allows_withdraw(self, side):
 			_finish(1 - side, "side %d cuts the lashings and rows away" % side, BattleResult.End.DRAW_OFF)
 			return
-	if _rounds_without_blow >= rules.retreat_stall_rounds:
+	if _rounds_without_blow >= rules.retreat_stall_rounds and not _driving_cattle(0):
 		var retreating := []
 		for side in 2:
 			if _ai.has(side) and standing_order(side) == CombatTypes.Shout.FALL_BACK:
@@ -826,7 +884,7 @@ func run_round() -> void:
 	# Nobody has struck a blow for a while after the lines met: the fight is
 	# over. The side with clearly fewer men standing has had enough and quits;
 	# otherwise both draw off.
-	if _blows_ever and _rounds_without_blow >= rules.stall_rounds:
+	if _blows_ever and _rounds_without_blow >= rules.stall_rounds and not _driving_cattle(0):
 		var standing := [0, 0]
 		for side in 2:
 			for w in active(side):
@@ -896,6 +954,13 @@ func withdraw(side: int) -> bool:
 		log.append("%s and his men slip away into the dark" % who)
 		result.by_objective = true
 		_finish(1 - side, "side %d gets away into the dark" % side, BattleResult.End.ESCAPE)
+		return true
+	if objective != null and objective.kind == Objective.Kind.CATTLE and side == objective.attacker:
+		# Aboard with what they drove down: the strandhogg is done.
+		log.append("%s's men get aboard and push off with %d head" % [who, objective.driven()])
+		result.by_objective = true
+		objective.taken = objective.driven() > 0
+		_finish(side, "side %d gets aboard with the cattle" % side, BattleResult.End.OBJECTIVE)
 		return true
 	if objective != null and objective.kind == Objective.Kind.DECK:
 		log.append("%s's men cut the lashings and pull away" % who)
@@ -1291,6 +1356,14 @@ func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.
 		winner = objective.defender()
 		how = BattleResult.End.ESCAPE
 		result.by_objective = true
+	if sector != null and not sector.final:
+		# The great battle: whatever happened in the band's part of it, the
+		# day is the whole line's (Sector.verdict).
+		var day := sector.verdict(self, winner, how)
+		if day != winner:
+			why = "%s; %s" % [why, sector.reason]
+		winner = day
+		result.by_objective = true
 	_over = true
 	result.winner = winner
 	result.how = how
@@ -1298,6 +1371,11 @@ func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.
 	if objective != null:
 		result.objective_kind = objective.kind
 		result.objective_attacker = objective.attacker
+		if objective.kind == Objective.Kind.CATTLE:
+			if winner == objective.attacker and how == BattleResult.End.ROUT:
+				objective.gathered = objective.herd  # the district beaten off: the whole herd
+				objective.taken = true
+			result.cattle = objective.driven() if winner == objective.attacker else 0
 		result.taken = objective.taken and winner == objective.attacker
 		result.ship_taken = objective.ship_taken
 	log.append("=== %s ===" % why)
@@ -1528,3 +1606,86 @@ func _sea_takes(r: SimRng, w: Warrior) -> void:
 	else:
 		w.fate = CombatTypes.Fate.RECOVERED
 		log.append("%s swims, and is hauled out of the sea" % w.display_name)
+
+
+# --- Battles 2 (docs/design/notes/battles-2.md) -------------------------------------
+
+## Men come onto the field at the start of the round they are due
+## (`arrivals`): each onto the first free of the entry's cells (else the
+## nearest free ground to the first), fresh, facing the way given, with the
+## order given (Break them: they come to fight), and the log says so.
+func _arrive() -> void:
+	var keep: Array[Dictionary] = []
+	for a in arrivals:
+		var due := int(a.round)
+		if a.has("after_contact"):
+			# Due so many rounds after the lines met (the door has held).
+			due = 1 << 30 if objective == null or objective.clock_start < 0 else objective.clock_start + int(a.after_contact)
+		if due > round:
+			keep.append(a)
+			continue
+		var came := 0
+		var cells: Array = a.get("cells", [])
+		for w: Warrior in a.men:
+			var at := BattleGrid.NO_CELL
+			for c: Vector2i in cells:
+				if grid.is_free(c):
+					at = c
+					break
+			if at == BattleGrid.NO_CELL and not cells.is_empty():
+				at = Scenario._nearest_free(grid, cells[0])
+			if at == BattleGrid.NO_CELL or not grid.is_free(at):
+				continue
+			w.reset_for_battle(rules)
+			grid.place(w, at)
+			w.facing = a.get("facing", Vector2i(0, 1))
+			w.heard_order = a.get("order", CombatTypes.Shout.BREAK_THEM)
+			warriors.append(w)
+			result.started[w.side] += 1
+			came += 1
+		warriors.sort_custom(func(x: Warrior, y: Warrior) -> bool: return x.id < y.id)
+		var line := str(a.get("line", ""))
+		if came > 0 and line != "":
+			log.append(line.replace("{n}", str(came)))
+		if came > 0 and int(a.get("dread", 0)) != 0:
+			# Men caught between a door they cannot force and friends of the
+			# house coming out of the dark lose heart.
+			for e in active(1 - int(a.side)):
+				e.morale = clampi(e.morale + int(a.dread), 0, 10)
+	arrivals = keep
+
+
+## Men to come at round `at_round` (see `arrivals`). `line` may hold {n},
+## the number who came.
+func add_arrival(at_round: int, side: int, men: Array[Warrior], cells: Array[Vector2i], facing: Vector2i,
+		line: String, order := CombatTypes.Shout.BREAK_THEM) -> void:
+	arrivals.append({"round": at_round, "side": side, "men": men, "cells": cells, "facing": facing,
+			"order": order, "line": line})
+
+
+## The wing whose word a man is acting on this round, or null.
+func wing_of(w: Warrior) -> Wing:
+	return _wing_of.get(w, null)
+
+
+## The wing a lieutenant leads, or null.
+func wing_led_by(w: Warrior) -> Wing:
+	for wing in wings:
+		if wing.lieutenant == w:
+			return wing
+	return null
+
+
+## Whether more men of `side` are still to come (`arrivals`): its last man
+## down is not the end of it.
+func _more_coming(side: int) -> bool:
+	for a in arrivals:
+		if int(a.side) == side:
+			return true
+	return false
+
+
+## A strandhogg is on (Objective.Kind.CATTLE): the stalls and draw-offs of
+## an open field do not end it; its clock, the boats and the rout do.
+func _driving_cattle(_side: int) -> bool:
+	return objective != null and objective.kind == Objective.Kind.CATTLE

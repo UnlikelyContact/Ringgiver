@@ -1070,3 +1070,24 @@ var volva_chance := 0.35
 var volva_fee := 8
 ## Her early winter: the summer is this many days short.
 var early_winter_days := 25
+
+# --- Battles 2 (docs/design/notes/battles-2.md) --------------------------------
+## The strandhogg fought (Journey._after_strandhogg): rations for every head
+## of cattle driven down to the boats.
+var strandhogg_food_per_head := 2
+## Letting none out of a burning (Journey._nithing): the band's honor, every
+## house's standing with it (the burned house's friends the more), what is
+## left of the burned house, and the band's men below this loyalty may leave
+## it, each with this chance.
+var none_out_honor := 30
+var none_out_standing := -10
+var none_out_ally_standing := -15
+var none_out_house_left := 2
+var none_out_stay_loyalty := 75
+var none_out_leave_chance := 0.35
+## A house burning the band's own hall lets none out with this chance for
+## each step of the feud (Journey.burners_let_none_out).
+var enemy_none_out_chance := 0.08
+## The stand-in player: a berserk under this honor lets none out of a
+## burning (JourneyBot._mercy).
+var bot_nithing_honor := 15

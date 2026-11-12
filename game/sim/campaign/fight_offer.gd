@@ -80,6 +80,10 @@ var burning := false
 ## What each choice's fight is over, in a line (Campaign.stake): choice ->
 ## text, "" for an open fight.
 var stakes := {}
+## A great battle (battles-2: Scenario.build_sector's parameters, from
+## Journey._about_fight): the band holds a sector of a longer line. {} for
+## every other fight.
+var great := {}
 
 const GROUND_TEXT := {"sea": "You are aboard, and they will come at you where the ships lie.",
 	"strand": "You are on open sand, with nothing to put at your back.",
@@ -147,6 +151,8 @@ func title(choice: int) -> String:
 				return "Lie in wait at the gate"
 	if ground == "thing" and choice == Choice.TAKE_THE_FIELD:
 		return "Stand and fight"
+	if cause == "strandhogg" and choice == Choice.TAKE_THE_FIELD:
+		return "Go in for the cattle"
 	match choice:
 		Choice.WAIT_FOR_THEM:
 			match ground:
@@ -168,7 +174,7 @@ func title(choice: int) -> String:
 ## A line for the log or the HUD: what is coming, as the scout tells it.
 func brief() -> String:
 	var text: String = report.get("text", "")
-	if ground == "farm" and attacking:
+	if ground == "farm" and attacking and cause != "strandhogg":
 		text += " Their hall stands before you."  # the hall is theirs to hold, not yours
 	elif GROUND_TEXT.has(ground):
 		text += " " + str(GROUND_TEXT[ground])

@@ -292,12 +292,18 @@ func answer(id: String) -> void:
 		"fight":
 			_answer_fight(d, int(id))
 			return  # _answer_fight settles when the fight is over
+		"mercy":
+			_answer_mercy(d, id)
+			return
 	_settle()
 
 
 func _answer_fight(d: Dictionary, choice: int) -> void:
 	var offer: FightOffer = d.offer
 	choice = c.settle_choice(offer, choice)
+	if choice == FightOffer.Choice.BURN and not (d.ctx as Dictionary).has("none_out"):
+		_ask_mercy(d)  # before the fire: let them out, or none (battles-2)
+		return
 	if choice == FightOffer.Choice.FADE_AWAY:
 		c.fade(offer)
 		_say("%s does not care to fight today, and leads his men away." % c.band.leader.display_name)
@@ -411,6 +417,8 @@ func _about_fight(ctx: Dictionary) -> Dictionary:
 		if k == "reckoning" or (k == "raid" and seat_here):
 			out.can_burn = true
 			out.head = h.head
+	if k == "spine":
+		out.great = _great_battle(ctx)
 	return out
 
 
@@ -443,6 +451,8 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 	var burned := result != null and int(ctx.get("choice", -1)) == FightOffer.Choice.BURN
 	if burned:
 		_after_burning(ctx, result)
+		if bool(ctx.get("none_out", false)):
+			_nithing(ctx, result)
 	if result != null and result.ship_taken == 1 and result.winner == 0:
 		_take_prize(str(ctx.get("offer_kind", "")))
 	match "burned" if burned else ctx.get("kind", ""):
@@ -504,6 +514,9 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 			WorldLife.after_fight(self, ctx, result)
 		"challenge":
 			_after_challenge(ctx, result)
+		"strandhogg":
+			_after_strandhogg(ctx, result)
+	_wing_lines(ctx, result)
 	_law_land_after_fight(ctx, result)
 	_killed_their_men(ctx, result)
 	# The party it was fought with: beaten, it is gone; otherwise it keeps
@@ -924,8 +937,8 @@ func actions() -> Array[Dictionary]:
 						" (the beacons are lit)" if a.beacons else "", roundi(a.expected_plunder * float(band.gift("raid_plunder", 1.0))),
 						_cap(p.family) if p.family != "" else "They"]) if fresh else "You have been here this year: what is left is hidden or fled."})
 		if p.kind == WorldTypes.PlaceKind.FARMSTEAD:
-			out.append({"id": "strandhogg", "label": "Strandhögg", "hint": "A quick raid for cattle and stores: %d rations and a little silver, no battle." % (
-					wr.strandhogg_food * int(band.gift("strandhogg", 1)))})
+			out.append({"id": "strandhogg", "label": "Strandhögg", "hint": "A quick raid for cattle: up from the boats and back before the district gathers, %d rations a head driven down." % (
+					wr.strandhogg_food_per_head * int(band.gift("strandhogg", 1)))})
 	if not closed:
 		var i := 0
 		for o in _work_here():
@@ -1165,10 +1178,7 @@ func act(id: String) -> void:
 					{"kind": "raid", "place": p}, "", true)
 			Omens.before_raid(self)
 	elif id == "strandhogg":
-		Raiding.strandhogg(_fork("strand"), wr, c.world, band, p, said)
-		_shift(p.family, wr.standing_strandhogg)
-		Way.add_deed(band, Way.Id.VIKING, wr.deed_strandhogg)
-		_pass(1.0)
+		_strandhogg(p)  # a fight now (battles-2); _after_strandhogg settles it
 	elif id.begins_with("work:"):
 		var list := _work_here()
 		var i := int(id.trim_prefix("work:"))
@@ -2523,15 +2533,18 @@ func _after_burning(ctx: Dictionary, result: BattleResult) -> void:
 	band.luck = clampi(band.luck - c.rules.luck_burning, Leader.LUCK_MIN, Leader.LUCK_MAX)
 	lines.append("Men say no luck comes of a burning.")
 	fs.burned(wr, c.world, _fork("burned"), band, fam, head_fell, burned_first, lines)
+	var none_out := bool(ctx.get("none_out", false))
 	for line in lines:
-		_say(line)
+		if not (none_out and line.contains("were let out")):
+			_say(line)
 	if head_fell and not f.is_empty():
 		f["settled"] = true
 		f["verdict"] = "burning"
 		f["mended"] = true
 		_vengeance()
 		var seat: Place = c.world.place(h.seat)
-		Feud.start(wr, band, fam, "the burning at %s" % (seat.display_name if seat != null else h.seat), h.seat, said)
+		if not none_out:  # with none let out there is no heir to begin it (Journey._nithing)
+			Feud.start(wr, band, fam, "the burning at %s" % (seat.display_name if seat != null else h.seat), h.seat, said)
 	if not burned_first and _fork("burning_thing").randf() < wr.burning_outlaw_chance:
 		_say("At the Thing the kin of %s bring the burning against %s, and the law finds for them." % [fam, band.leader.display_name])
 		Outlawry.declare(wr, band, c.cal, false, said)
@@ -2561,3 +2574,268 @@ func _take_prize(offer_kind: String) -> void:
 		_say("Her deck cleared, the %s is %s's prize; she is sold off for %d oz." % [name, who, oz2])
 		band.log("%s took a %s at sea" % [who, name])
 	c.tally.prizes = int(c.tally.get("prizes", 0)) + 1
+
+
+# --- Battles 2 (docs/design/notes/battles-2.md) --------------------------------------
+
+## The strandhogg is a fight now: up from the boats into the district's
+## pasture for its cattle, with the district gathering on the clock
+## (Scenario.build_strandhogg). A few herders by the farm, then
+## `strand_parties` parties of men, more where the place is well kept or
+## already alert, blooded where it keeps men under arms. "Let the saga
+## tell it" fights it with the leader AI.
+func _strandhogg(p: Place) -> void:
+	var wr := c.world_rules
+	var cr := c.combat_rules
+	var extra := p.defenses / 2 + p.alertness / 4
+	var size := c.rules.strand_herders
+	for k in cr.strand_parties:
+		size += cr.strand_party + k * cr.strand_party_growth + extra
+	var tier := CombatTypes.Tier.GREEN if p.defenses <= 2 else CombatTypes.Tier.BLOODED
+	var center := int(wr.defender_stat_by_kind[p.kind] + p.defenses * wr.defender_stat_per_defense)
+	_offer_fight("strandhogg at %s" % p.display_name, tier, size, true, clampi(center, 1, 10), false, false,
+			{"kind": "strandhogg", "place": p, "family": p.family},
+			"You put in below %s for its cattle: a few herders by the farm, and the district will come when it hears." % p.display_name, true)
+
+
+## What a strandhogg brought home: rations for every head driven down to
+## the boats (`strandhogg_food_per_head`, twice for a sea-wolf), and the
+## farm's silver in proportion to the herd taken; the district's house
+## thinks the worse of the band either way, the place grows alert, the
+## house may take up a feud, and the saga tells it.
+func _after_strandhogg(ctx: Dictionary, result: BattleResult) -> void:
+	var p: Place = ctx.get("place", null)
+	var band := c.band
+	if p == null or result == null:
+		return
+	var wr := c.world_rules
+	var who := band.leader.display_name if band.leader != null else "The band"
+	_shift(p.family, wr.standing_strandhogg)
+	Raiding._raise_alert(c.world, p, 1, 0)
+	var head := result.cattle if result.winner == 0 else 0
+	if head > 0:
+		var food := head * wr.strandhogg_food_per_head * int(band.gift("strandhogg", 1))
+		var silver := mini(p.wealth, roundi(float(wr.strandhogg_silver) * 2.0 * head / maxf(1.0, float(c.combat_rules.cattle_herd))))
+		band.food += food
+		band.silver += silver
+		p.wealth -= silver
+		Way.add_deed(band, Way.Id.VIKING, wr.deed_strandhogg)
+		_say("%s's men drive %d head of cattle down to the boats at %s and are away: %d rations%s." % [who, head, p.display_name, food,
+				(" and %d oz from the farm" % silver) if silver > 0 else ""])
+		band.log("took %d head of cattle at %s" % [head, p.display_name])
+		c.world.log("%s was raided for its cattle" % p.display_name)
+	elif result.winner == 0:
+		_say("%s's men get back aboard with nothing to show for it." % who)
+	else:
+		_say("The district's men drive %s's band back to its boats without the cattle." % who)
+		band.log("was driven off from the cattle at %s" % p.display_name)
+	c.tally.strandhogg = int(c.tally.get("strandhogg", 0)) + 1
+	if p.family != "" and _fork("strand_feud").randf() < wr.strandhogg_feud_chance:
+		band.add_feud(p.family, "strandhögg at %s" % p.display_name, p.id)
+		_say("%s swear vengeance for the cattle taken at %s." % [p.family, p.display_name])
+	_pass(1.0)
+
+
+## A great battle of the spine, fought as a sector of the line
+## (Scenario.build_sector's parameters for FightOffer.great): Hafrsfjord on
+## the ships lashed together, the others ashore. The kings' strengths make
+## the line's lean (`edge`): Harald's against the kings he means to take,
+## from the world's factions.
+func _great_battle(ctx: Dictionary) -> Dictionary:
+	var ev: Dictionary = ctx.get("event", {})
+	var choice := str(ctx.get("choice", ""))
+	var wr := c.world_rules
+	var with_harald := wr.spine_side_with.has(choice)
+	var harald: Faction = c.world.factions.get(Timeline.HARALD, null)
+	var hs := float(harald.strength) if harald != null and harald.alive else 1.0
+	var foes := 0.0
+	var effects: Dictionary = ev.get("effects", {})
+	var seen := {}
+	for fid in effects.get("absorb", []):
+		var f: Faction = c.world.factions.get(fid, null)
+		if f != null and f.alive and not seen.has(fid):
+			seen[fid] = true
+			foes += float(f.strength)
+	for pid in effects.get("conquer", []):
+		var pl := c.world.place(str(pid))
+		var f2: Faction = c.world.factions.get(pl.faction_id, null) if pl != null else null
+		if f2 != null and f2.alive and f2.id != Timeline.HARALD and not seen.has(f2.id):
+			seen[f2.id] = true
+			foes += float(f2.strength)
+	if foes <= 0.0:
+		foes = hs
+	var harald_edge := hs / maxf(1.0, hs + foes)
+	var p := {"edge": harald_edge if with_harald else 1.0 - harald_edge, "attacker": 0 if with_harald else 1,
+			"tier": int((effects.get("battle", {}) as Dictionary).get("tier", CombatTypes.Tier.BLOODED)),
+			"ally_tier": CombatTypes.Tier.BLOODED, "flank_men": c.combat_rules.sector_flank_men}
+	var at := c.world.place(str(ev.get("place", "")))
+	var where := at.display_name if at != null else "the fjord"
+	p.battle_name = where
+	if str(ev.get("id", "")) == "hafrsfjord":
+		p.ground = "deck"
+		p.title = "Hafrsfjord"
+		if with_harald:
+			p.ours_name = "Harald"
+			p.theirs_name = "the kings of the west"
+			p.left = "Rognvald of More's ship"
+			p.right = "the king's own ship"
+			p.banner = 1
+			p.banner_name = "Harald's banner"
+		else:
+			p.ours_name = "the kings of the west"
+			p.theirs_name = "Harald"
+			p.left = "Eirik of Hordaland's ship"
+			p.right = "Sulki of Rogaland's ship"
+			p.banner = -1
+			p.banner_name = "Kjotvi the Wealthy's banner"
+	else:
+		p.ground = "shore"
+		p.title = "The battle at %s" % where
+		p.ours_name = "Harald" if with_harald else "the men of the land"
+		p.theirs_name = "the men of the land" if with_harald else "Harald"
+		p.left = "the men on your left"
+		p.right = "the men on your right"
+		p.banner = 1 if with_harald else -1
+		p.banner_name = "Harald's banner" if with_harald else "the jarl's banner"
+	return p
+
+
+## What the named lieutenants did, for the saga: one who fell leading his
+## wing, and one whose word won the day.
+func _wing_lines(ctx: Dictionary, result: BattleResult) -> void:
+	var built: Dictionary = ctx.get("built", {})
+	if result == null or not built.has("battle"):
+		return
+	var b: Battle = built.battle
+	for wing in b.wings:
+		if wing.side != 0:
+			continue
+		var lt := wing.lieutenant
+		if wing.leaderless and lt.is_down():
+			_say("%s fell leading the %s wing, and the wing wavered without him." % [lt.display_name, wing.hand_name()])
+			c.band.log("%s fell leading the %s wing" % [lt.display_name, wing.hand_name()])
+		elif wing.acted_round >= 0 and result.winner == 0 and wing.word != Wing.Word.HOLD_LINE:
+			_say("Men speak of how %s led the %s: %s." % [lt.display_name, wing.hand_name(), Wing.WORD_NAMES[wing.word]])
+	if b.sector != null:
+		var s: Sector = b.sector
+		var lead := "the day at %s " % s.battle_name
+		if s.reason.begins_with(lead):
+			_say("At %s the day %s; the band %s its part of the line." % [s.battle_name, s.reason.trim_prefix(lead),
+					"held" if s.own_share(b) >= 0.0 else "could not hold"])
+		elif s.reason != "":
+			_say(Journey._cap(s.reason) + ".")
+
+
+## The burning, before the fire: whether to let the women, the children
+## and the thralls out, as is the custom, or to let none out.
+func _ask_mercy(d: Dictionary) -> void:
+	var fam := str((d.ctx as Dictionary).get("family", ""))
+	if fam == "" and (d.ctx as Dictionary).get("place", null) is Place:
+		fam = ((d.ctx as Dictionary).place as Place).family
+	decisions.push_front({"kind": "mercy", "title": "Before the fire", "fight": d,
+			"text": "The hall of %s is ringed and the torches are lit. Men call from the door to let the women and the children out. The custom is to let them go, with the thralls; a man who burns them is a nithing, and his name with him." % (fam if fam != "" else "their house"),
+			"options": [{"id": "let_out", "label": "Let them out"}, {"id": "none_out", "label": "Let none out"}]})
+
+
+func _answer_mercy(d: Dictionary, id: String) -> void:
+	var fd: Dictionary = d.fight
+	(fd.ctx as Dictionary)["none_out"] = id == "none_out"
+	if id == "none_out":
+		_say("%s will have none come out: the door is barred from without." % c.band.leader.display_name)
+	_answer_fight(fd, FightOffer.Choice.BURN)
+
+
+## A nithing's deed (the burning with none let out): the band's honor
+## falls far, every house in the land thinks the worse of it and the burned
+## house's friends worse still; nobody of that blood is left to avenge it,
+## but its nearest kin take up a feud no silver will end; men of honor in
+## the band leave it; and the saga remembers.
+func _nithing(ctx: Dictionary, _result: BattleResult) -> void:
+	var wr := c.world_rules
+	var fs := c.world.families
+	var band := c.band
+	var who := band.leader.display_name
+	var fam := str(ctx.get("family", ""))
+	if fam == "" and ctx.get("place", null) is Place:
+		fam = (ctx.place as Place).family
+	var h: House = fs.house(fam) if fs != null else null
+	var seat: Place = c.world.place(h.seat) if h != null else null
+	var at := seat.display_name if seat != null else "their hall"
+	band.honor = clampi(band.honor - wr.none_out_honor, 0, 100)
+	_say("None were let out. The women, the children and the thralls of %s burned in the hall at %s with their men." % [fam, at])
+	if fs != null:
+		var allies := fs.allies_of(fam)
+		for name in fs.names():
+			if name == fam:
+				continue
+			var delta := wr.none_out_standing + (wr.none_out_ally_standing if allies.has(name) else 0)
+			Families.set_standing(band, name, Families.standing(band, name) + delta)
+		# None of that blood is left to take vengeance; their kin will, and
+		# take no silver for it.
+		if h != null:
+			h.strength = mini(h.strength, wr.none_out_house_left)
+		var f := Feud.find(band, fam)
+		if not f.is_empty():
+			f["settled"] = true
+			f["verdict"] = "none left"
+		var kin := ""
+		for a in allies:
+			if fs.has_tie(fam, a, "blood") or fs.has_tie(fam, a, "marriage") or kin == "":
+				kin = a
+				if fs.has_tie(fam, a, "blood"):
+					break
+		if kin != "":
+			Feud.start(wr, band, kin, "the burning at %s, when none were let out" % at, h.seat if h != null else "", said)
+			var kf := Feud.find(band, kin)
+			if not kf.is_empty():
+				kf["no_silver"] = true
+				kf["level"] = 3
+			_say("%s take up the feud, and will take no silver for it." % kin)
+	_say("Men everywhere call %s a nithing for it." % who)
+	band.log("%s burned %s in their hall at %s and let none out, the women and children with them: men call him a nithing for it" % [who, fam, at])
+	c.world.log("%s burned %s in their hall at %s and let none out" % [who, fam, at])
+	# Men of honor will not follow him.
+	var gone := PackedStringArray()
+	var r := _fork("nithing")
+	for m in band.living_men():
+		if m == band.leader or m.loyalty >= wr.none_out_stay_loyalty:
+			continue
+		if r.randf() < wr.none_out_leave_chance:
+			gone.append(m.display_name)
+			band.remove_man(m)
+	if not gone.is_empty():
+		_say("%s will not follow a nithing: %s." % [", ".join(gone), "he takes his things and goes" if gone.size() == 1 else "they take their things and go"])
+	c.tally.nithing = int(c.tally.get("nithing", 0)) + 1
+
+
+## The band's own hall burned by its enemy (WinterHall._hall_burned): the
+## burners may let the household out, as is the custom, or let none out,
+## the more likely the hotter the feud. Returns true when none were let
+## out: the wife and the children at home burn with the hall, the feud is
+## past silver, the burners are nithings in the land's eyes, and the saga
+## says so (the caller then says nothing of the household going free).
+func burners_let_none_out(against: String) -> bool:
+	var wr := c.world_rules
+	var band := c.band
+	var f := Feud.find(band, against)
+	var level := int(f.get("level", 1)) if not f.is_empty() else 1
+	if _fork("none_out_theirs").randf() >= wr.enemy_none_out_chance * level:
+		return false
+	var lost := PackedStringArray()
+	if band.wife != "":
+		lost.append(band.wife)
+		band.wife = ""
+	for child in band.sons:
+		if child.get("alive", true) and not child.get("seat", false) and str(child.get("fostered_with", "")) == "" \
+				and c.cal.year - int(child.get("born", c.cal.year)) < 16:
+			child["alive"] = false
+			lost.append(str(child.get("name", "a child")))
+	_say("The roof takes fire. %s call that none shall come out, and hold the door with spears. %s" % [against,
+			("%s burn in the hall with the thralls." % ", ".join(lost)) if not lost.is_empty() else "The thralls burn in the hall."])
+	band.log("%s burned the hall and let none out%s" % [against, (": %s died in it" % ", ".join(lost)) if not lost.is_empty() else ""])
+	c.world.log("%s burned a hall and let none out" % against)
+	if not f.is_empty():
+		f["no_silver"] = true
+		f["level"] = 3
+	c.tally.burned_none_out = int(c.tally.get("burned_none_out", 0)) + 1
+	return true
