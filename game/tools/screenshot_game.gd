@@ -45,7 +45,7 @@
 ## user://shot_saves/, never the player's): on the map, `save` writes the
 ## autosave, `save:<slot>` a slot (slot1..slot3), `load` saves and loads the
 ## autosave into a new map (as Continue does), `sagas` opens the Sagas modal
-## over the map. `what` "continue" is the title with a saga to continue
+## over the map, `paste` its "Paste a save". `what` "continue" is the title with a saga to continue
 ## (a year played by the stand-in viking, saved, a slot kept too), "sagas"
 ## that title with the Sagas modal open, "confirm" that title asking
 ## before a new saga is begun.
@@ -66,8 +66,10 @@ func _save_cmd(game: Node, cmd: String) -> bool:
 		if game.map != null:
 			game.map.paused = true
 		return true
-	if cmd == "sagas":
-		SavesModal.open(game.map if game.map != null else game.screen, game)
+	if cmd == "sagas" or cmd == "paste":
+		var m := SavesModal.open(game.map if game.map != null else game.screen, game)
+		if cmd == "paste":
+			SavesModal._paste(m, game)
 		return true
 	return false
 
@@ -152,7 +154,7 @@ func _init() -> void:
 	# the others look as they always did.
 	var saving := what in ["continue", "sagas", "confirm"]
 	for i in range(3, args.size()):
-		saving = saving or args[i] == "load" or args[i] == "sagas" or args[i].begins_with("save")
+		saving = saving or args[i] in ["load", "sagas", "paste"] or args[i].begins_with("save")
 	game.autosave_on = saving
 	if what == "continue" or what == "sagas" or what == "confirm":
 		await _title_with_save(game, what)
