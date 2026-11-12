@@ -14,6 +14,7 @@ static func setup(c: Campaign, wr: WorldRules, home_id: String) -> World:
 	var world := World.build_norway(wr, c.cal.year)
 	Faction.load_all(world)
 	world.families = Families.build(wr, world, c.rng.fork("families").seed_value)
+	TradeRoad.open_stalls(wr, world)
 	c.world = world
 	c.world_rules = wr
 	c.fight_policy = Callable(Sandbox, "choose_fight")
