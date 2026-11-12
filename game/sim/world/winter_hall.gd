@@ -1212,7 +1212,7 @@ func _state_yard(j: Journey, s: Dictionary) -> void:
 	var rules := c.rules
 	var drillers := maxi(0, _free_men(j).size() - hunters)
 	s.text = "The yard. %s each turn, a point a turn in the shape you choose, to %d. A man who does not drill a shape loses a point of it at the thaw." % [
-			"one man drills" if drillers == 1 else "%d men drill" % drillers, rules.drill_points_full]
+			"One man drills" if drillers == 1 else "%d men drill" % drillers, rules.drill_points_full]
 	var none_on := shape == ""
 	s.rows.append(_row("Each man his own weakness", "No shape: every man drills what he is worst at.", "chosen" if none_on else "",
 			[_btn("shape:", "Choose", true, none_on)]))

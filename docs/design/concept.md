@@ -1519,11 +1519,34 @@ settings; a men panel told in words; and saving: an autosave at every
 natural beat, three slots, and a save that can be copied between
 devices. A save in the middle of a battle resumes at the fight's start.
 
+**The whole weighed** (`balance.md`). Whole sagas were played by the
+stand-in players and the rules trimmed where one system broke another.
+Captives are a stock that floods a market, slips away and costs honor to
+sell, so ransom and sale are a choice; luck drifts back toward the middle
+and no longer runs away; a band is as big as its hall's benches or its
+hull's thwarts (`Campaign.room`); a standing word answers offers while
+the years pass; the heir at the grave-ale can send a champion, look to
+the men or buy his rival off; a full outlaw's land is held until his
+pardon. The six ways now lie within 1.5 to 1.8 of each other in worth a
+year. The families panel says in words what the burning's vengeance
+still lacks (`Journey.vengeance_outlook`).
+
+**Played on the live build by touch** (12 Nov 2026): the title, the
+escape, the map and a place's deeds, a whole winter, the years let pass
+and the next spring, with the save taken up between visits. Three things
+that only a thumb finds were put right: a list made of rows could not be
+dragged (a button kept the touch; rows in a scroll now pass it on), a
+second card on day one (the spring omen keeps out of the first summer),
+and a clipped count of men.
+
 Open after this pass, in order of weight: the sound has been checked by
 number and not by ear; the whole has been played end to end only by the
 stand-in players and by scripted taps on the live build, not yet by a
-person for an evening; barring the door against fire is too weak;
-see `balance.md` for the state of the six ways against each other.
+person for an evening; barring the door against a stronger burning party
+is still a death; a long saga gathers more silver than it can spend; the
+king's man reaches his vengeance in three summers. In hand: the wider
+world west and east, the leader's nature and things worth silver, and
+named lieutenants, strandhogg and the great battle as fights.
 
 ## Open questions
 
