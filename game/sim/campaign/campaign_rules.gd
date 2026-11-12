@@ -485,3 +485,21 @@ var storm_mend_ounces := 3
 ## healing the loser takes away, and what it does to their bond.
 var quarrel_island_turns := 2
 var quarrel_island_bond := 15
+
+# --- The saga's fights (docs/design/notes/saga-fights.md) -------------------
+## A raid that has the field when the neighbours come but never stood in
+## the hall (Objective.Kind.PLUNDER, not `taken`) carries off this share of
+## what a raid that broke in carries.
+var raid_late_share := 0.4
+## A leader led from the front when he stood this many rounds with an enemy
+## at arm's length (Warrior.contact_rounds) or struck a blow, or went down,
+## in a fight his men came to blows in. Otherwise he hung back
+## (Leader.on_battle): it costs luck and honor.
+var front_contact_rounds := 2
+## A hall burning over your head (WinterHall): holding and burning, the
+## men this loyal or more stay in the fire with the leader; the rest are let
+## out with the household.
+var hold_burn_loyalty := 70
+## A house's men who take a band's hall (Objective THE_HALL taken) carry
+## off this share of its store.
+var hall_plundered_food := 0.5

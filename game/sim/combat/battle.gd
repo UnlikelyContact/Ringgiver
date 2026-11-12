@@ -30,6 +30,17 @@ var duel := false
 ## and lives (the burned hall's leader, whose saga it is). Empty in every
 ## other fight.
 var spared: Array[Warrior] = []
+## The fight is by night (the hall's: Scenario.build_hall_defence,
+## build_hall_burning). Only the view reads it.
+var night := false
+## The hall's roof is alight (the burning, or the fire taking at the end of
+## a defence). Only the view reads it.
+var hall_alight := false
+## The side breaking out of a burning hall is the leader AI's
+## (Scenario.build_hall_burning): it gives the escape's careful orders
+## (Objective.escape_order) and slips away when it can. False everywhere
+## else, the burned hall's own escape included (the player's).
+var ai_breaks_out := false
 var _custom_called := {}  # side -> CustomShout given this round
 var _follow_up := {}  # side -> the order a custom shout gives next round
 ## The side taken by surprise (an ambush), or -1, and the last round its
@@ -579,6 +590,11 @@ func run(max_rounds := -1) -> BattleResult:
 func run_round() -> void:
 	if _over:
 		return
+	if ai_breaks_out:
+		for side in 2:
+			if _ai.has(side) and escaping(side) and round > 0 and can_withdraw(side):
+				withdraw(side)
+				return
 	round += 1
 	log.append("--- round %d ---" % round)
 	var round_log_start := log.size()
@@ -606,6 +622,8 @@ func run_round() -> void:
 		elif _ai.has(side) and leader != null and is_surprised(side):
 			if round == 1:
 				log.append("%s's men are taken by surprise: no order comes" % leader.display_name)
+		elif _ai.has(side) and leader != null and ai_breaks_out and escaping(side):
+			shout = CombatTypes.Shout.SHIELD_WALL if round == 1 else Objective.escape_order(self, side)
 		elif _ai.has(side) and leader != null:
 			if round == surprised_until(side) + 1 and surprised_until(side) > 0:
 				_face_about(side, leader)
@@ -691,6 +709,7 @@ func run_round() -> void:
 	# 3c. Melee.
 	_resolve_melee(rr.fork("melee"), actions)
 	after_melee = _positions()
+	_count_contact()
 	# 3d. The push: a heave happens only when a leader has called for it.
 	if _push_called():
 		var may_advance := {}
@@ -713,12 +732,16 @@ func run_round() -> void:
 		var push := Push.resolve(rr.fork("push"), rules, grid, warriors, log, may_advance, wall_facing, driving, wall_axis)
 		for w in push.driven_off:
 			result.fled[w.side] += 1
+		for w in push.overboard:
+			_went_overboard(w, "%s is thrown back over the side into the sea" % w.display_name)
 		if push.winning_side >= 0:
 			log.append("the push goes to side %d" % push.winning_side)
 	# 3e. Morale.
 	var broke := Morale.round_update(rr.fork("morale"), rules, grid, warriors, leaders, any_attacks, log)
 	for w in broke:
 		result.broken[w.side] += 1
+	if grid.has_sea:
+		_over_the_rail()
 
 	# Blows landed this round?
 	var any_blow := false
@@ -772,6 +795,10 @@ func run_round() -> void:
 	for side in 2:
 		if _ai.has(side) and last_shout(side) == CombatTypes.Shout.FALL_BACK and _withdrawn(side):
 			_finish(1 - side, "side %d draws off and leaves the field" % side, BattleResult.End.DRAW_OFF)
+			return
+		if _ai.has(side) and last_shout(side) == CombatTypes.Shout.FALL_BACK and objective != null \
+				and objective.kind == Objective.Kind.DECK and objective.allows_withdraw(self, side):
+			_finish(1 - side, "side %d cuts the lashings and rows away" % side, BattleResult.End.DRAW_OFF)
 			return
 	if _rounds_without_blow >= rules.retreat_stall_rounds:
 		var retreating := []
@@ -829,6 +856,8 @@ func _face_about(side: int, leader: Warrior) -> void:
 ## Whether a side can withdraw: none of its standing men has an enemy at
 ## arm's length. Engaged, it must break contact first (fall back).
 func can_withdraw(side: int) -> bool:
+	if objective != null and objective.kind == Objective.Kind.DECK:
+		return objective.allows_withdraw(self, side)  # in contact over the rail or not: cut the lashings
 	if objective != null and not objective.allows_withdraw(self, side):
 		return false
 	for w in active(side):
@@ -855,6 +884,10 @@ func withdraw(side: int) -> bool:
 		log.append("%s and his men slip away into the dark" % who)
 		result.by_objective = true
 		_finish(1 - side, "side %d gets away into the dark" % side, BattleResult.End.ESCAPE)
+		return true
+	if objective != null and objective.kind == Objective.Kind.DECK:
+		log.append("%s's men cut the lashings and pull away" % who)
+		_finish(1 - side, "side %d cuts the lashings and rows away" % side, BattleResult.End.WITHDRAWAL)
 		return true
 	log.append("%s leads his men off the field" % who)
 	_finish(1 - side, "side %d withdraws from the field" % side, BattleResult.End.WITHDRAWAL)
@@ -1212,6 +1245,10 @@ func _resolve_melee(mr: SimRng, actions: Dictionary) -> void:
 		if b_attacks and not _ahead_of(b, a.pos):
 			b.facing = BattleGrid.direction_to(b.pos, a.pos)
 			b.turned_to_strike = true
+		if a_attacks:
+			a.strikes += 1
+		if b_attacks:
+			b.strikes += 1
 		var r := MeleeExchange.resolve(mr.fork(key), rules, grid, a, b, a_attacks, b_attacks, a_braced, b_braced, log)
 		_after_exchange(r)
 
@@ -1246,10 +1283,17 @@ func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.
 	result.winner = winner
 	result.how = how
 	result.rounds = round
+	if objective != null:
+		result.objective_kind = objective.kind
+		result.objective_attacker = objective.attacker
+		result.taken = objective.taken and winner == objective.attacker
+		result.ship_taken = objective.ship_taken
 	log.append("=== %s ===" % why)
 	var fr := rng.fork("fate")
 	for w in warriors:
-		if w.is_down() and spared.has(w):
+		if w.overboard:
+			_sea_takes(fr.fork("sea:%d" % w.id), w)
+		elif w.is_down() and spared.has(w):
 			w.fate = CombatTypes.Fate.RECOVERED
 			log.append("%s will live" % w.display_name)
 		elif w.is_down():
@@ -1264,3 +1308,82 @@ func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.
 				_:
 					log.append("%s will recover" % w.display_name)
 	result.log = log
+
+
+# --- The saga's fights --------------------------------------------------------------
+
+## The leader's luck carried into the fight (Warrior.luck): his side's men
+## start `luck_morale` the warmer or colder of heart for it, and his own
+## close calls lean on it (MeleeExchange, Fate). `luck` is -1, 0 or +1;
+## 0 changes nothing.
+func set_luck(side: int, luck: int) -> void:
+	var l: Warrior = _leaders.get(side, null)
+	if l == null or luck == 0:
+		return
+	l.luck = clampi(luck, -1, 1)
+	for w in side_warriors(side):
+		w.morale = clampi(w.morale + l.luck * rules.luck_morale, 0, 10)
+	if l.luck > 0:
+		log.append("%s's men say his luck holds" % l.display_name)
+	else:
+		log.append("%s's men mutter that his luck is out" % l.display_name)
+
+
+## Every man standing with an enemy at arm's length after the blows has
+## spent a round in contact (Warrior.contact_rounds): what the campaign
+## reads for a leader who led from the front. Counting only.
+func _count_contact() -> void:
+	for w in warriors:
+		if not w.is_active():
+			continue
+		for e in grid.adjacent_warriors(w.pos):
+			if e.side != w.side and e.is_active():
+				w.contact_rounds += 1
+				break
+
+
+## A man goes over the side (a deck's: Scenario.build_deck): off the field
+## like a man who fled, his fate the sea's when the fight ends.
+func _went_overboard(w: Warrior, line: String) -> void:
+	if w.overboard:
+		return
+	grid.remove(w)
+	w.overboard = true
+	w.fled = true
+	result.fled[w.side] += 1
+	result.overboard[w.side] += 1
+	log.append(line)
+
+
+## A broken man at the rail with an enemy at arm's length and the sea
+## beside him goes over the side rather than be cut down. Only a field
+## with sea on it (the deck) has any.
+func _over_the_rail() -> void:
+	for w in warriors:
+		if not w.is_active() or not w.broken:
+			continue
+		var sea := false
+		var foe := false
+		for n in grid.neighbors(w.pos):
+			if grid.terrain_at(n) == CombatTypes.Terrain.SEA:
+				sea = true
+			var e := grid.occupant(n)
+			if e != null and e.side != w.side and e.is_active():
+				foe = true
+		if sea and foe:
+			_went_overboard(w, "%s goes over the rail into the sea" % w.display_name)
+
+
+## The sea's verdict on a man overboard: he drowns (`overboard_drown`, far
+## likelier in mail) or swims and is hauled out.
+func _sea_takes(r: SimRng, w: Warrior) -> void:
+	var chance: float = rules.overboard_drown + float(rules.overboard_drown_armor[clampi(int(w.armor), 0, 2)])
+	if r.randf() < chance:
+		w.wound = CombatTypes.Wound.DOWN
+		w.fate = CombatTypes.Fate.DEAD
+		result.dead[w.side] += 1
+		result.drowned[w.side] += 1
+		log.append("%s goes down%s and does not come up" % [w.display_name, " in his mail" if w.armor == CombatTypes.Armor.MAIL else ""])
+	else:
+		w.fate = CombatTypes.Fate.RECOVERED
+		log.append("%s swims, and is hauled out of the sea" % w.display_name)

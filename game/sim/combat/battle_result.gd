@@ -34,6 +34,16 @@ var broken: Array[int] = [0, 0]
 var fled: Array[int] = [0, 0]
 var dead: Array[int] = [0, 0]
 var maimed: Array[int] = [0, 0]
+## The ship fight: men gone over the side, and of them the drowned.
+var overboard: Array[int] = [0, 0]
+var drowned: Array[int] = [0, 0]
+## What the objective came to (Objective): its kind (-1 for an open fight),
+## whether its attacker did the task itself (`Objective.taken`), and in a
+## ship fight the side whose ship was taken (-1 when none was).
+var objective_kind := -1
+var objective_attacker := -1
+var taken := false
+var ship_taken := -1
 var log := PackedStringArray()
 
 

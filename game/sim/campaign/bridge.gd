@@ -11,7 +11,8 @@ extends RefCounted
 ## {dead, maimed, wounded, grievous, fled, broke, deeds, tiers}, each an
 ## Array of lines.
 static func after_battle(rules: CampaignRules, band: Band, warriors: Array[Warrior], result: BattleResult, log: PackedStringArray) -> Dictionary:
-	var told := {"dead": [], "maimed": [], "wounded": [], "grievous": [], "fled": [], "broke": [], "deeds": [], "tiers": []}
+	var told := {"dead": [], "maimed": [], "wounded": [], "grievous": [], "fled": [], "broke": [], "deeds": [], "tiers": [],
+		"drowned": [], "overboard": []}
 	var stood: Array[Man] = []  # alive afterwards and did not flee
 	# The shape the band fought in: standing in a learned one teaches it.
 	var fought: FormationTemplate = null
@@ -36,6 +37,11 @@ static func after_battle(rules: CampaignRules, band: Band, warriors: Array[Warri
 			m.battles_survived += 1
 		if dead:
 			m.alive = false
+			if w.overboard:
+				band.log("%s went over the side and drowned" % m.display_name)
+				log.append("%s is drowned" % m.display_name)
+				told.drowned.append(m.display_name)
+				continue
 			band.log("%s fell in battle" % m.display_name)
 			log.append("%s is dead" % m.display_name)
 			told.dead.append(m.display_name)
@@ -51,7 +57,11 @@ static func after_battle(rules: CampaignRules, band: Band, warriors: Array[Warri
 				told.grievous.append(m.display_name)
 			elif turns >= rules.wound_turns[CombatTypes.Wound.WOUNDED]:
 				told.wounded.append(m.display_name)
-		if w.fled:
+		if w.overboard:
+			# Thrown into the sea is no flight: he swam, and was hauled out.
+			told.overboard.append(m.display_name)
+			stood.append(m)
+		elif w.fled:
 			m.loyalty = clampi(m.loyalty - rules.loyalty_fled_penalty, 0, 100)
 			log.append("%s fled the field (loyalty %d)" % [m.display_name, m.loyalty])
 			told.fled.append(m.display_name)

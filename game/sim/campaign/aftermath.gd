@@ -47,6 +47,10 @@ static func lines(told: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	if not told.dead.is_empty():
 		out.append("%s %s dead." % [_names(told.dead), "is" if told.dead.size() == 1 else "are"])
+	if not told.get("drowned", []).is_empty():
+		out.append("%s went over the side and %s drowned." % [_names(told.drowned), "was" if told.drowned.size() == 1 else "were"])
+	if not told.get("overboard", []).is_empty():
+		out.append("%s went over the side, swam, and %s hauled out of the sea." % [_names(told.overboard), "was" if told.overboard.size() == 1 else "were"])
 	for line in told.maimed:
 		out.append(line + ".")
 	if not told.grievous.is_empty():

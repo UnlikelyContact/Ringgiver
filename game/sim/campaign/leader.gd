@@ -30,6 +30,8 @@ static func on_battle(rules: CampaignRules, band: Band, won: bool, led_from_fron
 			log.append("%s did not care to fight that day, and led his men off" % who)
 	elif outcome == O.BOTH_DREW_OFF:
 		log.append("%s and his enemy drew off, and neither had the better of it" % who)
+	elif outcome == O.ESCAPED:
+		log.append("%s got out of the fire, and it is told of him" % who)
 	elif won and odds < rules.long_odds:
 		_add(band, rules.luck_long_odds, rules.fame_long_odds, 0)
 		log.append("%s won against the odds: his luck is talked of" % who)

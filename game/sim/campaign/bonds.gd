@@ -89,20 +89,35 @@ static func rivals(band: Band, m: Man) -> Array[Man]:
 ## vengeance. One feud against the killer is opened (unless an unsettled one
 ## already stands), and every brother whose ambition is not already
 ## VENGEANCE or FAME now wants vengeance. Call before removing the dead man.
-static func on_death(rules: CampaignRules, band: Band, dead: Man, killer: String, log: PackedStringArray) -> void:
+## The house of the killers, for `on_death`, when the caller does not know
+## it: the old ways, a feud named for the killer himself.
+const OLD_WAYS := "-"
+
+
+## `house` is the house the killers belong to: the vengeance is a feud with
+## it. "" (raiders, outlaws, men of no house): no feud, a private grudge
+## sworn at the grave. OLD_WAYS: a feud named for the killer, as it was.
+static func on_death(rules: CampaignRules, band: Band, dead: Man, killer: String, log: PackedStringArray,
+		house := OLD_WAYS) -> void:
 	var brothers := oath_brothers(band, dead)
 	if brothers.is_empty():
 		return
 	var cause := "%s slain" % dead.display_name
-	if band.add_feud(killer, cause):
-		log.append("feud opened against %s: %s" % [killer, cause])
+	var against := killer if house == OLD_WAYS else house
+	if against == "":
+		log.append("no house answers for %s's death: a grudge against %s" % [dead.display_name, killer])
+	elif band.add_feud(against, cause):
+		log.append("feud opened against %s: %s" % [against, cause])
 	for b in brothers:
 		if b.ambition != CampaignTypes.Ambition.VENGEANCE and b.ambition != CampaignTypes.Ambition.FAME:
 			b.ambition = CampaignTypes.Ambition.VENGEANCE
 			b.ambition_progress = 0
 			b.ambition_met = false
 		log.append("%s vows vengeance on %s for his oath brother %s" % [b.display_name, killer, dead.display_name])
-		band.log("%s swore over %s's grave that %s would pay." % [b.display_name, dead.display_name, killer])
+		if against == "":
+			band.log("%s swore over %s's grave that %s would pay, though no house answers for him." % [b.display_name, dead.display_name, killer])
+		else:
+			band.log("%s swore over %s's grave that %s would pay." % [b.display_name, dead.display_name, against if house != OLD_WAYS else killer])
 
 
 static func _of_kind(band: Band, m: Man, kind: CampaignTypes.BondKind) -> Array[Man]:

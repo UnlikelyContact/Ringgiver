@@ -166,6 +166,9 @@ func _build() -> void:
 
 func _press(id: String) -> void:
 	journey.winter_choose(id)
+	if not journey.fight.is_empty() and map != null and map.has_method("refresh"):
+		map.call_deferred("refresh")  # a fight at the hall: the battle screen, then the winter goes on
+		return
 	if not journey.in_winter():
 		queue_free()
 		if map != null and map.has_method("refresh"):
@@ -192,6 +195,7 @@ func refresh() -> void:
 				("%d left" % int(t.food_end)) if int(t.food_end) >= 0 else ("%d short" % -int(t.food_end))]
 	_back.disabled = not s.can_back
 	_next.text = str(s.next_label)
+	_next.disabled = not bool(s.get("can_next", true))
 	var steps_n := (s.steps as Array).size()
 	_step_label.text = "%d of %d%s" % [int(s.step) + 1, steps_n, ("   next: %s" % str(s.steps[int(s.step) + 1]).to_lower()) if int(s.step) + 1 < steps_n else ""]
 	for ch in _list.get_children():

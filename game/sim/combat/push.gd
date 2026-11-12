@@ -79,7 +79,7 @@ static func resolve(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	for w in winners:
 		w.add_effort(CombatTypes.Stat.MIGHT)
 	_shove(rules, grid, losers, result, log, wall_facing, wall_axis)
-	if not result.shoved.is_empty() or not result.driven_off.is_empty():
+	if not result.shoved.is_empty() or not result.driven_off.is_empty() or not result.overboard.is_empty():
 		for w in winners:
 			w.morale = clampi(w.morale + rules.push_won_morale, 0, 10)
 	if rules.push_winners_advance:
@@ -217,6 +217,16 @@ static func _shove(rules: CombatRules, grid: BattleGrid, losers: Array[Warrior],
 			side_step[w.side] = BattleGrid.forward(w.pos, wall_axis.get(w.side, BattleGrid.default_axis(f)), BattleGrid.rotate(f, 3))
 		back[w] = w.pos + side_step[w.side]
 	pending.sort_custom(func(a: Warrior, b: Warrior) -> bool: return a.id < b.id)
+	# On a deck, a man thrown back with the sea behind him goes over the side
+	# (only the ship fight has SEA: Scenario.build_deck).
+	if grid.has_sea:
+		for w: Warrior in pending.duplicate():
+			if grid.in_bounds(back[w]) and grid.terrain_at(back[w]) == CombatTypes.Terrain.SEA:
+				pending.erase(w)
+				grid.remove(w)
+				result.overboard.append(w)
+		if pending.is_empty():
+			return
 	# A line gives ground together: if fewer than push_line_fraction of its
 	# men have room behind them, the whole line is pressed and holds (and
 	# tires); otherwise it goes back and the few who are blocked stay.

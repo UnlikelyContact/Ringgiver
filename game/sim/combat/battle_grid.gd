@@ -15,6 +15,8 @@ const NO_CELL := Vector2i(-9999, -9999)
 var width: int
 var height: int
 var _terrain := {}  # axial -> Terrain (missing = FLAT)
+## True once any hex is SEA (the ship fight): the overboard rules look only then.
+var has_sea := false
 var _occupants := {}
 
 
@@ -56,6 +58,8 @@ func terrain_at(c: Vector2i) -> CombatTypes.Terrain:
 
 func set_terrain(c: Vector2i, t: CombatTypes.Terrain) -> void:
 	_terrain[c] = t
+	if t == CombatTypes.Terrain.SEA:
+		has_sea = true
 
 
 # --- Occupancy ----------------------------------------------------------------
@@ -70,7 +74,7 @@ func occupant(c: Vector2i) -> Warrior:
 ## nobody is struck or flanked from them either.
 static func blocks(t: CombatTypes.Terrain) -> bool:
 	return t == CombatTypes.Terrain.WATER or t == CombatTypes.Terrain.TREE or t == CombatTypes.Terrain.ROCK \
-			or t == CombatTypes.Terrain.FENCE or t == CombatTypes.Terrain.BUILDING
+			or t == CombatTypes.Terrain.FENCE or t == CombatTypes.Terrain.BUILDING or t == CombatTypes.Terrain.SEA
 
 
 ## On the map and ground a man can stand on, whoever stands there now.

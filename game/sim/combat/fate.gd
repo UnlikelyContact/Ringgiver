@@ -10,7 +10,7 @@ static func roll(rng: SimRng, rules: CombatRules, w: Warrior) -> CombatTypes.Fat
 	if not w.is_down():
 		w.fate = CombatTypes.Fate.RECOVERED
 		return w.fate
-	var total := rng.roll_2d6() + w.grit
+	var total := rng.roll_2d6() + w.grit + w.luck * rules.luck_fate
 	if total < rules.fate_dead_below:
 		w.fate = CombatTypes.Fate.DEAD
 	elif total < rules.fate_maimed_below:
