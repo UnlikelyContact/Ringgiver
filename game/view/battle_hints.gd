@@ -44,6 +44,11 @@ func setup(p_hints: Hints, p_hud: Node) -> void:
 	ok.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(ok)
 	root.add_child(_outline)
+	# A sheet before the fight (the offer, the named men's words) is read
+	# first: the hint waits under it and comes when it is put away.
+	var sheet: Control = hud.get("offer_panel")
+	if sheet != null:
+		sheet.visibility_changed.connect(check)
 	check()
 
 
@@ -62,9 +67,11 @@ func check() -> void:
 	if hud == null or hints == null:
 		return
 	var b: Battle = hud.view.battle
-	if showing == "":
+	var sheet: Control = hud.get("offer_panel")
+	var waiting := sheet != null and sheet.visible
+	if showing == "" and not waiting:
 		showing = hints.next_battle_hint(b)
-	if showing == "" or b.is_over():
+	if showing == "" or b.is_over() or waiting:
 		_card.visible = false
 		_outline.queue_redraw()
 		_keep_clear()

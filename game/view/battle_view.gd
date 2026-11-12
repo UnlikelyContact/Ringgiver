@@ -1134,6 +1134,18 @@ func _draw_herd(obj: Objective) -> void:
 		var hull := PackedVector2Array([p2 + Vector2(-24, -4), p2 + Vector2(24, -4), p2 + Vector2(16, 8), p2 + Vector2(-16, 8)])
 		draw_colored_polygon(hull, Palette.TIMBER)
 		draw_polyline(hull + PackedVector2Array([hull[0]]), Palette.OUTLINE, 2.0)
+	if not obj.boats.is_empty():
+		# Named like the pasture, off the boats' left end: where the day ends.
+		var first := Iso.to_screen(obj.boats[0])
+		for b in obj.boats:
+			if Iso.to_screen(b).x < first.x:
+				first = Iso.to_screen(b)
+		var font := ThemeDB.fallback_font
+		var text := "YOUR BOATS"
+		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+		var pos := Vector2(first.x - Iso.SIZE - w, first.y + 7.0)
+		draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, 6, Palette.OUTLINE)
+		draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Palette.GOLD)
 	# The sea below the strand.
 	var last := Iso.to_screen(BattleGrid.from_offset(0, g.height - 1))
 	var right := Iso.to_screen(BattleGrid.from_offset(g.width - 1, g.height - 1))

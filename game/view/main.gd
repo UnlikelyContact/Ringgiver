@@ -135,6 +135,11 @@ func focus_point(zoom: float) -> Vector2:
 	var band := get_viewport_rect().size.y - _hud_top() - HUD_BOTTOM - top_extra - bottom_extra
 	if _goal_on_top() and (b[1].y - b[0].y + 2.0 * EDGE_MARGIN) * zoom > band:
 		centre.y = b[0].y - EDGE_MARGIN * 0.5 + band / 2.0 / zoom
+	elif battle.objective != null and not battle.objective.boats.is_empty() \
+			and (b[1].y - b[0].y + 2.0 * EDGE_MARGIN) * zoom > band:
+		# A strandhogg's boats lie along the bottom: they stay in view, and
+		# the far end of the pasture goes under the bar instead.
+		centre.y = b[1].y + EDGE_MARGIN * 0.5 - band / 2.0 / zoom
 	return centre + Vector2(0, (HUD_BOTTOM + bottom_extra - _hud_top() - top_extra) / 2.0 / zoom)
 
 

@@ -991,7 +991,7 @@ func _show_wings() -> void:
 	if ours.is_empty():
 		return
 	offer_panel.open("Your named men")
-	offer_panel.body.add_child(UiTheme.label("Give each his word before the fight. He acts on it when he judges the time has come.", "BodyLabel"))
+	offer_panel.body.add_child(UiTheme.label("Give each his word before the fight: tap the word to change it. He acts on it when he judges the time has come.", "BodyLabel"))
 	for wing in ours:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", UiTheme.S2)
