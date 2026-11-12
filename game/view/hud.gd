@@ -19,6 +19,16 @@ var offer_panel: PanelContainer
 var pulse_slider: HSlider
 var pulse_label: Label
 var _last_logged_shout := {}
+## The controls by name, for the tutorial (view/tutorial.gd): "shout:<n>"
+## (CombatTypes.Shout), "next", "withdraw", "form", "advance", "wheel_l",
+## "wheel_r", "follow".
+var controls := {}
+## While the tutorial holds the player's hand, only these controls (names
+## as in `controls`) can be pressed; empty when it does not.
+var allowed: Array[String] = []
+## The tutorial director for the burned hall, or null (any other fight).
+var tutorial: Tutorial = null
+var root_control: Control
 
 const SHOUTS := [
 	CombatTypes.Shout.SHIELD_WALL, CombatTypes.Shout.HOLD, CombatTypes.Shout.PUSH,
@@ -34,6 +44,7 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	root_control = root
 
 	var top := HBoxContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
@@ -60,41 +71,47 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	you_label.custom_minimum_size = Vector2(200, 0)
 	left.add_child(you_label)
 	form_btn = Button.new()
-	form_btn.custom_minimum_size = Vector2(110, 40)
+	form_btn.custom_minimum_size = Vector2(110, 44)
 	form_btn.pressed.connect(func() -> void:
 		view.cycle_formation()
 		for k in shout_buttons:
 			(shout_buttons[k] as Button).button_pressed = (k == view.pending_shout)
 		_refresh())
 	top.add_child(form_btn)
+	controls["form"] = form_btn
 	var adv := Button.new()
 	adv.text = "Advance"
-	adv.custom_minimum_size = Vector2(92, 40)
+	adv.custom_minimum_size = Vector2(92, 44)
 	adv.pressed.connect(func() -> void: view.advance())
 	top.add_child(adv)
+	controls["advance"] = adv
 	var wheel_l := Button.new()
 	wheel_l.text = "Wheel L"
-	wheel_l.custom_minimum_size = Vector2(84, 40)
+	wheel_l.custom_minimum_size = Vector2(84, 44)
 	wheel_l.pressed.connect(func() -> void: view.wheel(-1))
 	top.add_child(wheel_l)
+	controls["wheel_l"] = wheel_l
 	var wheel_r := Button.new()
 	wheel_r.text = "Wheel R"
-	wheel_r.custom_minimum_size = Vector2(84, 40)
+	wheel_r.custom_minimum_size = Vector2(84, 44)
 	wheel_r.pressed.connect(func() -> void: view.wheel(1))
 	top.add_child(wheel_r)
+	controls["wheel_r"] = wheel_r
 	withdraw_btn = Button.new()
 	withdraw_btn.text = "Withdraw"
 	withdraw_btn.tooltip_text = "Lead your men off the field, out of contact: a choice, not a rout"
-	withdraw_btn.custom_minimum_size = Vector2(92, 40)
+	withdraw_btn.custom_minimum_size = Vector2(92, 44)
 	withdraw_btn.pressed.connect(_on_withdraw)
 	top.add_child(withdraw_btn)
+	controls["withdraw"] = withdraw_btn
 	follow_btn = Button.new()
 	follow_btn.text = "Follow"
 	follow_btn.toggle_mode = true
 	follow_btn.button_pressed = true
-	follow_btn.custom_minimum_size = Vector2(84, 40)
+	follow_btn.custom_minimum_size = Vector2(84, 44)
 	follow_btn.toggled.connect(func(on: bool) -> void: view.follow = on)
 	top.add_child(follow_btn)
+	controls["follow"] = follow_btn
 	pulse_label = Label.new()
 	pulse_label.add_theme_color_override("font_color", Palette.DIM)
 	top.add_child(pulse_label)
@@ -110,9 +127,10 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 		_refresh())
 	top.add_child(pulse_slider)
 	next_btn = Button.new()
-	next_btn.custom_minimum_size = Vector2(150, 56)
+	next_btn.custom_minimum_size = Vector2(150, 62)
 	next_btn.add_theme_font_size_override("font_size", 18)
 	next_btn.pressed.connect(_on_next)
+	controls["next"] = next_btn
 
 	var stamp := Label.new()
 	stamp.text = "build " + _build_stamp()
@@ -122,13 +140,13 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	stamp.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	stamp.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	stamp.offset_right = -6
-	stamp.offset_bottom = -64
+	stamp.offset_bottom = -74
 	root.add_child(stamp)
 	var bottom := HBoxContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	bottom.offset_left = 10
 	bottom.offset_right = -10
-	bottom.offset_top = -62
+	bottom.offset_top = -72  # buttons a thumb can find on a phone (about 45 px)
 	bottom.offset_bottom = -6
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(bottom)
@@ -137,18 +155,19 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	for s in SHOUTS:
 		var b := Button.new()
 		b.text = CombatTypes.SHOUT_NAMES[s].capitalize() + "!"
-		b.custom_minimum_size = Vector2(wide, 52)
+		b.custom_minimum_size = Vector2(wide, 62)
 		b.toggle_mode = true
 		b.pressed.connect(_on_shout.bind(s))
 		bottom.add_child(b)
 		shout_buttons[s] = b
+		controls["shout:%d" % s] = b
 	# The band's own shouts, sworn in the drill yard: a shape and an order.
 	for c in customs:
 		var cs: CustomShout = c
 		var cb := Button.new()
 		cb.text = cs.name + "!"
 		cb.tooltip_text = cs.describe()
-		cb.custom_minimum_size = Vector2(wide, 52)
+		cb.custom_minimum_size = Vector2(wide, 62)
 		cb.toggle_mode = true
 		cb.pressed.connect(_on_custom.bind(cs, cb))
 		bottom.add_child(cb)
@@ -161,9 +180,9 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	log_label = RichTextLabel.new()
 	log_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	log_label.offset_left = 10
-	log_label.offset_top = -170
+	log_label.offset_top = -180
 	log_label.offset_right = 330
-	log_label.offset_bottom = -66
+	log_label.offset_bottom = -76
 	log_label.scroll_following = true
 	log_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	log_label.add_theme_color_override("default_color", Palette.DIM)
@@ -191,10 +210,19 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 	view.auto_paused.connect(_on_auto_paused)
 	view.paused_changed.connect(func(_p: bool) -> void: _refresh())
 	view.camera_moved.connect(func() -> void: follow_btn.button_pressed = view.follow)
+	# The burned hall is taught (view/tutorial.gd): the director takes the
+	# player through its controls one at a time.
+	var obj := view.battle.objective
+	if obj != null and obj.kind == Objective.Kind.ESCAPE and main != null and main.get("teach") == true:
+		tutorial = Tutorial.new()
+		add_child(tutorial)
+		tutorial.setup(self)
 	_refresh()
 
 
 func _on_next() -> void:
+	if not _may("next"):
+		return
 	if view.is_manual():
 		view.step()
 	else:
@@ -203,6 +231,9 @@ func _on_next() -> void:
 
 
 func _on_shout(s: CombatTypes.Shout) -> void:
+	if not _may("shout:%d" % s):
+		(shout_buttons[s] as Button).button_pressed = false
+		return
 	view.pending_shout = CombatTypes.Shout.NONE if view.pending_shout == s else s
 	view.pending_custom = null
 	for k in shout_buttons:
@@ -211,6 +242,14 @@ func _on_shout(s: CombatTypes.Shout) -> void:
 		cb.button_pressed = false
 	_refresh()
 	view.queue_redraw()
+	if tutorial != null:
+		tutorial.changed()
+
+
+## Whether a control may be pressed now: always, unless the tutorial is
+## holding the player's hand and it is not the one it asks for.
+func _may(id: String) -> bool:
+	return allowed.is_empty() or allowed.has(id)
 
 
 ## A shout of the band's own: its shape this round, its order the next.
@@ -279,6 +318,8 @@ func _on_round(lines: PackedStringArray) -> void:
 	for s in shout_buttons:
 		(shout_buttons[s] as Button).button_pressed = false
 	view.pending_shout = CombatTypes.Shout.NONE
+	if tutorial != null:
+		tutorial.round_played()
 	_refresh()
 
 
@@ -294,10 +335,12 @@ func _result_text(r: BattleResult) -> String:
 	var why := ""
 	for line in r.log:
 		if line.begins_with("==="):
-			why = line.trim_prefix("=== ").trim_suffix(" ===").replace("side 0", "your band").replace("side 1", "their band")
+			why = line.trim_prefix("=== ").trim_suffix(" ===").replace("side 0", "your band").replace("side 1", "their band").replace("You is", "You are").replace("You gets", "You get")
 	var at := ""
 	var obj := view.battle.objective
-	if obj != null:
+	if obj != null and obj.kind == Objective.Kind.ESCAPE:
+		at = "You made for the dark beyond their ring.\n"
+	elif obj != null:
 		at = "You %s %s.\n" % ["came for" if obj.attacker == 0 else "stood to hold", obj.name]
 	return at + "%s after %d rounds.\nYours: %d of %d down, %d broke, %d fled, %d dead.\nTheirs: %d of %d down, %d broke, %d fled, %d dead." % [
 		(why[0].to_upper() + why.substr(1)) if why != "" else "The fight is over", r.rounds,
@@ -307,6 +350,8 @@ func _result_text(r: BattleResult) -> String:
 
 ## Leaving the field in order. Only out of contact: engaged, fall back first.
 func _on_withdraw() -> void:
+	if not _may("withdraw"):
+		return
 	var b := view.battle
 	if b.is_over() or not b.can_withdraw(0):
 		return
@@ -324,12 +369,15 @@ const OUTCOME_TITLES := {
 	BattleResult.Outcome.DRIVEN_OFF: "Defeat: driven off",
 	BattleResult.Outcome.ROUTED: "Defeat: a rout",
 	BattleResult.Outcome.LOST_THE_FIELD: "Defeat",
+	BattleResult.Outcome.ESCAPED: "You got out",
 }
 
 
 func _on_finished(result: BattleResult) -> void:
 	offer_panel.visible = false
 	result_panel.visible = true
+	if tutorial != null:
+		tutorial.finished()
 	for c in result_panel.get_children():
 		c.queue_free()
 	var box := VBoxContainer.new()
@@ -338,6 +386,7 @@ func _on_finished(result: BattleResult) -> void:
 	title.text = OUTCOME_TITLES[result.outcome(0)]
 	title.add_theme_font_size_override("font_size", 28)
 	box.add_child(title)
+
 	var body := Label.new()
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.text = _result_text(result)
@@ -596,6 +645,13 @@ func _refresh() -> void:
 	if b.round > 0 and offer_panel.visible:
 		offer_panel.visible = false  # the fight is on: the choice was made
 	withdraw_btn.disabled = b.is_over() or not b.can_withdraw(0)
+	# The tutorial's hand on the controls: only the one it asks for.
+	for id in controls:
+		var c: Button = controls[id]
+		if id == "withdraw":
+			c.disabled = c.disabled or not _may(id)
+		else:
+			c.disabled = not _may(id)
 	withdraw_btn.tooltip_text = "Break contact first: fall back, then withdraw" if not b.can_withdraw(0) \
 			else "Lead your men off the field, out of contact: a choice, not a rout"
 	var warn := ""

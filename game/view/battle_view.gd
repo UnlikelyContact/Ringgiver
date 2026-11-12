@@ -40,6 +40,7 @@ var _drag_moved := false
 
 const MIN_ZOOM := 0.8
 const MAX_ZOOM := 4.0
+var _fire_time := 0.0
 
 
 func setup(p_battle: Battle, p_player: Warrior, p_camera: Camera2D) -> void:
@@ -110,6 +111,9 @@ func set_paused(p: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	if battle != null and is_night():
+		_fire_time += delta
+		queue_redraw()  # the fire flickers
 	if battle == null or battle.is_over() or animating or is_manual() or paused:
 		return
 	clock -= delta
@@ -580,6 +584,8 @@ func _draw() -> void:
 	for row in g.height:
 		for col_i in g.width:
 			_draw_feature(g, BattleGrid.from_offset(col_i, row))
+	if is_night():
+		_draw_night()
 	draw_objective()
 	_draw_wall_slots()
 	_draw_shield_locks()
@@ -631,6 +637,55 @@ func _draw() -> void:
 				var dot := at + Vector2(-Token.R - 6, -Token.R - 16)
 				draw_circle(dot, 4.5, Palette.OUTLINE)
 				draw_circle(dot, 3.5, Color(Palette.GOLD, alpha))
+
+
+## The burned hall is fought at night (Objective.Kind.ESCAPE).
+func is_night() -> bool:
+	return battle.objective != null and battle.objective.kind == Objective.Kind.ESCAPE
+
+
+## Night over the ground (the men, drawn above, stay clear to read), then
+## the hall burning: flames on every hex of its timber, a glow round it,
+## and embers going up.
+func _draw_night() -> void:
+	var g := battle.grid
+	var dark := Color(0.02, 0.03, 0.09, 0.5)
+	var hall: Array[Vector2i] = []
+	for row in g.height:
+		for col_i in g.width:
+			var c := BattleGrid.from_offset(col_i, row)
+			draw_colored_polygon(Iso.hexagon(c, 0.0), dark)
+			if g.terrain_at(c) == CombatTypes.Terrain.BUILDING:
+				hall.append(c)
+	if hall.is_empty():
+		return
+	var t := _fire_time
+	var s := Iso.SIZE
+	var centre := Vector2.ZERO
+	for c in hall:
+		centre += Iso.to_screen(c)
+	centre /= hall.size()
+	draw_circle(centre, s * 4.5, Color(1.0, 0.45, 0.1, 0.07 + 0.02 * sin(t * 3.0)))
+	for c in hall:
+		var p := Iso.to_screen(c)
+		var h := absi((c.x * 73856093) ^ (c.y * 19349663))
+		for k in 3:
+			var ph := float((h >> (k * 3)) % 7) + k * 1.7
+			var flick := 0.75 + 0.25 * sin(t * (5.0 + k) + ph)
+			var base := p + Vector2((k - 1) * s * 0.42, s * 0.25)
+			var hgt := s * (0.55 + 0.25 * float((h >> k) % 3) / 2.0) * flick
+			var wid := s * 0.2
+			draw_colored_polygon(PackedVector2Array([base + Vector2(-wid, 0), base + Vector2(0, -hgt), base + Vector2(wid, 0)]),
+					Color(0.95, 0.42, 0.08, 0.9))
+			draw_colored_polygon(PackedVector2Array([base + Vector2(-wid * 0.5, 0), base + Vector2(0, -hgt * 0.6), base + Vector2(wid * 0.5, 0)]),
+					Color(1.0, 0.82, 0.3, 0.95))
+	for i in 18:
+		var c: Vector2i = hall[(i * 7) % hall.size()]
+		var p := Iso.to_screen(c)
+		var rise := fmod(t * (18.0 + (i % 5) * 4.0) + i * 23.0, s * 5.0)
+		var drift := sin(t * 1.3 + i) * s * 0.3
+		var a := 1.0 - rise / (s * 5.0)
+		draw_circle(p + Vector2(drift + (i % 3 - 1) * s * 0.3, -rise), 1.6, Color(1.0, 0.6, 0.2, a))
 
 
 ## One hex's ground: turf (checkered faintly), mud, slope with a faint

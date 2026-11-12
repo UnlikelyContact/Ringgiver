@@ -39,6 +39,9 @@ var custom_shouts: Array = []
 ## what it leaves behind is the campaign's to apply (`host.fight_over`),
 ## and leaving the field goes back to the map (`host.leave_battle`).
 var host: Node = null
+## Teach this fight (view/tutorial.gd): the burned hall, the first time
+## it is played. The HUD reads it.
+var teach := false
 
 
 func _ready() -> void:
@@ -68,9 +71,13 @@ func start_hosted(built: Dictionary, shouts: Array) -> void:
 	_show_battle()
 
 
-const HUD_TOP := 46.0  # the top bar, in design pixels
-const HUD_BOTTOM := 66.0  # the shout row
+const HUD_TOP := 50.0  # the top bar, in design pixels
+const HUD_BOTTOM := 76.0  # the shout row
 const EDGE_MARGIN := 40.0  # world pixels kept clear round the outermost men
+## Design pixels the tutorial's banner takes under the top bar or over the
+## shout row (view/tutorial.gd), kept clear like the bars themselves.
+var top_extra := 0.0
+var bottom_extra := 0.0
 
 
 ## The box round every man standing and the field's objective, if it has
@@ -90,6 +97,8 @@ func _men_bounds() -> Array[Vector2]:
 			hi = hi.max(p)
 	if lo.x == INF:
 		return [Vector2.ZERO, Vector2.ZERO]
+	if view != null and view.is_night():
+		hi.y += Iso.SIZE * 1.2  # the burning hall's front, behind the men
 	return [lo, hi]
 
 
@@ -98,7 +107,7 @@ func _men_bounds() -> Array[Vector2]:
 func fit_zoom() -> float:
 	var b := _men_bounds()
 	var size := get_viewport_rect().size
-	var band := size.y - HUD_TOP - HUD_BOTTOM
+	var band := size.y - HUD_TOP - HUD_BOTTOM - top_extra - bottom_extra
 	var span_y: float = b[1].y - b[0].y + 2.0 * EDGE_MARGIN
 	var span_x: float = b[1].x - b[0].x + 2.0 * EDGE_MARGIN
 	var z := minf(band / maxf(1.0, span_y), size.x / maxf(1.0, span_x))
@@ -110,7 +119,7 @@ func fit_zoom() -> float:
 func focus_point(zoom: float) -> Vector2:
 	var b := _men_bounds()
 	var centre: Vector2 = (b[0] + b[1]) / 2.0
-	return centre + Vector2(0, (HUD_BOTTOM - HUD_TOP) / 2.0 / zoom)
+	return centre + Vector2(0, (HUD_BOTTOM + bottom_extra - HUD_TOP - top_extra) / 2.0 / zoom)
 
 
 func _process(delta: float) -> void:

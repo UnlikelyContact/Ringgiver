@@ -137,6 +137,8 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	add_child(side_panel)
 	_time_buttons()
 	refresh()
+	if host != null and host.get("hints") != null:
+		(host.hints as Hints).attach(self)  # the first days' hints (view/hints.gd)
 
 
 func _small(text: String, on: Callable) -> Button:
