@@ -621,8 +621,8 @@ func vengeance_outlook() -> Dictionary:
 	if king_ready:
 		lines.append("A king thinks well enough of you to judge the burning, if you ask it at his hall.")
 	elif best_king > -100:
-		lines.append("A king would judge it for his hersir if he thought well of him (his regard %d of %d%s)." % [best_king, wr.king_justice_relation,
-				"" if band.rank >= wr.king_justice_rank else "; you are not yet a hersir"])
+		lines.append("A king would judge it for his %s if he thought well of him (his regard %d of %d%s)." % [WorldTypes.RANK_NAMES[wr.king_justice_rank],
+				best_king, wr.king_justice_relation, "" if band.rank >= wr.king_justice_rank else "; you are not yet one"])
 	return {"owed": true, "house": name, "ours": int(vb.ours), "theirs": int(vb.theirs), "ready": bool(vb.ready), "short": short,
 		"friends": t.friends, "allies": t.allies, "could_win": could, "reckoning_men": int(t.men), "your_men": men,
 		"reckoning_ready": ready, "king_ready": king_ready, "lines": lines}
@@ -1032,7 +1032,7 @@ func _king_justice() -> Dictionary:
 	var rel := FactionAI.relation(c.world, king.id, FactionAI.BAND)
 	var why := ""
 	if band.rank < wr.king_justice_rank:
-		why = "%s hears such things only from his own men: you are not his hersir." % king.leader
+		why = "%s hears such a matter only from his great men: you are not yet his %s." % [king.leader, WorldTypes.RANK_NAMES[wr.king_justice_rank]]
 	elif rel < wr.king_justice_relation:
 		why = "%s does not think well enough of you to take your quarrel up." % king.leader
 	return {"id": "king_justice", "label": "Ask %s for justice against %s" % [king.leader, band.vengeance], "enabled": why == "",

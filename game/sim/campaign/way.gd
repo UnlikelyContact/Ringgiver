@@ -48,9 +48,9 @@ const DEFS := [
 	{"key": "berserk", "name": "Berserk", "norse": "berserkr", "model": "Kveldulf's blood", "epithet": "the Berserk",
 		"blurb": "The fury in a fight, and the fear of it before one. Lords trust you the less for it.",
 		"ranks": [
-			{"name": "Hard man", "text": "The fury: stronger while your breath lasts, no wound felt, and those beside you lose heart. One man in seven pays rather than meet you on the island; a merchant pays a third more for your guard.", "gifts": {"fury": 1, "dread": 0.15, "escort_pay": 1.3}},
-			{"name": "Wolf-coat", "text": "One man in four pays rather than fight; half as much again for standing in a farmer's place, and a merchant pays half as much again for a guard nobody cares to cross.", "gifts": {"fury": 1, "dread": 0.25, "champion_fee": 1.5, "escort_pay": 1.5}},
-			{"name": "Berserk", "text": "The fury runs deeper; one man in three pays; double for standing in a farmer's place, and double for a merchant's guard.", "gifts": {"fury": 2, "dread": 0.35, "champion_fee": 2.0, "escort_pay": 2.0}},
+			{"name": "Hard man", "text": "The fury: stronger while your breath lasts, no wound felt, and those beside you lose heart. One man in seven pays rather than meet you on the island; a merchant pays a fifth more for your guard.", "gifts": {"fury": 1, "dread": 0.15, "escort_pay": 1.2}},
+			{"name": "Wolf-coat", "text": "One man in four pays rather than fight; half as much again for standing in a farmer's place, and a merchant pays a third more for a guard nobody cares to cross.", "gifts": {"fury": 1, "dread": 0.25, "champion_fee": 1.5, "escort_pay": 1.35}},
+			{"name": "Berserk", "text": "The fury runs deeper; one man in three pays; double for standing in a farmer's place, and half as much again for a merchant's guard.", "gifts": {"fury": 2, "dread": 0.35, "champion_fee": 2.0, "escort_pay": 1.5}},
 		]},
 	{"key": "skald", "name": "Skald", "norse": "skáld", "model": "Egil Skallagrimsson", "epithet": "the Skald",
 		"blurb": "Kings pay for praise that will outlive them.",

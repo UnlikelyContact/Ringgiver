@@ -616,13 +616,13 @@ var origin_kin := {"burned_hall": ["sogn_farms"], "younger_son": ["hardanger"]}
 ## board, when his realm thinks this well of it (FactionAI.relation).
 var lords_hall_relation := 40
 ## The king's man's road to his vengeance (docs/design/notes/balance.md):
-## a hersir or better whom a king thinks `king_justice_relation` of may ask
+## a jarl or better whom a king thinks `king_justice_relation` of may ask
 ## him for justice against the house he has his vengeance on, at one of
 ## the king's halls once a summer. The king summons them and makes them
 ## pay `king_justice_ounces` (the king keeps `king_justice_share`); the
 ## feud is ended, and the favour is spent (`king_justice_cost` regard).
-var king_justice_relation := 50
-var king_justice_rank := WorldTypes.Rank.HERSIR
+var king_justice_relation := 60
+var king_justice_rank := WorldTypes.Rank.JARL
 var king_justice_ounces := 60
 var king_justice_share := 0.5
 var king_justice_cost := 15

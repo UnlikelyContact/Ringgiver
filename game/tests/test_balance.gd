@@ -271,7 +271,7 @@ func test_the_vengeance_outlook_says_what_is_lacking() -> void:
 	assert_true(not bool(Journey.begin(3, "younger_son", "Egil").vengeance_outlook().owed), "none owed by a younger son")
 
 
-func test_the_king_judges_for_his_hersir() -> void:
+func test_the_king_judges_for_his_great_man() -> void:
 	var j := Journey.begin(3, "burned_hall", "Egil")
 	_free(j)
 	j.roam.parties.clear()
@@ -287,8 +287,8 @@ func test_the_king_judges_for_his_hersir() -> void:
 	j.c.band.location = at
 	var king := Outlawry._king_of(j, j.here())
 	var act := j._king_justice()
-	assert_true(not act.is_empty() and not act.get("enabled", true), "greyed for a man who is not his hersir")
-	j.c.band.rank = WorldTypes.Rank.HERSIR
+	assert_true(not act.is_empty() and not act.get("enabled", true), "greyed for a man who is not his jarl")
+	j.c.band.rank = j.c.world_rules.king_justice_rank
 	FactionAI.shift(j.c.world, king.id, FactionAI.BAND, 100)
 	act = j._king_justice()
 	assert_true(act.get("enabled", true), str(act.get("hint", "")))
