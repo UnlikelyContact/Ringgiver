@@ -287,6 +287,8 @@ func _animate(before: Dictionary, lines: PackedStringArray) -> void:
 	if shots > 0:
 		await _wait(0.5)
 	# Beat 2: blows land one at a time; the winner lunges, the loser flashes.
+	# The sound of it is a few layered clashes for the whole round.
+	Audio.blows(lines)
 	for line in lines:
 		if not line.contains(" beats "):
 			continue
@@ -313,6 +315,15 @@ func _animate(before: Dictionary, lines: PackedStringArray) -> void:
 	if _tween_to(final, 0.35):
 		await _wait(0.4)
 	# Beat 4: morale: breaks, the fallen, the fled.
+	var fled := 0
+	for line in lines:
+		if line.contains("flees the field"):
+			fled += 1
+	if Audio.blow_counts(lines).z > 0:
+		Audio.play("down")
+	if fled >= 3 or (battle.is_over() and battle.result != null and battle.result.how == BattleResult.End.ROUT):
+		Audio.play("rout", -2.0)
+	var met := false
 	for w in battle.warriors:
 		var t: Token = tokens[w]
 		if w.is_down():
@@ -320,8 +331,11 @@ func _animate(before: Dictionary, lines: PackedStringArray) -> void:
 			t.z_index = 5
 		if w.fled:
 			t.visible = false
-		t.set_tense(w.is_active() and not battle.grid.adjacent_warriors(w.pos, 1 - w.side).is_empty())
+		var tense := w.is_active() and not battle.grid.adjacent_warriors(w.pos, 1 - w.side).is_empty()
+		met = met or tense
+		t.set_tense(tense)
 		t.queue_redraw()
+	Audio.close(met and not battle.is_over())  # the drum quickens while the lines are met
 	await _settle(0.3)
 	animating = false
 	queue_redraw()
