@@ -41,10 +41,12 @@ static func on_down(rules: CombatRules, grid: BattleGrid, downed: Warrior,
 
 ## End-of-round morale beat. `leaders` maps side -> Warrior (or null).
 ## `any_attacks` is false when nobody attacked this round (a lull).
-## Returns the men who broke this round, in the order they broke.
+## Returns the men who broke this round, in the order they broke. `keep`
+## holds men who cannot break this round (the first fight's band:
+## Battle._unbreakable); empty everywhere else.
 static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		all: Array[Warrior], leaders: Dictionary, any_attacks: bool,
-		log: PackedStringArray) -> Array[Warrior]:
+		log: PackedStringArray, keep: Dictionary = {}) -> Array[Warrior]:
 	var men := _sorted(all)
 	var broke: Array[Warrior] = []
 
@@ -91,7 +93,7 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 	var first_wave: Array[Warrior] = []
 	for w in men:
 		if w.is_active() and not w.broken and w.morale <= rules.morale_break_threshold \
-				and not (rules.leaders_never_break and w.is_leader):
+				and not (rules.leaders_never_break and w.is_leader) and not keep.has(w):
 			checked[w] = true
 			if _check_breaks(rng, rules, grid, w):
 				_break(w, log, "")
@@ -111,7 +113,7 @@ static func round_update(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 				panicked.append(f)
 	panicked.sort_custom(func(x: Warrior, y: Warrior) -> bool: return x.id < y.id)
 	for f in panicked:
-		if checked.has(f) or f.broken or f.morale > rules.morale_break_threshold or (rules.leaders_never_break and f.is_leader):
+		if checked.has(f) or f.broken or f.morale > rules.morale_break_threshold or (rules.leaders_never_break and f.is_leader) or keep.has(f):
 			continue
 		checked[f] = true
 		if _check_breaks(rng, rules, grid, f):

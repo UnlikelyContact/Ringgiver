@@ -380,6 +380,7 @@ static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dicti
 	# breaking out of his own burning hall later in the saga (`spare` false:
 	# Scenario.build_breakout) has no such luck.
 	if bands.get("spare", true):
+		objective.first_fight = true
 		for w in ours:
 			if w.is_leader:
 				battle.spared.append(w)

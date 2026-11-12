@@ -194,8 +194,12 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 		return
 	var theirs := active(1 - side)
 	var engaged := {}
+	# The saga's first fight: three men running for their lives do not stop
+	# to trade blows with a man at their flank; the wall goes on wherever
+	# the ground ahead is free (Objective.first_fight).
+	var running := objective != null and objective.first_fight and side == objective.attacker
 	for w in members:
-		if not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
+		if not running and not grid.adjacent_warriors(w.pos, 1 - side).is_empty():
 			engaged[w] = true
 	if not back and engaged.size() == members.size():
 		if not _contact_logged.get(side, false):
@@ -381,6 +385,8 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 	# A learned shape the band has not drilled: the test is harder in
 	# proportion (drill_unfamiliar_factor at none, 1 at full).
 	chance *= lerpf(rules.drill_unfamiliar_factor, 1.0, familiarity(side))
+	if objective != null and objective.first_fight and side == objective.attacker:
+		chance = 1.0  # three men running for their lives move as one
 	if wr.randf() > chance:
 		log.append("%s's line hesitates (%d%% to move as one)" % [leader.display_name, int(round(chance * 100))])
 		_hold_wall(members)
@@ -408,7 +414,8 @@ func _plan_wall(wr: SimRng, side: int, leader: Warrior) -> void:
 		# The exceptions to moving as one: a man who falls, and a man whose
 		# nerve breaks. Falling back, a green or blooded man with little
 		# heart left wavers and runs instead of stepping back with the wall.
-		if back and w != leader and w.tier <= CombatTypes.Tier.BLOODED and w.morale <= rules.fall_back_steady_morale:
+		if back and w != leader and w.tier <= CombatTypes.Tier.BLOODED and w.morale <= rules.fall_back_steady_morale \
+				and not (objective != null and objective.keeps_together(w)):
 			log.append("%s's nerve goes as the wall falls back" % w.display_name)
 			w.wall_move = Warrior.NO_WALL_MOVE
 			continue
@@ -737,7 +744,7 @@ func run_round() -> void:
 		if push.winning_side >= 0:
 			log.append("the push goes to side %d" % push.winning_side)
 	# 3e. Morale.
-	var broke := Morale.round_update(rr.fork("morale"), rules, grid, warriors, leaders, any_attacks, log)
+	var broke := Morale.round_update(rr.fork("morale"), rules, grid, warriors, leaders, any_attacks, log, _unbreakable())
 	for w in broke:
 		result.broken[w.side] += 1
 	if grid.has_sea:
@@ -756,12 +763,17 @@ func run_round() -> void:
 	_rounds_without_blow = 0 if any_blow else _rounds_without_blow + 1
 	_blows_ever = _blows_ever or any_blow
 
+	if objective != null and objective.first_fight:
+		_first_fight_give_way()
+
 	# 4. End check. The objective first: its decision stands over the rest.
 	if objective != null:
 		var taken := objective.check(self)
 		if taken >= 0:
 			result.by_objective = true
 			_finish(taken, objective.reason, BattleResult.End.ESCAPE if objective.kind == Objective.Kind.ESCAPE else BattleResult.End.OBJECTIVE)
+			return
+		if objective.first_fight and _first_fight_end():
 			return
 	if duel:
 		# First blood ends a holmgang: the man blooded has lost. Both in the
@@ -1308,6 +1320,135 @@ func _finish(winner: int, why: String, how: BattleResult.End = BattleResult.End.
 				_:
 					log.append("%s will recover" % w.display_name)
 	result.log = log
+
+
+# --- The saga's first fight (Objective.first_fight) ------------------------------------
+## docs/design/notes/first-fight.md. The burned hall bends so that a
+## first-timer who does roughly the right thing gets out, and one who does
+## nothing at all is carried off: the band holds together (Decision, Morale,
+## the wall's test), the burners between its leader and the dark give way
+## once it has pushed, a leader cut off is dragged out, and the night ends.
+
+var _ff_pushed := 0  # rounds the band has fought under a driving order
+var _ff_cut := 0  # rounds running its leader has been cut off from his men
+var _ff_best := 99  # the nearest its leader has come to the dark
+var _ff_since_best := 0  # rounds since he last came nearer
+var _ff_ordered := false  # the band has been given an order at all
+
+
+## Men who cannot break this round: the first fight's band.
+func _unbreakable() -> Dictionary:
+	var out := {}
+	if objective == null or not objective.first_fight:
+		return out
+	for w in warriors:
+		if objective.keeps_together(w):
+			out[w] = true
+	return out
+
+
+## Rounds the first fight's band has pushed (for the tutorial and the tests).
+func first_fight_pushed() -> int:
+	return _ff_pushed
+
+
+## Rounds running the first fight's leader has been cut off.
+func first_fight_cut() -> int:
+	return _ff_cut
+
+
+## After the band has pushed `escape_give_rounds` rounds, every burner who
+## stands nearer the dark than its leader and within `escape_give_radius`
+## of him gives way: he breaks and runs off the field. The thin place is
+## open to anyone who has pushed at all, and stays open.
+func _first_fight_give_way() -> void:
+	var side := objective.attacker
+	var order := standing_order(side)
+	if last_shout(side) != CombatTypes.Shout.NONE:
+		_ff_ordered = true
+	if order == CombatTypes.Shout.PUSH or order == CombatTypes.Shout.BREAK_THEM or order == CombatTypes.Shout.SVINFYLKING:
+		_ff_pushed += 1
+	var l := sworn_leader(side)
+	if l == null or not l.is_active() or _ff_pushed < rules.escape_give_rounds:
+		return
+	var mine := objective.dark_distance(l.pos)
+	var gave := PackedStringArray()
+	for w in active(objective.defender()):
+		if w.broken or objective.dark_distance(w.pos) >= mine or BattleGrid.distance(w.pos, l.pos) > rules.escape_give_radius:
+			continue
+		# Out of the band's way at once: a man who gives way here runs off
+		# into the yard's dark and is gone, rather than fleeing up the very
+		# ground the band must cross.
+		w.broken = true
+		w.morale = Morale.MORALE_MIN
+		grid.remove(w)
+		w.fled = true
+		result.fled[w.side] += 1
+		gave.append(w.display_name)
+	if not gave.is_empty():
+		log.append("the ring gives way before the push: %s %s off into the night" % [" and ".join(gave), "runs" if gave.size() == 1 else "run"])
+
+
+## The first fight's ends that are the saga's, not the dice's: a leader cut
+## off from his men `escape_rescue_rounds` rounds running, or no nearer the
+## dark for `escape_stall_rounds` once the push is done, is dragged out by
+## the nearest of them (both hurt); at `escape_round_cap` the night is told.
+## A band that never gave an order is not helped: at the cap its leader is
+## struck down and carried off. True when it ended the fight.
+func _first_fight_end() -> bool:
+	var side := objective.attacker
+	var l := sworn_leader(side)
+	if l == null or not l.is_active():
+		return false
+	var d := objective.dark_distance(l.pos)
+	if d < _ff_best:
+		_ff_best = d
+		_ff_since_best = 0
+	else:
+		_ff_since_best += 1
+	var friend := false
+	for w in active(side):
+		if w != l and not w.broken and BattleGrid.chebyshev(w.pos, l.pos) <= 1:
+			friend = true
+	_ff_cut = _ff_cut + 1 if not friend and not grid.adjacent_warriors(l.pos, 1 - side).is_empty() else 0
+	if _ff_pushed < rules.escape_give_rounds:
+		_ff_since_best = 0  # the stall counts from when the thin place has given
+	var stalled := _ff_since_best >= rules.escape_stall_rounds
+	if _ff_ordered and (_ff_cut >= rules.escape_rescue_rounds or stalled):
+		_first_fight_rescue(l)
+		return true
+	if round < rules.escape_round_cap:
+		return false
+	result.by_objective = true
+	if not _ff_ordered:
+		l.wound = CombatTypes.Wound.DOWN
+		objective.escape_reason(self)  # his men drag him off, or he is left for dead
+		_finish(objective.defender(), objective.reason, BattleResult.End.ESCAPE)
+		return true
+	objective.how_out = "told"
+	_finish(objective.defender(), "the smoke thickens and the dark covers them: %s gets away into the night" % l.display_name, BattleResult.End.ESCAPE)
+	return true
+
+
+## The saga's own rescue: the nearest of his men standing drags the leader
+## out through the smoke, and both are hurt; with none standing, he breaks
+## away alone and is hurt the worse.
+func _first_fight_rescue(l: Warrior) -> void:
+	var by: Warrior = null
+	for w in active(objective.attacker):
+		if w != l and not w.broken and (by == null or BattleGrid.distance(w.pos, l.pos) < BattleGrid.distance(by.pos, l.pos)):
+			by = w
+	var why := ""
+	if by != null:
+		by.wound = maxi(by.wound, rules.escape_rescue_wound) as CombatTypes.Wound
+		l.wound = maxi(l.wound, rules.escape_rescued_wound) as CombatTypes.Wound
+		why = "%s drags %s out through the smoke" % [by.display_name, l.display_name]
+	else:
+		l.wound = maxi(l.wound, rules.escape_rescue_wound) as CombatTypes.Wound
+		why = "%s breaks away alone into the smoke" % l.display_name
+	objective.how_out = "rescued"
+	result.by_objective = true
+	_finish(objective.defender(), why, BattleResult.End.ESCAPE)
 
 
 # --- The saga's fights --------------------------------------------------------------

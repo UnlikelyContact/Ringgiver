@@ -110,6 +110,18 @@ var ship_taken := -1
 var fire_men := 2
 var fire_rounds := 6
 var fire_count := 0
+## The burned hall as the saga's first fight (Scenario.build_escape with the
+## leader spared; docs/design/notes/first-fight.md): the fight bends so that
+## a first-timer who does roughly the right thing gets out. The escaping
+## band holds together (no man of it freezes, wavers or breaks, and none
+## wanders off from his leader), the burners between its leader and the
+## dark give way once it has pushed, a leader cut off is dragged out
+## through the smoke, and the night has an end (Battle._first_fight_end).
+## False everywhere else, the saga's later break-out included.
+var first_fight := false
+## How the first fight's band got out when the saga's own hand ended it:
+## "rescued" (dragged out through the smoke), "told" (the round cap), or "".
+var how_out := ""
 var _seed := 0
 var _streak := 0  # rounds running the attacker has held the hall
 var _checked_round := -1
@@ -285,6 +297,12 @@ func way_open(battle: Battle) -> bool:
 		if not w.broken and dark_distance(w.pos) < mine:
 			return false
 	return true
+
+
+## The first fight's band holds together (`first_fight`): true for a man of
+## the escaping side there.
+func keeps_together(w: Warrior) -> bool:
+	return first_fight and w != null and w.side == attacker
 
 
 ## Whether `side` may leave the field in order now (Battle.can_withdraw).
@@ -614,6 +632,12 @@ func _decide_escape(battle: Battle) -> int:
 		reason = "%s's men break and scatter into the night" % l.display_name
 		return defender()
 	return -1
+
+
+## Sets `reason` for the escape as it stands now (how the band got out),
+## outside the round's own check: the first fight's round cap.
+func escape_reason(battle: Battle) -> void:
+	_decide_escape(battle)
 
 
 ## The finish line when the time runs out on the attacker.
