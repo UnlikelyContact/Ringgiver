@@ -849,6 +849,10 @@ func _show_families() -> void:
 		_close_side(box)
 		return
 	box.add_child(UiTheme.label("How each house stands toward you, from blood-enemy to sworn friend. What you do to one house its kin and friends feel too, and its enemies the other way.", "SmallLabel"))
+	var owed := journey.vengeance_outlook()
+	if bool(owed.get("owed", false)):
+		box.add_child(UiTheme.section("The burning unavenged: %s" % str(owed.house)))
+		box.add_child(_parchment("\n".join(owed.lines as PackedStringArray)))
 	var told := fs.tidings_of()
 	if not told.is_empty():
 		box.add_child(UiTheme.section("Tidings of the houses"))
