@@ -1,72 +1,91 @@
 class_name Tutorial
 extends Node
-## The burned hall taught (docs/design/notes/tutorial.md): a director that
-## takes the player through the battle's controls once each, in the order
-## a real fight needs them, driven by the battle as it stands and never by
-## a clock. One short instruction at a time in a banner that keeps clear of
-## the control it names; that control pulses; for the first steps the
-## others cannot be pressed. When the player has done it, a line says what
-## it did and the next step comes.
+## The burned hall taught (docs/design/notes/tutorial.md, first-fight.md):
+## a director that reads the battle every round and says the one most
+## useful true thing, in a banner that keeps clear of the control it names;
+## that control pulses, and on the board the man or the hex it means is
+## ringed and the dark's edge pulses when that is where to go.
 ##
-## The steps: who is who (read, then Go on); the wall (Shield Wall, Next
-## round); the push at the thin place in their ring (Push, then Next round
-## until the way to the dark is open); a man hurt (read, whenever the first
-## of yours is hurt); falling back toward the dark with the shields to the
-## men coming after (Fall Back, Next round); slipping away out of contact
-## (Withdraw); out.
+## The first two things are taught in order and the other controls are shut
+## while they are: who is who (read, then Go on, or Skip the fight), and the
+## wall (Shield Wall, Next round). After that every control answers, and
+## what the banner asks comes from the field as it stands (`advise`, a pure
+## function of the battle and a little memory): Withdraw when it would work;
+## To Me when a man is apart from you; Fall Back when the way to the dark is
+## open; Push when one of them stands between you and the dark, and how
+## many more shoves the thin place will take; a hex to tap when the wall is
+## held up. It never asks for a control that is shut or disabled, and never
+## says again what the last round did and came to nothing.
 ##
-## The logic (`evaluate`, `control`, `text`, `acknowledge`, `round_played`)
-## reads only the Battle and the shout waiting to be given, so the tests
-## drive it without a screen (tests/test_escape.gd). `setup(hud)` adds the
-## banner and the pulsing outline over the HUD.
+## `advise`, `evaluate`, `control`, `text`, `acknowledge` and `after_round`
+## read only the Battle and the shout waiting to be given, so the tests and
+## the stand-in players (tests/escape_players.gd) drive it without a
+## screen. `setup(hud)` adds the banner and the outline over the HUD.
 
-enum Step { WHO, WALL, PUSH, HURT, FALL_BACK, WITHDRAW, OUT }
+## What the banner is about. WHO and WALL come in order; the rest are read
+## from the field each round (`advise`).
+enum Step { WHO, WALL, PUSH, TO_ME, FALL_BACK, STEP_OUT, WITHDRAW, CARRIED, OUT }
 
-## What the banner says at each step, one sentence each. PUSH, FALL_BACK
-## and WITHDRAW have a second form once the order is given (`_AFTER`).
-const TEXTS := {
-	Step.WHO: "The red shields are you and your two men, the blue are the jarl's men round the yard, and the line at the top counts the men standing in each wall.",
-	Step.WALL: "Three men shoulder to shoulder are worth more than three apart: press Shield Wall, then Next round.",
-	Step.PUSH: "Their ring is thin straight ahead, two men with a gap between them: press Push, then Next round.",
-	Step.HURT: "%s: the red marks by a man's shield are his wounds, and he takes them with him out of this fight.",
-	Step.FALL_BACK: "You are through, and they are closing behind you: press Fall Back, then Next round, and your men give ground toward the trees with their shields to them.",
-	Step.WITHDRAW: "None of them is at arm's length and the way is open: press Withdraw, for leaving a fight is a choice and not a defeat.",
-	Step.OUT: "",
-}
-## The wound step when the first hurt is your own.
-const HURT_YOU := "You are hurt: the red marks by your shield are your wounds, and you take them with you out of this fight."
-const _AFTER := {
-	Step.PUSH: "Press Next round, and again: your wall goes on pushing until it is through their ring.",
-	Step.FALL_BACK: "Press Next round, and again: the wall gives ground a step at a time.",
-	Step.WITHDRAW: "They are still at arm's length: press Next round and keep falling back.",
-}
-## The line that says what a step did, once it is done.
-const DONE := {
-	Step.WALL: "Your men close up at your shoulders: each shield now guards the man beside it.",
-	Step.FALL_BACK: "A wall that gives ground in order is still a wall, and they cannot get round it.",
-}
-## Said the first round the lines push against each other.
-const PUSH_SAID := "In the push the line with more shields together, and more heart, drives the other back a step."
-## The push step gives way to falling back after this many rounds of
-## pushing even if the ring holds: the lesson is not to be stuck on.
-const PUSH_ROUNDS_MAX := 6
+const TEXT_WHO := "The red shields are you and your two men, the blue the jarl's men round the yard. The gold edge at the top is the dark of the trees: get there."
+const TEXT_WALL := "First close up: press Shield Wall, then Next round."
+const TEXT_PUSH := "They stand between you and the dark, the marked man nearest: press Push, then Next round, and drive through the thin place."
+const TEXT_PUSH_ON := "Next round: keep pushing. The thin place gives after %d more."
+const TEXT_PUSH_ONE := "Next round: keep pushing. One more shove and the thin place gives."
+const TEXT_PUSH_PAST := "The marked man still stands in your way: Next round, and the push carries you past him."
+const TEXT_PUSH_RING := "Next round: push on past the end of their ring, toward the dark."
+const TEXT_STRIKE := "The marked man still stands in your way: tap him to strike him yourself, then Next round."
+const TEXT_NOT_YET := "Not yet: they are still between you and the dark. Press Push, then Next round."
+const TEXT_TO_ME := "%s is apart from you: press To Me, then Next round, and your men close on you."
+const TEXT_TO_ME_ON := "Next round: they are coming to you."
+const TEXT_FALL_BACK := "You are through. Now fall back toward the dark: press Fall Back, then Next round."
+const TEXT_FALL_BACK_ON := "Next round: the wall gives ground toward the dark, shields to the men behind."
+const TEXT_STEP_OUT := "The wall is held up: tap the marked hex, nearer the dark, to step there, then Next round."
+const TEXT_STEP_ON := "Next round: you step toward the dark, and your men come after you."
+const TEXT_STRIKE_ON := "Next round: you strike at the man you marked. Tap yourself to go with the line again."
+const TEXT_STEP_ASIDE := "Next round: you step where you tapped. Tap yourself to go with the line again."
+const TEXT_WITHDRAW := "None of them is at arm's length and the way is open: press Withdraw. Leaving a fight is a choice, not a defeat."
+const TEXT_CARRIED := "You are down. Your men are carrying you out."
+
+## What a round did, shown dim above the next instruction.
+const SAID_WALL := "Your men close up at your shoulders: each shield now guards the man beside it."
+const SAID_PUSH := "In the push the line with more shields together, and more heart, drives the other back a step."
+const SAID_GAVE := "The thin place gives: they break and run before your shields."
+const SAID_FALL_BACK := "A wall that gives ground in order is still a wall, and they cannot get round it."
+const SAID_TO_ME := "Your men close on you, and take heart from it."
+const SAID_HURT := "%s is hurt: the red marks by a man's shield are his wounds, and he takes them with him out of this fight."
+const SAID_HURT_YOU := "You are hurt: the red marks by your shield are your wounds, and you take them with you out of this fight."
 
 var step: Step = Step.WHO
 var battle: Battle
 ## The shout waiting to be given next round (BattleView.pending_shout);
 ## the HUD keeps it current, tests set it.
 var pending: CombatTypes.Shout = CombatTypes.Shout.NONE
-## What the last step did, for the banner's first line.
+## The hex your man is to step to or strike at next round (a tap on the
+## board), or NO_CELL; the HUD keeps it current.
+var tapped: Vector2i = BattleGrid.NO_CELL
+## What the last round did, for the banner's first line.
 var said := ""
-## The steps done, in order, for the tools and the tests.
+## The steps shown, in order, for the tools and the tests.
 var done: Array[Step] = []
+## The man or hex the banner means, ringed on the board, or NO_CELL.
+var point: Vector2i = BattleGrid.NO_CELL
+## Whether the dark's edge is where to go now (it pulses on the board).
+var goal := false
 
-var _shouted := {}  # Shout -> true once a round has been fought under it
-var _push_from := -1  # the round the first push was fought
-var _hurt_shown := false
-var _hurt_name := ""
-var _resume: Step = Step.PUSH
+var _acked := false
+var _text := ""
+var _control := ""
+## The banner before the last round, and whether that round brought your
+## leader nearer the dark: the same words after a round that came to
+## nothing are not said again.
+var _last_text := ""
+var _last_progress := true
+var _to_me_tried := false
+var _dist_seen := 99  # the leader's distance to the dark after the last round
+var _hurt_said := false
+var _gave_said := false
 var _pushed_said := false
+var _fell_back_said := false
 
 ## Where the banner stands: under the top bar and its status lines (the
 ## HUD measures them), or over the shout row (design pixels).
@@ -78,6 +97,7 @@ var _banner: PanelContainer
 var _said_label: Label
 var _text_label: Label
 var _go_on: Button
+var _skip: Button
 var _outline: Control
 var _time := 0.0
 var _resize := 0  # frames left to shrink the banner to its words
@@ -88,81 +108,218 @@ var _resize := 0  # frames left to shrink the banner to its words
 func start(p_battle: Battle) -> void:
 	battle = p_battle
 	step = Step.WHO
+	_acked = false
+	_dist_seen = battle.objective.leader_distance(battle) if battle.objective != null else 99
 	evaluate()
 
 
-## Moves on from whatever step is done, as far as the next that is not.
-func evaluate() -> void:
-	if battle == null:
-		return
-	var guard := 0
-	while guard < 8:
-		guard += 1
-		var was := step
-		_next_step()
-		if step == was:
-			return
+## The one most useful true thing to say about `b` as it stands, as
+## {step, control, text, point, goal}. `m` is the director's memory:
+## acked (who is who has been read), pending (the shout waiting), tapped
+## (the hex your man will step to or strike), last_text and last_progress
+## (the banner before the last round, and whether that round brought the
+## leader nearer the dark), to_me_tried (To Me was given and the men are
+## still apart). Pure: reads the battle, changes nothing.
+static func advise(b: Battle, m: Dictionary) -> Dictionary:
+	var out := {"step": Step.OUT, "control": "", "text": "", "point": BattleGrid.NO_CELL, "goal": false}
+	if b == null or b.is_over():
+		return out
+	var obj := b.objective
+	var l := b.sworn_leader(0)
+	var pend: CombatTypes.Shout = m.get("pending", CombatTypes.Shout.NONE)
+	if l == null or not l.is_active():
+		out.step = Step.CARRIED
+		out.text = TEXT_CARRIED
+		return out
+	if b.round == 0 and not m.get("acked", false):
+		out.step = Step.WHO
+		out.control = "ack"
+		out.text = TEXT_WHO
+		out.goal = true
+		return out
+	if b.round == 0:
+		out.step = Step.WALL
+		out.control = _shout_then_next(CombatTypes.Shout.SHIELD_WALL, pend, false)
+		out.text = TEXT_WALL
+		return out
+	var last_text: String = m.get("last_text", "")
+	var stuck: bool = not m.get("last_progress", true)
+	var order := b.standing_order(0)
+	# Withdraw, the moment it would work.
+	if b.can_withdraw(0):
+		out.step = Step.WITHDRAW
+		out.control = "withdraw"
+		out.text = TEXT_WITHDRAW
+		out.goal = true
+		return out
+	# A man apart from you, while they still stand between you and the dark:
+	# call him in, once; if he is still apart after it, the field's next need
+	# comes first. Once the way is open he comes after you on his own.
+	var way_open := obj != null and obj.way_open(b)
+	var apart := _apart(b, l) if not way_open else null
+	if apart != null and not m.get("to_me_tried", false):
+		out.step = Step.TO_ME
+		out.point = apart.pos
+		var asked := pend == CombatTypes.Shout.TO_ME
+		out.control = "next" if asked else "shout:%d" % CombatTypes.Shout.TO_ME
+		out.text = TEXT_TO_ME_ON if asked else TEXT_TO_ME % apart.display_name
+		return out
+	if way_open:
+		out.goal = true
+		var tap_to := _step_nearer(b, l)
+		if m.get("tapped", BattleGrid.NO_CELL) != BattleGrid.NO_CELL:
+			out.step = Step.STEP_OUT
+			out.control = "next"
+			out.text = _tap_text(b, l, m.tapped)
+			return out
+		var falling := order == CombatTypes.Shout.FALL_BACK or pend == CombatTypes.Shout.FALL_BACK
+		out.step = Step.FALL_BACK
+		out.control = _shout_then_next(CombatTypes.Shout.FALL_BACK, pend, order == CombatTypes.Shout.FALL_BACK)
+		out.text = TEXT_FALL_BACK_ON if falling else TEXT_FALL_BACK
+		if out.text == last_text and stuck and tap_to != BattleGrid.NO_CELL:
+			out.step = Step.STEP_OUT
+			out.control = "tap"
+			out.text = TEXT_STEP_OUT
+			out.point = tap_to
+		return out
+	# One of them between you and the dark: push through him.
+	var between := _between(b, l)
+	out.step = Step.PUSH
+	out.point = between.pos if between != null else BattleGrid.NO_CELL
+	var pushing := order == CombatTypes.Shout.PUSH or order == CombatTypes.Shout.BREAK_THEM
+	if pend == CombatTypes.Shout.PUSH or (pushing and pend == CombatTypes.Shout.NONE):
+		out.control = "next"
+		# The thin place gives at the end of the round the band has pushed
+		# `escape_give_rounds` rounds in all (Battle._first_fight_give_way).
+		var left := b.rules.escape_give_rounds - b.first_fight_pushed() if obj.first_fight else 0
+		# Near enough to stand in the push's way (and to give way to it).
+		var in_way := between != null and BattleGrid.chebyshev(between.pos, l.pos) <= b.rules.escape_give_radius + 1
+		if left > 1:
+			out.text = TEXT_PUSH_ON % left
+		elif left == 1:
+			out.text = TEXT_PUSH_ONE
+		elif in_way:
+			out.text = TEXT_PUSH_PAST
+		else:
+			out.text = TEXT_PUSH_RING  # only the ends of their ring are ahead, off to the side
+			out.point = BattleGrid.NO_CELL
+			out.goal = true
+		if out.text == last_text and stuck:
+			# The push came to nothing last round: something else to do.
+			var tap_to := _step_nearer(b, l)
+			if m.get("tapped", BattleGrid.NO_CELL) != BattleGrid.NO_CELL:
+				out.text = _tap_text(b, l, m.tapped)
+			elif in_way and BattleGrid.chebyshev(between.pos, l.pos) == 1:
+				out.control = "tap"
+				out.text = TEXT_STRIKE
+			elif tap_to != BattleGrid.NO_CELL:
+				out.step = Step.STEP_OUT
+				out.control = "tap"
+				out.text = TEXT_STEP_OUT
+				out.point = tap_to
+		return out
+	out.control = "shout:%d" % CombatTypes.Shout.PUSH
+	out.text = TEXT_NOT_YET if order == CombatTypes.Shout.FALL_BACK else TEXT_PUSH
+	return out
 
 
-func _next_step() -> void:
-	if battle.is_over():
-		_to(Step.OUT)
-		return
-	match step:
-		Step.WALL:
-			if _shouted.has(CombatTypes.Shout.SHIELD_WALL):
-				_to(Step.PUSH)
-		Step.PUSH:
-			if _shouted.has(CombatTypes.Shout.PUSH) and (_way_open() or battle.round - _push_from >= PUSH_ROUNDS_MAX):
-				_to(Step.FALL_BACK)
-		Step.FALL_BACK:
-			if _shouted.has(CombatTypes.Shout.FALL_BACK):
-				_to(Step.WITHDRAW)
-
-
-func _to(s: Step) -> void:
-	if s == step:
-		return
-	if not done.has(step):
-		done.append(step)
-	if DONE.has(step):
-		said = DONE[step]
-	step = s
-
-
-func _way_open() -> bool:
-	return battle.objective != null and battle.objective.way_open(battle)
-
-
-## The control to press now, by the HUD's names ("shout:<n>", "next",
-## "withdraw"), "ack" for the banner's Go on, or "" when there is none.
-func control() -> String:
-	match step:
-		Step.WHO, Step.HURT:
-			return "ack"
-		Step.WALL:
-			return _shout_then_next(CombatTypes.Shout.SHIELD_WALL)
-		Step.PUSH:
-			return _shout_then_next(CombatTypes.Shout.PUSH)
-		Step.FALL_BACK:
-			return _shout_then_next(CombatTypes.Shout.FALL_BACK)
-		Step.WITHDRAW:
-			return "withdraw" if battle.can_withdraw(0) else "next"
-	return ""
-
-
-func _shout_then_next(s: CombatTypes.Shout) -> String:
-	if _shouted.has(s) or pending == s:
+## "shout:<s>" until it is waiting (or standing, when `standing_ok`), then
+## "next".
+static func _shout_then_next(s: CombatTypes.Shout, pend: CombatTypes.Shout, standing_ok: bool) -> String:
+	if pend == s or (standing_ok and pend == CombatTypes.Shout.NONE):
 		return "next"
 	return "shout:%d" % s
 
 
-## The controls that may be pressed now: for the first steps only the one
-## asked for (and the shout already chosen, to take it back); afterwards
-## every one (empty).
+## The man of yours furthest apart from you, two hexes or more away with
+## none of yours at his shoulder and none of theirs at arm's length, or
+## null: a man alone.
+static func _apart(b: Battle, l: Warrior) -> Warrior:
+	var best: Warrior = null
+	var best_d := 1
+	for w in b.active(0):
+		if w == l or w.broken:
+			continue
+		var d := BattleGrid.chebyshev(w.pos, l.pos)
+		if d <= best_d or not b.grid.adjacent_warriors(w.pos, 1).is_empty():
+			continue
+		var friend := false
+		for f in b.grid.adjacent_warriors(w.pos, 0):
+			friend = friend or (f.is_active() and not f.broken)
+		if not friend:
+			best = w
+			best_d = d
+	return best
+
+
+## The nearest of them standing between your leader and the dark (nearer
+## it than he is), or null.
+static func _between(b: Battle, l: Warrior) -> Warrior:
+	var obj := b.objective
+	var mine := obj.dark_distance(l.pos)
+	var best: Warrior = null
+	for w in b.active(1):
+		if w.broken or obj.dark_distance(w.pos) >= mine:
+			continue
+		if best == null or BattleGrid.distance(w.pos, l.pos) < BattleGrid.distance(best.pos, l.pos):
+			best = w
+	return best
+
+
+## What a tap on the board will do next round, truly said.
+static func _tap_text(b: Battle, l: Warrior, cell: Vector2i) -> String:
+	var occ := b.grid.occupant(cell)
+	if occ != null and occ.side != l.side:
+		return TEXT_STRIKE_ON
+	if b.objective.dark_distance(cell) < b.objective.dark_distance(l.pos):
+		return TEXT_STEP_ON
+	return TEXT_STEP_ASIDE
+
+
+## A free hex beside your leader nearer the dark, or NO_CELL.
+static func _step_nearer(b: Battle, l: Warrior) -> Vector2i:
+	var obj := b.objective
+	var best := BattleGrid.NO_CELL
+	var best_d := obj.dark_distance(l.pos)
+	for c in b.grid.neighbors(l.pos):
+		if not b.grid.is_free(c):
+			continue
+		var d := obj.dark_distance(c)
+		if d < best_d:
+			best = c
+			best_d = d
+	return best
+
+
+## Reads the field again: the step, the control, the words, the marks.
+func evaluate() -> void:
+	if battle == null:
+		return
+	var a := advise(battle, {"acked": _acked, "pending": pending, "tapped": tapped, "last_text": _last_text,
+			"last_progress": _last_progress, "to_me_tried": _to_me_tried})
+	var s: Step = a.step
+	if s != step and not done.has(step):
+		done.append(step)
+	step = s
+	_control = a.control
+	_text = a.text
+	point = a.point
+	goal = a.goal
+
+
+## The control to press now, by the HUD's names ("shout:<n>", "next",
+## "withdraw"), "ack" for the banner's Go on, "tap" for a hex or a man on
+## the board (`point`), or "" when there is none.
+func control() -> String:
+	return _control
+
+
+## The controls that may be pressed now: for the first steps (who is who,
+## the wall, the first push) only the one asked for (and the shout already
+## chosen, to take it back); afterwards every one (empty).
 func allowed() -> Array[String]:
 	var out: Array[String] = []
-	if step == Step.WALL or step == Step.PUSH or step == Step.WHO:
+	if step == Step.WHO or step == Step.WALL or (step == Step.PUSH and battle != null and battle.first_fight_pushed() == 0):
 		var want := control()
 		if want != "ack" and want != "":
 			out.append(want)
@@ -175,61 +332,64 @@ func allowed() -> Array[String]:
 
 ## The instruction for the banner.
 func text() -> String:
-	match step:
-		Step.HURT:
-			return HURT_YOU if _hurt_name == "" else TEXTS[Step.HURT] % _hurt_name
-		Step.PUSH, Step.FALL_BACK:
-			return _AFTER[step] if _shouted.has(_order_of(step)) else TEXTS[step]
-		Step.WITHDRAW:
-			return TEXTS[step] if battle.can_withdraw(0) else _AFTER[step]
-	return TEXTS[step]
+	return _text
 
 
-func _order_of(s: Step) -> CombatTypes.Shout:
-	return CombatTypes.Shout.PUSH if s == Step.PUSH else CombatTypes.Shout.FALL_BACK
-
-
-## The player has read a step that asks only that (Go on).
+## The player has read who is who (Go on).
 func acknowledge() -> void:
-	if step == Step.WHO:
-		_to(Step.WALL)
-	elif step == Step.HURT:
-		_to(_resume)
+	_acked = true
 	evaluate()
 
 
 ## A round has been fought: what was shouted, what it did.
 func after_round() -> void:
-	if step == Step.HURT:
-		_to(_resume)  # read or not, the fight has moved on
+	said = ""
+	# The banner as Next round was pressed, and whether that round brought
+	# the leader nearer the dark.
+	_last_text = _text
+	var d := battle.objective.leader_distance(battle) if battle.objective != null else 99
+	_last_progress = d < _dist_seen or battle.is_over()
+	_dist_seen = d
 	var s := battle.last_shout(0)
-	if s != CombatTypes.Shout.NONE:
-		if s == CombatTypes.Shout.PUSH and _push_from < 0:
-			_push_from = battle.round
-		_shouted[s] = true
-	pending = CombatTypes.Shout.NONE
-	if not _pushed_said and _pushed_this_round():
+	if battle.round == 1 and s == CombatTypes.Shout.SHIELD_WALL:
+		said = SAID_WALL
+	var l := battle.sworn_leader(0)
+	if s == CombatTypes.Shout.TO_ME:
+		said = SAID_TO_ME
+		_to_me_tried = true
+	elif l == null or not l.is_active() or _apart(battle, l) == null:
+		_to_me_tried = false  # together again: a man apart later is called in afresh
+	var round_log := _round_log()
+	if not _pushed_said and round_log.has("push"):
 		_pushed_said = true
-		said = PUSH_SAID
-	evaluate()
-	# The first man of yours hurt, between rounds, once: read it, then on.
-	if not _hurt_shown and not battle.is_over() and (step == Step.PUSH or step == Step.FALL_BACK or step == Step.WITHDRAW):
+		said = SAID_PUSH
+	if not _gave_said and round_log.has("gave"):
+		_gave_said = true
+		said = SAID_GAVE
+	if not _fell_back_said and s == CombatTypes.Shout.FALL_BACK:
+		_fell_back_said = true
+		said = SAID_FALL_BACK
+	if not _hurt_said and not battle.is_over():
 		var hurt := _first_hurt()
 		if hurt != null:
-			_hurt_shown = true
-			_hurt_name = "" if hurt.is_leader else "%s is hurt" % hurt.display_name
-			_resume = step
-			step = Step.HURT
+			_hurt_said = true
+			said = SAID_HURT_YOU if hurt.is_leader else SAID_HURT % hurt.display_name
+	pending = CombatTypes.Shout.NONE
+	tapped = BattleGrid.NO_CELL
+	evaluate()
 
 
-func _pushed_this_round() -> bool:
+func _round_log() -> Dictionary:
+	var out := {}
 	for i in range(battle.log.size() - 1, -1, -1):
 		var line := battle.log[i]
 		if line.begins_with("--- round"):
-			return false
+			break
 		if line.begins_with("push: "):
-			return true
-	return false
+			out["push"] = true
+		if line.begins_with("the ring gives way"):
+			out["gave"] = true
+	return out
 
 
 func _first_hurt() -> Warrior:
@@ -269,13 +429,23 @@ func setup(p_hud: Node) -> void:
 	_text_label.custom_minimum_size = Vector2(320, 0)  # never a column of letters before the anchors settle
 	_text_label.add_theme_font_size_override("font_size", 18)
 	row.add_child(_text_label)
-	_go_on = UiTheme.primary("Go on", Callable(), 120.0)
+	var buttons := VBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 4)
+	buttons.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(buttons)
+	_go_on = UiTheme.primary("Go on", Callable(), 130.0)
 	_go_on.custom_minimum_size.y = UiTheme.ROW
-	_go_on.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_go_on.pressed.connect(func() -> void:
 		acknowledge()
 		_show())
-	row.add_child(_go_on)
+	buttons.add_child(_go_on)
+	# A way out of the fight for anyone who wants none of it: the dice tell
+	# the escape (Journey.skip_escape) and the saga goes on.
+	_skip = UiTheme.quiet("Skip the fight", func() -> void:
+		if hud != null and hud.has_method("skip_fight"):
+			hud.skip_fight(), 130.0)
+	_skip.custom_minimum_size.y = UiTheme.ROW
+	buttons.add_child(_skip)
 	# The first fight shows only what it teaches: the wheel, the step and
 	# the pulse are for later fights.
 	for id in ["advance", "wheel_l", "wheel_r"]:
@@ -294,6 +464,14 @@ func changed() -> void:
 	_show()
 
 
+## The player tapped the board: his man will step to or strike at `cell`
+## next round (NO_CELL: he acts with the line again).
+func on_tap(cell: Vector2i) -> void:
+	tapped = cell
+	evaluate()
+	_show()
+
+
 ## The HUD's round is played and animated.
 func round_played() -> void:
 	after_round()
@@ -307,12 +485,17 @@ func finished() -> void:
 
 
 ## Puts the step on the screen: the banner's words, where it stands (away
-## from the control it names), the outline, and which controls answer.
+## from the control it names), the outline, the marks on the board, and
+## which controls answer.
 func _show() -> void:
 	if hud == null:
 		return
 	var none: Array[String] = []
 	hud.allowed = allowed() if step != Step.OUT else none
+	var view: Node = hud.view
+	if view != null:
+		view.set("guide_cell", point if step != Step.OUT else BattleGrid.NO_CELL)
+		view.set("guide_goal", goal and step != Step.OUT)
 	if step == Step.OUT:
 		_banner.visible = false
 		_outline.queue_redraw()
@@ -324,9 +507,10 @@ func _show() -> void:
 	_text_label.text = text()
 	var want := control()
 	_go_on.visible = want == "ack"
+	_skip.visible = step == Step.WHO
 	# Keep clear of the control: below the top bar when it is in the shout
-	# row (or is the banner's own Go on), above the shout row when it is up
-	# in the top bar.
+	# row (or is the banner's own Go on, or the board), above the shout row
+	# when it is up in the top bar.
 	var target := _target()
 	var low: bool = want != "ack" and target != null and target.get_global_rect().get_center().y < (hud.root_control as Control).size.y / 2.0
 	_banner.anchor_top = 1.0 if low else 0.0
@@ -365,7 +549,7 @@ func _target() -> Control:
 	var want := control()
 	if want == "ack":
 		return _go_on
-	if hud == null or want == "":
+	if hud == null or want == "" or want == "tap":
 		return null
 	return hud.controls.get(want, null)
 

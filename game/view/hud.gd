@@ -28,6 +28,15 @@ var controls := {}
 var allowed: Array[String] = []
 ## The tutorial director for the burned hall, or null (any other fight).
 var tutorial: Tutorial = null
+## The saga's battle hints (view/battle_hints.gd), or null (the burned hall,
+## the skirmish prototype).
+var battle_hints: BattleHints = null
+## The fight was skipped (`skip_fight`): the dice told it, and these are
+## its lines for the result panel.
+var _skipped_lines := PackedStringArray()
+## The burned hall's leader's distance to the dark when it began, for the
+## strip's colour as it falls.
+var _dark_start := -1
 var root_control: Control
 
 const SHOUTS := [
@@ -156,7 +165,14 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 		if tutorial == null:
 			Settings.set_value("battle_pulse", pulse_slider.value))
 	buttons_row.add_child(pulse_slider)
-	var gear := Settings.gear(func() -> void: Settings.open(root_control, self), 48.0)
+	# "?": what each shout and control does, one line each (a reference card,
+	# open in every fight, the first one too).
+	var ask := _tool("?", 48)
+	ask.tooltip_text = "What each shout does"
+	ask.add_theme_font_size_override("font_size", UiTheme.fs(22))
+	ask.pressed.connect(_show_reference)
+	buttons_row.add_child(ask)
+	var gear := Settings.gear(_open_settings, 48.0)
 	gear.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	buttons_row.add_child(gear)  # not one of the tutorial's controls: always open
 	next_btn = UiTheme.primary("Next round", _on_next, 176.0)
@@ -258,6 +274,18 @@ func setup(p_view: BattleView, p_main: Node) -> void:
 		tutorial = Tutorial.new()
 		add_child(tutorial)
 		tutorial.setup(self)
+		view.tapped.connect(func(c: Vector2i) -> void:
+			if tutorial != null:
+				tutorial.on_tap(c))
+	else:
+		# The saga's other fights teach the rest lightly (view/hints.gd, the
+		# battle hints), once each across the saga.
+		var host: Node = main.get("host") if main != null else null
+		var h = host.get("hints") if host != null else null
+		if h is Hints:
+			battle_hints = BattleHints.new()
+			add_child(battle_hints)
+			battle_hints.setup(h, self)
 	_refresh()
 	_layout_top()
 
@@ -416,6 +444,8 @@ func _on_round(lines: PackedStringArray) -> void:
 	view.pending_shout = CombatTypes.Shout.NONE
 	if tutorial != null:
 		tutorial.round_played()
+	if battle_hints != null:
+		battle_hints.check()
 	_refresh()
 
 
@@ -454,8 +484,14 @@ const OUTCOME_TITLES := {
 
 func _on_finished(result: BattleResult) -> void:
 	offer_panel.visible = false
+	if battle_hints != null:
+		battle_hints.dismiss()
 	if tutorial != null:
 		tutorial.finished()
+	var first := view.battle.objective
+	if first != null and first.first_fight and first.attacker == 0 and main.get("host") != null:
+		_first_fight_result(result)
+		return
 	var outcome := result.outcome(0)
 	Audio.result(outcome)
 	Audio.close(false)
@@ -500,6 +536,134 @@ func _on_finished(result: BattleResult) -> void:
 		yard.tooltip_text = "Drill a shape, or swear a shout of your own"
 	result_panel.add_button("Fight again" if not main.get("saga_over") else "A new band", func() -> void: main.next_fight(), "PrimaryButton", 200.0)
 	_refresh()
+
+
+## The burned hall's result (the saga's first): how he got out, what it
+## cost, and what was learned, then Go on to the kin's farm. Not the counts
+## and not the growth rules' "is now blooded" for every man.
+func _first_fight_result(result: BattleResult) -> void:
+	var outcome := result.outcome(0)
+	Audio.result(outcome)
+	Audio.close(false)
+	result_panel.open(OUTCOME_TITLES[outcome])
+	result_panel.title_label.add_theme_color_override("font_color", _outcome_color(outcome))
+	var box := result_panel.body
+	var after: PackedStringArray = _skipped_lines if not _skipped_lines.is_empty() else main.after_fight(result)
+	var told := PackedStringArray([first_fight_telling(view.battle)])
+	var cost := PackedStringArray()
+	for line in after:
+		if line.contains("is now blooded"):
+			continue
+		if line.contains("Sogn") or line.contains("kin") or line.contains("remembers nothing"):
+			told.append(line)
+		else:
+			cost.append(line)
+	if cost.is_empty():
+		cost.append("Nobody of yours took a wound that will not mend on the road.")
+	var p := UiTheme.panel("ParchmentPanel")
+	p.add_child(UiTheme.label(" ".join(told), "InkLabel"))
+	box.add_child(p)
+	box.add_child(UiTheme.label(" ".join(cost), "BodyLabel"))
+	var learned := UiTheme.label("You have learned the wall, the push and falling back. The other shouts come in later fights; the ? by the gear says what each does.", "SmallLabel")
+	box.add_child(learned)
+	result_panel.add_button("Go on", func() -> void: main.host.leave_battle(), "PrimaryButton", 200.0)
+	_refresh()
+
+
+## How the band got out of the burned hall, one line in the saga's voice.
+static func first_fight_telling(b: Battle) -> String:
+	var l := b.sworn_leader(0)
+	var who := l.display_name if l != null else "He"
+	var obj := b.objective
+	var why := ""
+	for line in b.result.log:
+		if line.begins_with("==="):
+			why = line.trim_prefix("=== ").trim_suffix(" ===")
+	if l != null and l.is_down():
+		var carried := false
+		for w in b.side_warriors(0):
+			if w != l and w.is_active() and not w.broken:
+				carried = true
+		return ("%s went down in the yard, and his men carried him out into the dark." if carried
+				else "%s went down in the yard and was left for dead, but came to himself in the smoke and crawled away.") % who
+	if obj != null and obj.how_out == "rescued":
+		return why[0].to_upper() + why.substr(1) + "."
+	if obj != null and obj.how_out == "told":
+		return "The smoke thickened and the dark covered them, and %s got away." % who
+	return "%s came out through their ring and into the dark." % who
+
+
+## Skips the burned hall (the banner's or the settings' "Skip the fight"):
+## the dice tell the rest of it from where it stands (Journey.skip_escape:
+## the careful orders, slipping away the moment it can) and the result
+## panel reads it out.
+func skip_fight() -> void:
+	var b := view.battle
+	if b.is_over() or view.animating:
+		return
+	var host: Node = main.get("host") if main != null else null
+	var j = host.get("journey") if host != null else null
+	if j is Journey and (j as Journey).escape_pending():
+		if host.has_method("remember_escape"):
+			host.remember_escape()
+		_skipped_lines = (j as Journey).skip_escape()
+	else:
+		while not b.is_over() and b.round < b.rules.max_rounds:
+			if b.can_withdraw(0) and b.withdraw(0):
+				break
+			b.set_shout(0, Objective.escape_order(b, 0))
+			b.run_round()
+		if not b.is_over():
+			b.run()
+	_on_finished(b.result)
+
+
+## The reference card: what each shout and control does, one line each,
+## and what the hints have taught so far in this saga.
+func _show_reference() -> void:
+	if not view.is_manual():
+		view.set_paused(true)
+	var m := UiModal.new()
+	m.max_width = 820.0
+	root_control.add_child(m)
+	m.open("The shouts")
+	var rows := [
+		["Shield Wall!", "Your men form a line on you, shoulder to shoulder, each shield guarding the next."],
+		["Hold!", "The wall stands where it is and lets them come."],
+		["Push!", "The wall goes forward as one, and shoves when it meets them."],
+		["To Me!", "Your men come to your side, and take heart."],
+		["Break Them!", "Every man goes at the nearest of them: for a beaten enemy, not a fresh one."],
+		["Fall Back!", "The wall gives ground a step at a time, and is still a wall."],
+		["Taunt!", "A jeer across the field: men who are only standing there lose heart."],
+		["Advance", "The wall steps one hex forward, without the shove."],
+		["Wheel L, R", "The wall turns to face another way."],
+		["Form", "The shape the men take when they form up."],
+		["Withdraw", "Leave the field in order, out of their reach: a choice, not a rout."],
+		["Next round", "The round is fought. Tap a hex to step, an enemy to strike, yourself to go with the line."],
+	]
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", UiTheme.S3)
+	grid.add_theme_constant_override("v_separation", 2)
+	m.body.add_child(grid)
+	for r in rows:
+		var k := UiTheme.label(str(r[0]), "StrongLabel", false)
+		grid.add_child(k)
+		var v := UiTheme.label(str(r[1]), "SmallLabel")
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		v.custom_minimum_size = Vector2(260, 0)
+		grid.add_child(v)
+	var host: Node = main.get("host") if main != null else null
+	var h = host.get("hints") if host != null else null
+	if h is Hints:
+		var lines: PackedStringArray = (h as Hints).learned_in_battle()
+		if not lines.is_empty():
+			m.body.add_child(UiTheme.section("Learned in the saga's fights"))
+			for line in lines:
+				m.body.add_child(UiTheme.label(line, "SmallLabel"))
+	m.add_button("Back to the fight", func() -> void:
+		m.close()
+		m.queue_free(), "PrimaryButton", 220.0)
 
 
 ## Why the fight ended, in plain words, from the battle's last line.
@@ -709,7 +873,15 @@ func _refresh() -> void:
 	if b.objective != null:
 		var prog := b.objective.progress(b)
 		if prog != "":
-			top += "    [color=#%s][b]%s[/b][/color]" % [COLORS.gold, Journey._cap(prog)]
+			var prog_col: String = COLORS.gold
+			if b.objective.kind == Objective.Kind.ESCAPE and b.objective.attacker == 0:
+				# The dark's distance warms from grey to gold as it falls.
+				var d := b.objective.leader_distance(b)
+				if _dark_start < 0:
+					_dark_start = maxi(1, d)
+				var k := clampf(1.0 - float(d) / float(_dark_start), 0.0, 1.0)
+				prog_col = Palette.UI_MUTED.lerp(Palette.UI_GOLD, 0.25 + 0.75 * k).to_html(false)
+			top += "    [color=#%s][b]%s[/b][/color]" % [prog_col, Journey._cap(prog)]
 		var clock := b.objective.clock_text(b)
 		if clock != "":
 			top += "  [color=#%s]%s[/color]" % [COLORS.muted, clock]
@@ -761,6 +933,15 @@ func _refresh() -> void:
 
 
 # --- The settings (view/settings.gd), opened from the top row ----------------------
+
+func _open_settings() -> void:
+	var m := Settings.open(root_control, self)
+	if tutorial != null and not view.battle.is_over():
+		# The first fight only: a way out of it, from the settings too.
+		m.add_button("Skip the fight", func() -> void:
+			m.close()
+			skip_fight(), "", 170.0)
+
 
 ## A setting changed while the settings are open over the fight: the pace
 ## and the pausing follow at once; the colours redraw.

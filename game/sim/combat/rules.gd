@@ -442,6 +442,27 @@ var escape_nerve_bonus := 2
 ## yard's edges beside the hall, and come up from the flanks as the rounds
 ## pass, so that a band that lingers in the yard is caught.
 var escape_flankers := 4
+## The saga's first fight (Objective.first_fight; docs/design/notes/
+## first-fight.md). Once the band has pushed this many rounds in all, the
+## burners standing between its leader and the dark, within
+## `escape_give_radius` hexes of him, give way: the thin place opens for
+## anyone who has pushed at all.
+var escape_give_rounds := 3
+var escape_give_radius := 3
+## A leader cut off (an enemy at arm's length and none of his men beside
+## him) this many rounds running, or no nearer the dark for
+## `escape_stall_rounds` rounds once the push is done, is dragged out
+## through the smoke by the nearest of his men, at a cost: the man who
+## drags him is hurt (`escape_rescue_wound`), and so is he
+## (`escape_rescued_wound`). Only for a band that has given an order.
+var escape_rescue_rounds := 3
+var escape_stall_rounds := 5
+var escape_rescue_wound := CombatTypes.Wound.WOUNDED
+var escape_rescued_wound := CombatTypes.Wound.BRUISED
+## The night has an end: at this round the escape is told (the smoke and
+## the dark cover them), or, for a band that never gave an order, its
+## leader is struck down and carried off.
+var escape_round_cap := 16
 
 ## The objective's clock counts from the round the lines meet; an attacker
 ## who has not closed by this round has given the day up to the defender.

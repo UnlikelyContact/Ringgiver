@@ -26,6 +26,9 @@ enum Opt { ORDER, THROW, BRACE_FOR_CHARGE, FILL_GAP, FACE_FLANK, DROP_BACK, COVE
 	GIVE_GROUND, CHARGE, LOOT, STEP_OUT, GO_FOR_WOUNDED, OBJECTIVE, RUN }
 const OPT_NAMES := ["order", "throw early", "brace for charge", "fill gap", "face flank", "drop back",
 	"cover leader", "give ground", "charge", "loot", "step out", "go for wounded", "make for objective", "lose heart"]
+## What a man of the first fight's band may weigh besides his order: nothing
+## that takes him away from his leader (Objective.first_fight).
+const TOGETHER_OPTS := [Opt.ORDER, Opt.THROW, Opt.BRACE_FOR_CHARGE, Opt.FILL_GAP, Opt.FACE_FLANK, Opt.COVER_LEADER]
 ## Names for what a man did when it was his order's plain default, by ActionKind.
 const PLAIN_NAMES := ["hold", "step", "strike", "shoot", "run", "idle"]
 
@@ -122,9 +125,12 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		w.last_option = "hold"
 		return Action.brace()
 
-	# 3. A frightened green man may ignore the order altogether.
+	# 3. A frightened green man may ignore the order altogether; not in the
+	# saga's first fight, where three men run for their lives together
+	# (Objective.first_fight): nerve is not in question there.
+	var together := objective != null and objective.keeps_together(w)
 	if w.tier == CombatTypes.Tier.GREEN and w.morale <= rules.morale_break_threshold \
-			and rng.randf() < rules.green_panic_ignore_chance:
+			and not together and rng.randf() < rules.green_panic_ignore_chance:
 		var froze := "%s freezes behind his shield" % w.display_name
 		log.append(froze)
 		w.last_reason = froze
@@ -152,6 +158,20 @@ static func choose(rng: SimRng, rules: CombatRules, grid: BattleGrid,
 		order_score -= rules.dm_omen_order  # the heart has gone out of him
 	opts.append(Option.new(Opt.ORDER, order_score + m.jitter(), plain, why))
 	_alternatives(m, order, plain, opts)
+	if together:
+		# The first fight's men stay with their leader or die: a man apart
+		# from him with nobody at arm's length goes to him, and nobody
+		# wanders off after a mark, a hurt man or loot.
+		if m.has_leader() and BattleGrid.chebyshev(w.pos, m.leader.pos) > 1 and _adjacent(w, m.enemies).is_empty():
+			var to_him := _step_toward(grid, w, m.leader.pos, Vector2i.ZERO)
+			if to_him != null:
+				w.last_option = "with leader"
+				return to_him
+		var kept: Array[Option] = []
+		for o in opts:
+			if o.kind in TOGETHER_OPTS:
+				kept.append(o)
+		opts = kept
 
 	var best: Option = opts[0]
 	for o in opts:
@@ -603,7 +623,8 @@ static func _by_order(m: Mind, order: CombatTypes.Shout) -> Action:
 		CombatTypes.Shout.BREAK_THEM:
 			act = _break_them(m)
 		CombatTypes.Shout.FALL_BACK:
-			if w.tier <= CombatTypes.Tier.BLOODED and w.morale <= rules.fall_back_steady_morale:
+			if w.tier <= CombatTypes.Tier.BLOODED and w.morale <= rules.fall_back_steady_morale \
+					and not (m.objective != null and m.objective.keeps_together(w)):
 				m.pending.append("the line wavers: %s turns to run" % w.display_name)
 				return _flee(grid, w, enemies)
 			if has_leader and not _in_wall(grid, w) and _adjacent(w, enemies).is_empty():
