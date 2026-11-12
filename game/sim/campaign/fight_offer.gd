@@ -168,7 +168,9 @@ func title(choice: int) -> String:
 ## A line for the log or the HUD: what is coming, as the scout tells it.
 func brief() -> String:
 	var text: String = report.get("text", "")
-	if GROUND_TEXT.has(ground):
+	if ground == "farm" and attacking:
+		text += " Their hall stands before you."  # the hall is theirs to hold, not yours
+	elif GROUND_TEXT.has(ground):
 		text += " " + str(GROUND_TEXT[ground])
 	var over := str(stakes.get(Choice.TAKE_THE_FIELD, ""))
 	if over != "" and not they_know_first:

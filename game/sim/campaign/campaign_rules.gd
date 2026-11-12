@@ -434,9 +434,6 @@ var front_contact_rounds := 2
 ## men this loyal or more stay in the fire with the leader; the rest are let
 ## out with the household.
 var hold_burn_loyalty := 70
-## What burning lost to the hall: every building but this many is ashes,
-## and the store with it; the benches go back to the hall's base seats.
-var burned_hall_keeps := 0
 ## A house's men who take a band's hall (Objective THE_HALL taken) carry
 ## off this share of its store.
 var hall_plundered_food := 0.5

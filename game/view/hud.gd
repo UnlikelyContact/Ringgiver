@@ -448,7 +448,13 @@ func _on_finished(result: BattleResult) -> void:
 	if tutorial != null:
 		tutorial.finished()
 	var outcome := result.outcome(0)
-	result_panel.open(OUTCOME_TITLES[outcome])
+	var title: String = OUTCOME_TITLES[outcome]
+	var burn := view.battle.objective
+	if burn != null and burn.kind == Objective.Kind.ESCAPE and burn.attacker == 1 and result.winner == 0:
+		# The burning: what counts is whether their head came out of it.
+		var head := view.battle.sworn_leader(1)
+		title = "The hall burns, and their head with it" if head != null and head.is_down() else "The hall burns, but their head got out"
+	result_panel.open(title)
 	result_panel.title_label.add_theme_color_override("font_color", _outcome_color(outcome))
 	var box := result_panel.body
 	var obj := view.battle.objective

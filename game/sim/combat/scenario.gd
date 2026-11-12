@@ -326,8 +326,11 @@ static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dicti
 	var objective := Objective.new(Objective.Kind.ESCAPE, 0, seed_in, rules)
 	objective.place_escape(g, 1)
 	battle.objective = objective
-	# Your men: a line outside the door, facing up the field.
-	BandFactory.deploy_formation(g, ours, BattleGrid.from_offset(c, our_row), Vector2i(0, -1), rules, FormationTemplate.line())
+	# Your men: a line outside the door, facing up the field; a whole band
+	# breaking out of its own hall (`spare` false) comes out in ranks.
+	var breakout: bool = not bands.get("spare", true)
+	BandFactory.deploy_formation(g, ours, BattleGrid.from_offset(c, our_row), Vector2i(0, -1), rules,
+			FormationTemplate.ranks() if breakout else FormationTemplate.line())
 	# The ring: the thin place first (two men either side of an empty hex
 	# straight ahead of the door), their leader beside it, the rest round
 	# the arc toward the hall's ends.
@@ -349,6 +352,12 @@ static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dicti
 	for w in theirs:
 		w.reset_for_battle(rules)
 		var at: Vector2i = spots[placed] if placed < spots.size() else BattleGrid.NO_CELL
+		if breakout:
+			# A big band fills the yard: a spot taken goes to the next, and
+			# past the last, the nearest free ground up the yard.
+			while placed < spots.size() and not g.is_free(spots[placed]):
+				placed += 1
+			at = spots[placed] if placed < spots.size() else _nearest_free(g, BattleGrid.from_offset(c, ring_row - 1))
 		if at == BattleGrid.NO_CELL or not g.is_free(at):
 			continue
 		# The picked men are steady; the two at the thin place are not.

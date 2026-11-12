@@ -635,7 +635,7 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 		# Under the war-leader the fight is his as much as the leader's.
 		if int(built.get("war_leader", -1)) >= 0 and band.fame > fame_before:
 			band.fame -= (band.fame - fame_before) - roundi((band.fame - fame_before) * rules.war_leader_fame_share)
-		if offer != null and offer.cause != "":
+		if offer != null and offer.cause != "" and band.leader != null and band.leader.alive:
 			var tl: PackedStringArray = told.lines
 			tl.append_array(luck_lines(front, luck_before))
 			told.lines = tl
