@@ -431,6 +431,17 @@ var escape_ring_distance := 3
 ## The jarl's men are watching the roof fall in: their leader gives no
 ## order for this many rounds after the band comes out of the smoke.
 var escape_surprise_rounds := 3
+## The ring are the jarl's picked men, not farmers: their hearts are this
+## much steadier than a plain band's when the fight begins, so three men
+## coming out of the smoke break through the thin place but do not break
+## the ring.
+var escape_morale_bonus := 4
+## and their nerve this much better (the break check, Morale._check_breaks).
+var escape_nerve_bonus := 2
+## And more of them about the burning: this many more stand off at the
+## yard's edges beside the hall, and come up from the flanks as the rounds
+## pass, so that a band that lingers in the yard is caught.
+var escape_flankers := 4
 
 ## The objective's clock counts from the round the lines meet; an attacker
 ## who has not closed by this round has given the day up to the defender.

@@ -302,8 +302,10 @@ static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dicti
 	var ring_row := our_row - rules.escape_ring_distance
 	var brng := SimRng.new(seed_in).fork("bands")
 	var ours: Array[Warrior] = bands.get("ours", BandFactory.make_mixed_band(brng.fork("a"), 0, 3, 0, 0, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 0, 1))
-	var theirs: Array[Warrior] = bands.get("theirs", BandFactory.make_mixed_band(brng.fork("b"), 1, rules.escape_enemy_shields,
+	var theirs: Array[Warrior] = bands.get("theirs", BandFactory.make_mixed_band(brng.fork("b"), 1, rules.escape_enemy_shields + rules.escape_flankers,
 			rules.escape_enemy_spears, 0, CombatTypes.Tier.GREEN, rules, CombatTypes.Armor.NONE, 3, 101))
+	if str(bands.get("leader_name", "")) != "" and not theirs.is_empty():
+		theirs[0].display_name = str(bands.leader_name)
 	# The hall: three rows of burning timber along the bottom, its door in
 	# the middle of the front wall.
 	for row in range(door_row, size.y):
@@ -334,16 +336,25 @@ static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dicti
 		BattleGrid.from_offset(c - 1, ring_row), BattleGrid.from_offset(c + 1, ring_row),  # the thin place
 		BattleGrid.from_offset(c + 3, ring_row), BattleGrid.from_offset(c - 3, ring_row),
 		BattleGrid.from_offset(c + 4, ring_row + 1), BattleGrid.from_offset(c - 4, ring_row + 1),
-		BattleGrid.from_offset(c - 4, our_row), BattleGrid.from_offset(c + 5, our_row),
-		BattleGrid.from_offset(c - 5, our_row),
+		BattleGrid.from_offset(c - 4, our_row),
+		# The flankers: off at the yard's edges beside the burning hall,
+		# rounds away from the thin place.
+		BattleGrid.from_offset(0, size.y - 1), BattleGrid.from_offset(size.x - 1, size.y - 1),
+		BattleGrid.from_offset(0, size.y - 2), BattleGrid.from_offset(size.x - 1, size.y - 2),
+		BattleGrid.from_offset(c + 5, our_row), BattleGrid.from_offset(c - 5, our_row),
 	]
 	var me := BattleGrid.from_offset(c, our_row)
 	var placed := 0
+	var steady: Array[Warrior] = []
 	for w in theirs:
 		w.reset_for_battle(rules)
 		var at: Vector2i = spots[placed] if placed < spots.size() else BattleGrid.NO_CELL
 		if at == BattleGrid.NO_CELL or not g.is_free(at):
 			continue
+		# The picked men are steady; the two at the thin place are not.
+		if placed != 1 and placed != 2:
+			w.nerve = mini(10, w.nerve + rules.escape_nerve_bonus)
+			steady.append(w)
 		g.place(w, at)
 		w.facing = BattleGrid.direction_to(at, me)
 		if w.is_leader:
@@ -354,6 +365,8 @@ static func build_escape(seed_in: int, rules: CombatRules, bands := {}) -> Dicti
 	battle.add_band(theirs)
 	battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
 	battle.surprise(1, rules.escape_surprise_rounds, 0)
+	for w in steady:
+		w.morale = mini(Morale.MORALE_MAX, w.morale + rules.escape_morale_bonus)
 	for w in ours:
 		if w.is_leader:
 			battle.spared.append(w)
