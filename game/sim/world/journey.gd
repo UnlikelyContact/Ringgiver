@@ -278,6 +278,11 @@ func _answer_fight(d: Dictionary, choice: int) -> void:
 		return
 	roam.stop()  # a fight is where the day's march ends
 	var built := c.build_fight(offer, choice)
+	# What `_after_fight` needs of the fight itself: the choice (a burning?),
+	# the battle (who fell), the offer's kind (a prize's hull).
+	d.ctx["choice"] = choice
+	d.ctx["built"] = built
+	d.ctx["offer_kind"] = offer.kind
 	if quick:
 		var result: BattleResult = (built.battle as Battle).run()
 		var told := c.conclude_fight(offer, built, result)
@@ -297,6 +302,16 @@ func fight_done(result: BattleResult) -> PackedStringArray:
 	var f := fight
 	fight = {}
 	var told := c.conclude_fight(f.offer, f.built, result)
+	if str((f.ctx as Dictionary).get("kind", "")) in ["hall", "breakout"] and winter_hall != null:
+		# A fight at the hall in the winter: its lines, then the winter goes on.
+		var mark0 := said.size()
+		for line in told.lines:
+			_say(line)
+		winter_hall.hall_fight_done(self, f.ctx, f.built, result)
+		var out0 := PackedStringArray()
+		for i in range(mark0, said.size()):
+			out0.append(said[i])
+		return out0
 	if str((f.ctx as Dictionary).get("kind", "")) == "escape":
 		var out: PackedStringArray = told.lines
 		out.append_array(_after_escape(f.built, result))
@@ -322,7 +337,10 @@ func _tell_fight(result: BattleResult, told: Dictionary) -> void:
 
 func _offer_fight(kind: String, tier: CombatTypes.Tier, size: int, attacking: bool, stat: int, at_sea: bool,
 		cornered: bool, ctx: Dictionary, text: String, front: bool) -> void:
-	var offer := c.offer_fight(kind, tier, size, attacking, stat, at_sea, cornered, ground_here())
+	var about := _about_fight(ctx)
+	var offer := c.offer_fight(kind, tier, size, attacking, stat, at_sea, cornered, str(about.get("ground", ground_here())), about)
+	if str(about.get("head", "")) != "":
+		offer.enemy_leader = str(about.head)  # the head of the house leads its men
 	var opts: Array[Dictionary] = []
 	if offer.they_know_first:
 		opts.append({"id": str(FightOffer.Choice.TAKE_THE_FIELD), "label": "Fight"})
@@ -334,6 +352,38 @@ func _offer_fight(kind: String, tier: CombatTypes.Tier, size: int, attacking: bo
 		decisions.push_front(d)
 	else:
 		decisions.append(d)
+
+
+## What a fight is over and whose men they are, from its ctx, for the
+## offer (Campaign.offer_fight's `about`): the cause (the ctx's kind, or a
+## world fight's `what`), the house (the ctx's family, the place's, the
+## party's; "" for men of no house), whether the band's ship lies here,
+## whether the burning may be chosen (the reckoning at a seat, or a raid on
+## the seat of a house at feud) and its head; the Thing's own ground.
+func _about_fight(ctx: Dictionary) -> Dictionary:
+	var k := str(ctx.get("kind", ""))
+	var out := {"cause": k if k != "" else "fight"}
+	if k == "world_fight":
+		out.cause = str(ctx.get("what", "world"))
+	var fam := str(ctx.get("family", ""))
+	var place: Place = ctx.get("place", null) if ctx.get("place", null) is Place else null
+	var party: Roam.Party = ctx.get("party", null)
+	if fam == "" and place != null and k == "raid":
+		fam = place.family
+	if fam == "" and party != null:
+		fam = party.family
+	out.house = fam
+	if k == "thing":
+		out.ground = "thing"
+	out.ships_here = c.band.ship != null and not roam.afloat() and (roam.aboard or roam.ship_cell() == roam.cell())
+	var fs := c.world.families
+	var h: House = fs.house(fam) if fs != null and fam != "" else null
+	if h != null and not Feud.find(c.band, fam).is_empty():
+		var seat_here := here() != null and here().id == h.seat
+		if k == "reckoning" or (k == "raid" and seat_here):
+			out.can_burn = true
+			out.head = h.head
+	return out
 
 
 ## The ground under the band, for a fight that finds it here
@@ -361,7 +411,16 @@ func ground_here() -> String:
 func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 	var wr := c.world_rules
 	var won := result != null and result.winner == 0
-	match ctx.get("kind", ""):
+	var burned := result != null and int(ctx.get("choice", -1)) == FightOffer.Choice.BURN
+	if burned:
+		_after_burning(ctx, result)
+	if result != null and result.ship_taken == 1 and result.winner == 0:
+		_take_prize(str(ctx.get("offer_kind", "")))
+	match "burned" if burned else ctx.get("kind", ""):
+		"feud":
+			_after_feud_ambush(ctx, result)
+		"thing":
+			_after_thing_brawl(ctx, result)
 		"sea":
 			if result != null:
 				Encounters.after_battle(wr, c.band, ctx.req, won, said)
@@ -374,6 +433,14 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 			var target: Place = ctx.place
 			if result != null:
 				var take := Raiding.after_raid(_fork("after_raid"), wr, c.world, c.band, target, won, said)
+				var share := c.plunder_share(result)
+				if won and share < 1.0:
+					# Out before the neighbours came, with what could be carried.
+					var back := int(take.get("silver", 0)) - roundi(int(take.get("silver", 0)) * share)
+					c.band.silver -= back
+					target.wealth += back
+					take["silver"] = int(take.get("silver", 0)) - back
+					_say("The neighbours were coming: the band carried off %d oz and left the rest." % int(take.silver))
 				if won:
 					Loyalty.share_plunder(c.rules, c.band, take.get("silver", 0), c.rules.fair_leader_share, said)
 					if target.faction_id != "":
@@ -1669,6 +1736,8 @@ func winter_state() -> Dictionary:
 func winter_choose(id: String) -> void:
 	if winter_hall == null:
 		return
+	if winter_hall.paused(self) and not id.begins_with("fire:"):
+		return  # a fight at the hall, or the burning's choice, comes first
 	if id == "next" and winter_hall.step == WinterHall.SPRING:
 		winter_end()
 		return
@@ -1745,3 +1814,115 @@ func _say(line: String) -> void:
 func _fork(label: String) -> SimRng:
 	_n += 1
 	return _rng.fork("%s:%d" % [label, _n])
+
+
+# --- The saga's fights: what they settle (docs/design/notes/saga-fights.md) ----------
+
+## A feud's ambush fought out: beaten off, the feud cools a step (they
+## went home with their dead and will think again); beaten, it rises a step
+## (they will be bolder). Every man killed either way goes on the feud's
+## ledger (`kills_ours`: theirs the band killed; `kills_theirs`: the band's
+## they killed).
+func _after_feud_ambush(ctx: Dictionary, result: BattleResult) -> void:
+	if result == null:
+		return
+	var fam := str(ctx.get("family", ""))
+	var f := Feud.find(c.band, fam)
+	if f.is_empty():
+		return
+	var wr := c.world_rules
+	f["kills_ours"] = int(f.get("kills_ours", 0)) + result.dead[1]
+	f["kills_theirs"] = int(f.get("kills_theirs", 0)) + result.dead[0]
+	var level := int(f.get("level", 1))
+	if result.winner == 0:
+		f["level"] = maxi(1, level - wr.feud_ambush_cools)
+		_say("The men of %s go home beaten%s; the feud cools a little." % [fam, (" with %d dead" % result.dead[1]) if result.dead[1] > 0 else ""])
+		c.band.log("beat off the men of %s who lay in wait for him" % fam)
+	elif result.winner == 1:
+		f["level"] = mini(3, level + 1)
+		_say("The men of %s had the better of it, and will be the bolder for it." % fam)
+		c.band.log("was set upon by the men of %s and had the worse of it" % fam)
+
+
+## A brawl at the Thing fought out: the case's footing changes with it.
+## Won, the other side has seen the band hold its ground among the booths:
+## they think the better of it, and a feud between them cools a step;
+## lost, the other way about.
+func _after_thing_brawl(ctx: Dictionary, result: BattleResult) -> void:
+	if result == null:
+		return
+	var wr := c.world_rules
+	var fam := str(ctx.get("family", ""))
+	var f := Feud.find(c.band, fam)
+	if result.winner == 0:
+		_shift(fam, wr.thing_brawl_won_standing)
+		if not f.is_empty():
+			f["level"] = maxi(1, int(f.get("level", 1)) - 1)
+			f["refusals"] = 0
+		_say("The Thing saw who held the field among the booths; %s speak the softer for it." % fam)
+	elif result.winner == 1:
+		_shift(fam, wr.thing_brawl_lost_standing)
+		if not f.is_empty():
+			f["level"] = mini(3, int(f.get("level", 1)) + 1)
+		_say("The Thing saw the band beaten among the booths; %s press the harder for it." % fam)
+
+
+## The band has burned a house in its hall (FightOffer.Choice.BURN): the
+## house halved and its head dead if he fell in the yard (Families.burned),
+## the band's honor and the houses tied to the burned one, the feud ended
+## with the head and begun again by the heir, and the Thing.
+func _after_burning(ctx: Dictionary, result: BattleResult) -> void:
+	var wr := c.world_rules
+	var fs := c.world.families
+	var band := c.band
+	var fam := str(ctx.get("family", ""))
+	if fam == "" and ctx.get("place", null) is Place:
+		fam = (ctx.place as Place).family
+	if fs == null or fs.house(fam) == null:
+		return
+	var h := fs.house(fam)
+	var built: Dictionary = ctx.get("built", {})
+	var head: Warrior = (built.battle as Battle).sworn_leader(1) if built.has("battle") else null
+	var head_fell := head != null and head.is_down()
+	var f := Feud.find(band, fam)
+	var burned_first := not f.is_empty() and str(f.get("cause", "")).contains("burning")
+	var lines := PackedStringArray()
+	fs.burned(wr, c.world, _fork("burned"), band, fam, head_fell, burned_first, lines)
+	for line in lines:
+		_say(line)
+	if head_fell and not f.is_empty():
+		f["settled"] = true
+		f["verdict"] = "burning"
+		f["mended"] = true
+		_vengeance()
+		var seat: Place = c.world.place(h.seat)
+		Feud.start(wr, band, fam, "the burning at %s" % (seat.display_name if seat != null else h.seat), h.seat, said)
+	if not burned_first and _fork("burning_thing").randf() < wr.burning_outlaw_chance:
+		_say("At the Thing the kin of %s bring the burning against %s, and the law finds for them." % [fam, band.leader.display_name])
+		Outlawry.declare(wr, band, c.cal, false, said)
+	c.tally.burnings = int(c.tally.get("burnings", 0)) + 1
+
+
+## A ship taken at sea (her deck cleared from stem to stern): the band
+## keeps her when she is the better hull (or it has none) and sells its old
+## one; else she is sold off. `offer_kind` names whose ship she was.
+func _take_prize(offer_kind: String) -> void:
+	var wr := c.world_rules
+	var band := c.band
+	var kind: int = wr.prize_hulls.get(offer_kind, WorldTypes.ShipKind.KARVE)
+	var name: String = WorldTypes.SHIP_NAMES[kind]
+	var who := band.leader.display_name
+	if band.ship == null or int(wr.ship_price[kind]) > int(wr.ship_price[band.ship.kind]):
+		var old := band.ship
+		band.ship = Ship.make(kind as WorldTypes.ShipKind)
+		var oz := roundi(int(wr.ship_price[old.kind]) * wr.ship_trade_in) if old != null else 0
+		band.silver += oz
+		_say("Her deck cleared, the %s is %s's prize; he takes her for his own%s." % [name, who,
+				(" and sells the old %s for %d oz" % [WorldTypes.SHIP_NAMES[old.kind], oz]) if old != null else ""])
+		band.log("%s took a %s at sea and made her his own" % [who, name])
+	else:
+		var oz2 := roundi(int(wr.ship_price[kind]) * wr.prize_sale_share)
+		band.silver += oz2
+		_say("Her deck cleared, the %s is %s's prize; she is sold off for %d oz." % [name, who, oz2])
+		band.log("%s took a %s at sea" % [who, name])
+	c.tally.prizes = int(c.tally.get("prizes", 0)) + 1

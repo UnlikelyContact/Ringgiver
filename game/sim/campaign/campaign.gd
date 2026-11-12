@@ -165,12 +165,20 @@ func fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attackin
 ## whether either side saw the other first. On land, when they come for
 ## you, your scout seeing them first makes an ambush yours; failing that,
 ## `caught_chance` makes it theirs.
+## `about` (from the map, Journey._offer_fight) says what the fight is over:
+## {cause, house, ships_here, can_burn, burning} (FightOffer), from which
+## each choice's stake is set (`stake`).
 func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, attacking: bool, stat_center := -1,
-		at_sea := false, cornered := false, ground := "") -> FightOffer:
+		at_sea := false, cornered := false, ground := "", about := {}) -> FightOffer:
 	tally.battles += 1
 	var o := FightOffer.new()
 	o.kind = kind
 	o.ground = ground
+	o.cause = str(about.get("cause", ""))
+	o.house = str(about.get("house", ""))
+	o.ships_here = bool(about.get("ships_here", false))
+	o.can_burn = bool(about.get("can_burn", false))
+	o.burning = bool(about.get("burning", false))
 	o.enemy_size = maxi(1, enemy_size)
 	o.enemy_tier = enemy_tier
 	o.attacking = attacking
@@ -205,12 +213,18 @@ func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, at
 		tier = CombatTypes.Tier.VETERAN
 	var sr := SimRng.new(o.seed_value).fork("scout")
 	# Only a band that comes to you can be caught on the march, by you or
-	# the other way about; your own raid is your own doing.
+	# the other way about; your own raid is your own doing. At your own
+	# hall a watchful scout can warn you in time to wait at the gate; nobody
+	# is caught on the march there.
 	if not at_sea and not cornered and not attacking:
 		o.we_know_first = Scouting.spots_first(sr.fork("first"), rules, wits, tier)
 		if not o.we_know_first and not foresight:
 			o.they_know_first = sr.fork("caught").randf() < rules.caught_chance
+	elif ground == "hall":
+		o.we_know_first = bool(about.get("warned", false))  # the scout warned you as they came (WinterHall)
 	o.report = Scouting.report(sr.fork("report"), rules, wits, tier, o)
+	for ch in [FightOffer.Choice.TAKE_THE_FIELD, FightOffer.Choice.WAIT_FOR_THEM, FightOffer.Choice.LAY_AMBUSH, FightOffer.Choice.BURN]:
+		o.stakes[ch] = str(stake(o, ch).text)
 	last_offer = o
 	return o
 
@@ -284,7 +298,21 @@ func build_fight(offer: FightOffer, choice: int) -> Dictionary:
 	var pick := {"doctrine": offer.doctrine}
 	var built: Dictionary
 	var template := ""
-	if offer.ground != "" and name != "ambush" and name != "ambushed":
+	var st := stake(offer, choice)
+	if choice == FightOffer.Choice.BURN:
+		built = Scenario.build_hall_burning(seed_in, combat_rules, {"ours": ours, "theirs": enemy})
+	elif offer.ground == "hall":
+		var how := "meet" if choice == FightOffer.Choice.TAKE_THE_FIELD else ("wait" if choice == FightOffer.Choice.LAY_AMBUSH else "bar")
+		built = Scenario.build_hall_defence(seed_in, combat_rules, {"ours": ours, "theirs": enemy}, offer.burning, how)
+	elif offer.ground == "sea":
+		# Both afloat: the hulls lashed together, the side that came on boarding.
+		built = Scenario.build_deck(seed_in, combat_rules, {"ours": ours, "theirs": enemy}, int(st.attacker), offer.doctrine)
+	elif offer.ground != "" and offer.cause != "" and name != "ambush" and name != "ambushed":
+		# What the fight is over (`stake`) sets the objective and the ground.
+		pick.objective = int(st.kind)
+		pick.attacker = int(st.attacker)
+		built = Scenario.build("equal_green", seed_in, combat_rules, true, fighters.size(), str(st.template), {"ours": ours, "theirs": enemy}, pick)
+	elif offer.ground != "" and name != "ambush" and name != "ambushed":
 		# The ground the map gives (FightOffer.ground): the field is built
 		# from where the band stands.
 		var held := choice == FightOffer.Choice.WAIT_FOR_THEM
@@ -329,16 +357,115 @@ func build_fight(offer: FightOffer, choice: int) -> Dictionary:
 		built = Scenario.build(name, seed_in, combat_rules, true, fighters.size(), "", {"ours": ours, "theirs": enemy}, pick)
 	var battle: Battle = built.battle
 	var ours_aggressive := offer.attacking or choice == FightOffer.Choice.LAY_AMBUSH
-	if choice == FightOffer.Choice.WAIT_FOR_THEM:
+	if choice == FightOffer.Choice.WAIT_FOR_THEM or choice == FightOffer.Choice.BURN:
 		ours_aggressive = false
+	if offer.ground == "hall":
+		ours_aggressive = choice == FightOffer.Choice.TAKE_THE_FIELD
 	battle.set_ai(0, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE if ours_aggressive else LeaderAI.Doctrine.STEADY))
-	if offer.they_know_first or choice == FightOffer.Choice.WAIT_FOR_THEM:
+	if (offer.they_know_first or choice == FightOffer.Choice.WAIT_FOR_THEM) and choice != FightOffer.Choice.BURN:
 		battle.set_ai(1, LeaderAI.new(LeaderAI.Doctrine.AGGRESSIVE))
+	# His luck goes with him into the fight, when he is in it.
+	if stallari == null and offer.cause != "":
+		battle.set_luck(0, Leader.luck_modifier(rules, band))
 	built.fighters = fighters
+	built.house = offer.house
+	built.stake = st
 	built.choice = choice
 	built.odds = float(fighters.size()) / maxf(1.0, float(offer.enemy_size))  # ours over theirs
 	built.war_leader = stallari.id if stallari != null else -1
 	return built
+
+
+## What a choice's fight is over (concept.md, "Raids and skirmishes ...
+## with objectives"), from the offer's cause and ground: {kind (an
+## Objective.Kind, or -1 for an open field), attacker (the side that must
+## come on), template (Field), text (a line for the offer, "" when there is
+## nothing to take or hold)}. The ground decides first (your hall at night,
+## the deck at sea, the Thing's booths), then the cause: a raid on a
+## steading is its silver against the neighbours' coming, the farmers you
+## stand with hold their yard, the ship-thieves have your ship, a robbery
+## on land is the cargo, a fight on the strand where your ship lies is the
+## ships; then the ground you chose to wait on, as before.
+func stake(offer: FightOffer, choice: int) -> Dictionary:
+	var cr := combat_rules
+	var out := {"kind": -1, "attacker": 0, "template": "", "text": ""}
+	if offer.they_know_first or (choice == FightOffer.Choice.LAY_AMBUSH and offer.ground != "hall"):
+		return out
+	var held := choice == FightOffer.Choice.WAIT_FOR_THEM
+	if choice == FightOffer.Choice.BURN:
+		out.kind = Objective.Kind.ESCAPE
+		out.attacker = 1
+		out.text = "Ring the hall in the dark and let none of their fighting men through the fire; the women and children go free"
+		return out
+	match offer.ground:
+		"hall":
+			out.attacker = 1
+			out.kind = Objective.Kind.FIRE if offer.burning else Objective.Kind.THE_HALL
+			out.text = ("They come with fire: drive them from the walls before the roof takes (%d rounds of fire)" % cr.fire_rounds) if offer.burning \
+					else "They mean to take the hall: hold the door and the yard, %d rounds from contact" % cr.objective_hall_rounds
+			return out
+		"sea":
+			out.kind = Objective.Kind.DECK
+			out.attacker = 0 if offer.attacking else 1
+			out.text = ("Lash the hulls together, board her and clear her deck from stem to stern, about %d rounds from contact" % cr.objective_deck_rounds) if offer.attacking \
+					else "They will lash on and board: keep them off your deck, or cut loose"
+			return out
+		"thing":
+			out.template = "meadow"
+			return out
+		"strand":
+			out.template = "meadow"
+		"farm":
+			out.template = "farmstead"
+		"hills":
+			out.template = "hillside"
+	if choice == FightOffer.Choice.TAKE_THE_FIELD:
+		match offer.cause:
+			"raid":
+				if offer.ground == "farm":
+					out.kind = Objective.Kind.PLUNDER
+					out.attacker = 0
+					out.text = "Take the hall before their neighbours come: about %d rounds from contact" % cr.objective_plunder_rounds
+					return out
+			"defend":
+				out.kind = Objective.Kind.THE_HALL
+				out.attacker = 1
+				out.template = "farmstead"
+				out.text = "Hold the yard with its farmers, %d rounds from contact" % cr.objective_hall_rounds
+				return out
+			"thieves":
+				out.kind = Objective.Kind.REACH_THE_SHIPS
+				out.attacker = 0
+				out.template = "meadow"
+				out.text = "Your ship is drawn up behind them: win through to her, %d rounds from contact" % cr.objective_ships_rounds
+				return out
+			"rob":
+				out.kind = Objective.Kind.CARGO
+				out.attacker = 0
+				out.template = "meadow"
+				out.text = "Get to the cargo before they make off with it, %d rounds from contact" % cr.objective_ships_rounds
+				return out
+		if offer.ground == "strand" and offer.ships_here:
+			out.kind = Objective.Kind.REACH_THE_SHIPS
+			out.attacker = 0 if offer.attacking else 1
+			out.text = ("Their ships are drawn up on the strand: get to them, %d rounds from contact" % cr.objective_ships_rounds) if offer.attacking \
+					else "Your ship lies on the strand behind you: keep them from her, %d rounds from contact" % cr.objective_ships_rounds
+			return out
+		return out
+	if held:
+		out.attacker = 1
+		match offer.ground:
+			"farm":
+				out.kind = Objective.Kind.THE_HALL
+				out.text = "Hold the hall, %d rounds from contact" % cr.objective_hall_rounds
+			"hills":
+				out.kind = Objective.Kind.HOLD_GROUND
+				out.text = "Hold the high bank, %d rounds from contact" % cr.objective_ford_rounds
+			_:
+				out.kind = Objective.Kind.HOLD_GROUND
+				out.template = "river"
+				out.text = "Keep them off the ford, %d rounds from contact" % cr.objective_ford_rounds
+	return out
 
 
 ## The war-leader when he leads the wall in the leader's place: named, the
@@ -412,6 +539,34 @@ func build_escape(leader_name := "") -> Dictionary:
 	return built
 
 
+## Out of the band's own burning hall (WinterHall, the roof taken): the
+## leader and his men break out through the door into the ring of `left`
+## of `against`'s men (Scenario.build_breakout, the escape as a fight of
+## the saga: the leader is not spared). Returns `build_fight`'s
+## dictionary with its `offer` (at the ground "hall", cause "breakout").
+func build_breakout(against: String, left: int, tier: int) -> Dictionary:
+	var offer := offer_fight("the fire at the hall", tier as CombatTypes.Tier, left, false, -1, false, true, "hall",
+			{"cause": "breakout", "house": against})
+	var fighters := band.fighters(rules)
+	if fighters.size() > MAX_FIGHTERS:
+		fighters = fighters.slice(0, MAX_FIGHTERS)
+	var ours: Array[Warrior] = []
+	for m in fighters:
+		ours.append(m.to_warrior(0, rules, 0))
+	var seed_in := offer.seed_value
+	var theirs := BandFactory.make_mixed_band(SimRng.new(seed_in).fork("burners"), 1, maxi(1, left - left / 4), left / 4, 0,
+			tier as CombatTypes.Tier, combat_rules, CombatTypes.Armor.NONE, 3, ENEMY_FIRST_ID)
+	var built := Scenario.build_breakout(seed_in, combat_rules, {"ours": ours, "theirs": theirs, "leader_name": against.trim_suffix("'s kin")})
+	(built.battle as Battle).set_luck(0, Leader.luck_modifier(rules, band))
+	built.fighters = fighters
+	built.choice = FightOffer.Choice.TAKE_THE_FIELD
+	built.odds = float(fighters.size()) / maxf(1.0, float(theirs.size()))
+	built.house = against
+	built.offer = offer
+	built.stake = {"kind": Objective.Kind.ESCAPE, "attacker": 0, "template": "", "text": "Get out through their ring into the dark"}
+	return built
+
+
 ## What the fight left: growth, wounds, deaths, loot, a man who asks to
 ## join (Aftermath); grief and oaths (Bonds); luck, fame and the flat
 ## plunder of a win (Leader, not for a duel); succession if the leader
@@ -461,8 +616,12 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 	Bonds.after_battle(rules, band, survivors, fallen, log)
 	rules.bond_fought_together = fought
 	var killer := enemy[0].display_name
+	# On the map a vengeance is opened against the house the killers belong
+	# to, or none (raiders, outlaws: a grudge, not a feud); the plain
+	# campaign keeps its old ways (Bonds.on_death).
+	var house: String = str(built.get("house", "")) if world != null else Bonds.OLD_WAYS
 	for m in fallen:
-		Bonds.on_death(rules, band, m, killer, log)
+		Bonds.on_death(rules, band, m, killer, log, house)
 		if m != band.leader:
 			band.remove_man(m)
 
@@ -470,14 +629,22 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 	# these: the saga begins there, it is not judged by it.
 	if not is_duel and not is_escape:
 		var fame_before := band.fame
-		Leader.on_battle(rules, band, won, true, built.odds, log, outcome)
+		var luck_before := band.luck
+		var front := led_from_front(built, result)
+		Leader.on_battle(rules, band, won, front, built.odds, log, outcome)
 		# Under the war-leader the fight is his as much as the leader's.
 		if int(built.get("war_leader", -1)) >= 0 and band.fame > fame_before:
 			band.fame -= (band.fame - fame_before) - roundi((band.fame - fame_before) * rules.war_leader_fame_share)
+		if offer != null and offer.cause != "":
+			var tl: PackedStringArray = told.lines
+			tl.append_array(luck_lines(front, luck_before))
+			told.lines = tl
 	if won and not is_duel and not is_escape:
 		_summer_wins += 1
 		tally.wins += 1
 		var flat := rules.plunder_per_win if world == null else rules.plunder_per_win_world
+		# A raid that had the field but never stood in the hall goes with less.
+		flat = roundi(flat * plunder_share(result))
 		band.silver += flat
 		Loyalty.share_plunder(rules, band, flat, rules.fair_leader_share, log)
 		for m in band.living_men():
@@ -486,6 +653,51 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 	if band.leader != null and not band.leader.alive:
 		succession("battle")
 	return told
+
+
+## Whether the leader stood in the front rank (concept.md, "Your
+## character"): in a fight where his men came to blows, he spent
+## `front_contact_rounds` rounds at arm's length of the enemy, or struck a
+## blow, or went down. When the war-leader leads the wall in his place he
+## is honestly not there (his share of the fame is less already), and a
+## fight nobody closed in hangs nobody back.
+func led_from_front(built: Dictionary, result: BattleResult) -> bool:
+	if int(built.get("war_leader", -1)) >= 0 or band.leader == null:
+		return true
+	var mine: Warrior = null
+	var blows := false
+	for w: Warrior in built.ours:
+		if w.id == band.leader.id:
+			mine = w
+		if w.contact_rounds > 0 or w.strikes > 0:
+			blows = true
+	if mine == null or not blows:
+		return true
+	return mine.is_down() or mine.strikes > 0 or mine.contact_rounds >= rules.front_contact_rounds
+
+
+## What the men say of their leader's luck after a fight of the saga, in
+## the result's words: "the men say his luck holds", or that he hung back.
+func luck_lines(front: bool, luck_before: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	var who := band.leader.display_name if band.leader != null else "The leader"
+	if not front:
+		out.append("Men saw %s keep back from the shield-wall, and they speak of it." % who)
+	if band.luck > luck_before:
+		out.append("The men say %s's luck holds." % who if band.luck < rules.luck_high else "The men say %s's luck is a thing to follow." % who)
+	elif band.luck < luck_before:
+		out.append("The men mutter that %s's luck is turning." % who if band.luck > rules.luck_low else "The men say %s's luck has left him." % who)
+	return out
+
+
+## The share of a won fight's plunder the band carries off: all of it,
+## but for a raid on a steading that had the field when the neighbours
+## came and never stood in the hall (Objective.Kind.PLUNDER, not taken).
+func plunder_share(result: BattleResult) -> float:
+	if result.objective_kind == Objective.Kind.PLUNDER and result.winner == 0 and not result.taken \
+			and result.how != BattleResult.End.ROUT:
+		return rules.raid_late_share
+	return 1.0
 
 
 ## This year's part of each man's fight, for the ring-giving: the fight

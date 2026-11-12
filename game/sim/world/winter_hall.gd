@@ -68,6 +68,16 @@ var verse := PackedStringArray()
 var spring_to := ""
 var given := {}  # man id -> what he was given, in words
 var _facts := {}
+# A fight at the hall played on the battle screen (Journey.fight): the
+# winter's living-through stops at the talk card that brought it and goes
+# on from `Journey.fight_done` (`hall_fight_done`). `_talk_at` is the next
+# card, `_held` what the first half of `resolve` left for the second.
+var _talk_at := 0
+var _held := {}
+## The roof is alight over the band (a burning lost at the walls): the
+## choice the sagas give waits here, {against, left, tier} (`fire:out`,
+## break out through the door; `fire:hold`, hold and burn). Empty else.
+var fire := {}
 
 
 # --- The start -------------------------------------------------------------------
@@ -100,6 +110,8 @@ static func open(j: Journey, p: Place) -> WinterHall:
 			continue  # the houses offer their daughters by name (`_house_cards`)
 		var card := WinterEvents.card(r.fork("card:" + kind), c.rules, band, kind)
 		if not card.is_empty():
+			if kind in WinterEvents.FEUD_KINDS:
+				_hall_fight_card(c, r.fork("warned:" + kind), card)
 			h.talk.append(card)
 	h.talk.append(_vow_card(c))
 	h._facts = h._year_facts(c)
@@ -164,6 +176,27 @@ static func _about(rules: CampaignRules, m: Man, ask: int) -> String:
 ## A house's ask that belongs to the winter: a daughter to marry, a son to
 ## foster (Families.asks). A marriage is not offered in the winter of a
 ## year a house offered one in the spring.
+## A house's men coming for the hall by night (the feud's spears in the
+## snow, the fire in the night): the leader's choices are the hall's
+## (FightOffer at the ground "hall"), fought on the battle screen
+## (`_hall_fight`). A watchful scout may warn him in time to wait at the
+## gate (`warned`).
+static func _hall_fight_card(c: Campaign, r: SimRng, card: Dictionary) -> void:
+	var scout := Scouting.pick_scout(c.band.fighters(c.rules))
+	var warned := scout != null and Scouting.spots_first(r, c.rules, scout.stat(CombatTypes.Stat.WITS), scout.tier)
+	card.warned = warned
+	var burning := str(card.kind) == "hall_burning"
+	var opts: Array = [
+		{"id": "meet", "label": "Out, and meet them in the yard", "hint": "Your line up the yard, between them and the walls."},
+		{"id": "bar", "label": "Bar the door and hold the walls" if burning else "Bar the door and hold the yard",
+				"hint": "Your line before the door, the hall at your backs: nowhere to give ground."}]
+	if warned:
+		opts.append({"id": "wait", "label": "Lie in wait at the gate", "hint": "Your scout saw them coming: catch them strung out."})
+	card.options = opts
+	if warned:
+		card.text = str(card.text) + " Your scout saw them coming."
+
+
 static func _house_cards(j: Journey, r: SimRng) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var c := j.c
@@ -265,6 +298,8 @@ func default_choice(j: Journey, card: Dictionary) -> String:
 			return "settle" if j.c.band.silver >= 2 * j.c.rules.settle_quarrel_ounces + 20 else "for_a"
 		"thrall_unrest":
 			return "let"
+		"feud_attack", "hall_burning":
+			return "wait" if card.get("warned", false) else "meet"
 	for o in opts:
 		if j.c.band.silver + int(o.get("silver", 0)) >= 0:
 			return str(o.id)
@@ -488,6 +523,10 @@ func choose(j: Journey, id: String) -> void:
 	var parts := id.split(":")
 	var key := parts[0]
 	var arg := ":".join(parts.slice(1)) if parts.size() > 1 else ""
+	if not fire.is_empty():
+		if key == "fire":
+			_fire_choice(j, arg, true)
+		return
 	if resolved:
 		match key:
 			"invest":
@@ -687,23 +726,58 @@ func resolve(j: Journey) -> void:
 		band.food += grain(j) * rules.grain_rations
 		lines.append("The grain in the hold went to the store: %d rations." % (grain(j) * rules.grain_rations))
 		band.cargo.erase(WorldTypes.Good.GRAIN)
-	# The hall's talk.
-	var vow := ""
-	for card in talk:
+	# The hall's talk. A fight at the hall played on the battle screen
+	# stops it here; the rest is done when that fight is over.
+	_held = {"mark": mark, "chron": chron, "said_mark": said_mark, "lines": lines, "away": away, "vow": ""}
+	_talk_at = 0
+	_talk(j)
+
+
+## True while the winter waits on a fight at the hall (the battle screen)
+## or on the choice in the burning hall.
+func paused(j: Journey) -> bool:
+	return not fire.is_empty() or (not _held.is_empty() and not j.fight.is_empty())
+
+
+## The hall's talk from the card `_talk_at` on, then the rest of the winter.
+func _talk(j: Journey) -> void:
+	var c := j.c
+	var band := c.band
+	var rules := c.rules
+	var r := c.rng.fork("hall_resolve:%d" % year)
+	while _talk_at < talk.size():
+		var card: Dictionary = talk[_talk_at]
+		_talk_at += 1
 		var choice := str(card.get("choice", ""))
 		match str(card.kind):
 			"vow":
 				if choice.begins_with("vow:"):
-					vow = VOWS[clampi(int(choice.trim_prefix("vow:")), 0, VOWS.size() - 1)]
+					_held.vow = VOWS[clampi(int(choice.trim_prefix("vow:")), 0, VOWS.size() - 1)]
 			"house":
 				j._answer_house(card.ask, choice)
 			_:
-				var ev := WinterEvents.resolve(r.fork("talk:" + str(card.kind)), rules, band, c.cal, card, choice, band.ship, log)
-				_after_talk(j, ev)
+				var ev := WinterEvents.resolve(r.fork("talk:" + str(card.kind)), rules, band, c.cal, card, choice, band.ship, c.log)
+				_after_talk(j, ev, choice, bool(card.get("warned", false)))
 				if c.over:
 					break
-	for i in range(said_mark, j.said.size()):
+				if paused(j):
+					return  # the battle screen has it; `hall_fight_done` goes on
+	_live_through(j)
+
+
+## The second half of `resolve`: the ring-giving, the four turns and the
+## thaw, and the telling.
+func _live_through(j: Journey) -> void:
+	var c := j.c
+	var mark: int = _held.mark
+	var chron: int = _held.chron
+	var lines: PackedStringArray = _held.lines
+	for i in range(int(_held.said_mark), j.said.size()):
 		lines.append(j.said[i])
+	var away: Array[Man] = []
+	away.assign(_held.away)
+	var vow: String = _held.vow
+	_held = {}
 	if c.over:
 		_tell(j, mark, chron, lines)
 		return
@@ -720,7 +794,7 @@ func resolve(j: Journey) -> void:
 
 ## What a resolved card leaves for the loop: fame and honor, an outlaw
 ## taken in, a marriage, a fight at the door.
-func _after_talk(j: Journey, ev: Dictionary) -> void:
+func _after_talk(j: Journey, ev: Dictionary, choice := "meet", warned := false) -> void:
 	var c := j.c
 	var band := c.band
 	if ev.is_empty():
@@ -743,11 +817,7 @@ func _after_talk(j: Journey, ev: Dictionary) -> void:
 			pot.append(clampi(c.rules.cap_mean + mr.randi_range(-c.rules.cap_spread, c.rules.cap_spread), 1, 10))
 		Family.marry(c.rules, band, "a daughter of %s" % ev.marriage_offer, pot, mr.randi_range(1, c.rules.household_skill_max), str(ev.marriage_offer), c.log)
 	if ev.has("battle_required"):
-		# Hall fights are told by the saga for now. A later hook: hand this
-		# to the battle screen (Journey.fight) and resume `resolve` after.
-		var br: Dictionary = ev.battle_required
-		c.tally.hall_fights += 1
-		c.fight(str(br.kind), br.tier, int(br.attackers), false, -1, false, true)
+		_hall_fight(j, ev.battle_required, choice, warned)
 
 
 ## The ring-giving: each gift taken from the chest and given; a deed
@@ -977,6 +1047,9 @@ func state(j: Journey) -> Dictionary:
 			"food": c.band.food, "food_end": food_end(j) if not resolved else c.band.food,
 			"need": food_need(j), "men": staying(j).size() if not resolved else c.band.living_men().size(),
 			"seats": hall.seats + c.rules.benches_seats * int(build.get(CampaignTypes.Building.BENCHES, 0))}
+	if not fire.is_empty():
+		_state_fire(j, s)
+		return s
 	match STEPS[step]:
 		"store":
 			_state_store(j, s)
@@ -1217,3 +1290,151 @@ func _state_spring(j: Journey, s: Dictionary) -> void:
 		s.rows.append(_row(Journey._cap(str(d.name)), "%d days over the hills at the thaw%s." % [int(d.days),
 				"; your ship stays where she lies" if j.c.band.ship != null and j.roam.aboard else ""], "chosen" if on else "",
 				[_btn("spring:" + str(d.id), "Begin there", true, on)]))
+
+
+# --- A fight at the hall (docs/design/notes/saga-fights.md) ----------------------------
+
+## A house's men at the hall by night: the fight at the ground "hall"
+## (Scenario.build_hall_defence) as the leader chose on the talk card. In
+## the winter the player plays (`Journey.stepped_winter`, not `quick`) it
+## goes to the battle screen through `Journey.fight` and the winter waits
+## (`paused`); otherwise the leader AIs fight it out at once.
+func _hall_fight(j: Journey, br: Dictionary, how: String, warned: bool) -> void:
+	var c := j.c
+	c.tally.hall_fights += 1
+	var burning := str(br.kind) == "hall_burning"
+	var against := str(br.get("against", ""))
+	var offer := c.offer_fight(str(br.kind), br.tier, Sandbox._forced(c, int(br.attackers)), false, -1, false, true, "hall",
+			{"cause": "hall", "house": against, "burning": burning, "warned": warned})
+	var choice: int = {"meet": FightOffer.Choice.TAKE_THE_FIELD, "bar": FightOffer.Choice.WAIT_FOR_THEM,
+			"wait": FightOffer.Choice.LAY_AMBUSH}.get(how, FightOffer.Choice.TAKE_THE_FIELD)
+	var built := c.build_fight(offer, choice)
+	var ctx := {"kind": "hall", "burning": burning, "against": against, "tier": int(br.tier)}
+	_play_or_tell(j, offer, built, ctx)
+
+
+## Hands a fight to the battle screen in the played winter, or fights it
+## with the leader AIs now and goes on.
+func _play_or_tell(j: Journey, offer: FightOffer, built: Dictionary, ctx: Dictionary) -> void:
+	var c := j.c
+	var battle: Battle = built.battle
+	if j.stepped_winter and not j.quick:
+		battle.clear_ai(0)
+		j.fight = {"offer": offer, "built": built, "ctx": ctx}
+		return
+	if str(ctx.kind) == "breakout":
+		# The careful way out, as the escape is told (Journey.skip_escape).
+		battle.clear_ai(0)
+		while not battle.is_over() and battle.round < battle.rules.max_rounds:
+			if battle.can_withdraw(0) and battle.withdraw(0):
+				break
+			battle.set_shout(0, Objective.escape_order(battle, 0))
+			battle.run_round()
+	if not battle.is_over():
+		battle.run()
+	var told := c.conclude_fight(offer, built, battle.result)
+	for line in told.lines:
+		j._say(line)
+	hall_fight_done(j, ctx, built, battle.result, false)
+
+
+## A fight at the hall is over (from `Journey.fight_done` when it was
+## played, `resume` true: the winter then goes on from here; or at once,
+## inside the talk): what it did to the hall and the household, and the
+## burning's choice when the roof took.
+func hall_fight_done(j: Journey, ctx: Dictionary, built: Dictionary, result: BattleResult, resume := true) -> void:
+	var c := j.c
+	var band := c.band
+	var who := band.leader.display_name if band.leader != null else "The band"
+	var against := str(ctx.get("against", ""))
+	var won := result.winner == 0
+	match str(ctx.kind):
+		"hall":
+			if won:
+				j._say("The men of %s are beaten off from the hall%s." % [against, ", and the fire is put out" if ctx.burning else ""])
+				band.log("beat off %s's men from the hall at %s" % [against, place_name])
+			elif ctx.burning:
+				_hall_burned(j)
+				if band.leader != null and band.leader.alive and not c.over:
+					var left := 0
+					for w: Warrior in built.theirs:
+						if w.is_active() and not w.broken:
+							left += 1
+					fire = {"against": against, "left": maxi(3, left), "tier": int(ctx.get("tier", 1))}
+					if not (j.stepped_winter and not j.quick):
+						_fire_choice(j, "out", false)  # the leader AI breaks out
+					return
+			elif result.taken or result.winner == 1:
+				var lost := roundi(band.food * c.rules.hall_plundered_food)
+				band.food -= lost
+				j._say("The men of %s break into the hall and carry off %d of the store." % [against, lost])
+				band.log("%s's men broke into the hall at %s" % [against, place_name])
+		"breakout":
+			if band.leader != null and band.leader.alive:
+				j._say("%s comes out through the fire and the ring of %s's men into the dark." % [who, against])
+			band.log("%s's hall at %s was burned by %s" % [who, place_name, against])
+	if resume and not paused(j) and not _held.is_empty():
+		_talk(j)
+
+
+## The roof has taken: what the fire takes from the hall. The household
+## is let out first, as the burners must (and they do): the wife, the
+## children and the thralls live. The buildings and the store burn.
+func _hall_burned(j: Journey) -> void:
+	var c := j.c
+	var band := c.band
+	var hall := Hall.ensure(band, c.rules)
+	var lost := hall.buildings.size()
+	hall.buildings.clear()
+	hall.seats = c.rules.hall_base_seats
+	band.food = 0
+	j._say("The roof takes fire. The women, the children and the thralls are let out first; the household lives.")
+	j._say("The hall burns%s, and the store with it." % ((", with its %d buildings" % lost) if lost > 0 else ""))
+
+
+## The choice in the burning hall: `out`, break out through the door into
+## their ring (Scenario.build_breakout: the leader may die there), or
+## `hold`, stay and burn with the men who will not leave him; the rest go
+## out with the household.
+func _fire_choice(j: Journey, what: String, resume: bool) -> void:
+	var c := j.c
+	var band := c.band
+	if fire.is_empty():
+		return
+	var f := fire
+	fire = {}
+	if what == "hold":
+		var who := band.leader.display_name
+		var with_him := PackedStringArray()
+		for m in band.living_men():
+			if m.loyalty >= c.rules.hold_burn_loyalty:
+				with_him.append(m.display_name)
+				m.alive = false
+				band.remove_man(m)
+		j._say("%s will not go out to be cut down in the yard. He lies down in his bed%s, and the roof falls on them." % [
+				who, (" with %s" % ", ".join(with_him)) if not with_him.is_empty() else ""])
+		band.log("%s was burned in his hall at %s by %s%s" % [who, place_name, f.against, (", and %s with him" % ", ".join(with_him)) if not with_him.is_empty() else ""])
+		band.leader.alive = false
+		c.succession("battle")
+		if resume and not _held.is_empty():
+			_talk(j)
+		return
+	var built := c.build_breakout(str(f.against), int(f.left), int(f.tier))
+	var ctx := {"kind": "breakout", "against": str(f.against)}
+	_play_or_tell(j, built.offer, built, ctx)
+
+
+## The roof is alight: the saga's choice, two buttons and no going on
+## until one is pressed.
+func _state_fire(j: Journey, s: Dictionary) -> void:
+	var who := j.c.band.leader.display_name
+	s.title = "Fire in the night"
+	s.can_back = false
+	s.can_next = false
+	s.next_label = "Choose"
+	s.text = "The roof of the hall is burning over %s's head, and %d of %s's men stand round the door in the firelight. The women, the children and the thralls have been let out." % [
+			who, int(fire.left), str(fire.against)]
+	s.rows.append(_row("Break out", "Out through the door into their ring, and make for the dark. A man may die in the yard.", "",
+			[_btn("fire:out", "Break out through the door")]))
+	s.rows.append(_row("Hold and burn", "Lie down in the hall as Njal did, with the men who will not leave you; the rest go out with the household.", "",
+			[_btn("fire:hold", "Hold, and burn")]))

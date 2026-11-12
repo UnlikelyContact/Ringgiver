@@ -110,6 +110,9 @@ static func _answer(j: Journey, d: Dictionary, bent: int) -> String:
 			var offer: FightOffer = d.offer
 			if offer.they_know_first:
 				return str(FightOffer.Choice.TAKE_THE_FIELD)
+			# The berserk takes the darkest road to his vengeance: the burning.
+			if bent == Way.Id.BERSERK and offer.allows(FightOffer.Choice.BURN) and offer.house == band.vengeance:
+				return str(FightOffer.Choice.BURN)
 			return str(Sandbox.choose_fight(offer))
 		"spine":
 			for o in d.options:

@@ -315,8 +315,11 @@ func test_the_ground_decides_the_choices_and_the_field() -> void:
 	var at_farm := c.build_fight(farm, FightOffer.Choice.WAIT_FOR_THEM)
 	assert_eq((at_farm.objective as Objective).kind, Objective.Kind.THE_HALL, "the hall to hold")
 	var sea := c.offer_fight("x", CombatTypes.Tier.GREEN, 6, false, 3, true, false, "sea")
-	var on_strand := c.build_fight(sea, FightOffer.Choice.TAKE_THE_FIELD)
-	assert_eq((on_strand.objective as Objective).kind, Objective.Kind.REACH_THE_SHIPS, "fought out by the ships")
+	var on_deck := c.build_fight(sea, FightOffer.Choice.TAKE_THE_FIELD)
+	# Both afloat: the hulls lashed together (saga-fights.md; it was the
+	# strand by the ships before the deck was built).
+	assert_eq((on_deck.objective as Objective).kind, Objective.Kind.DECK, "fought out on the decks")
+	assert_eq(str(on_deck.field_name), "deck")
 	assert_true(sea.brief().contains("aboard"))
 
 
