@@ -33,6 +33,7 @@ var _seen := ""  # what the panel was last drawn for, so it is redrawn only on a
 func setup(p_journey: Journey, p_host: Node) -> void:
 	journey = p_journey
 	host = p_host
+	journey.stepped_winter = true  # the winter is played in the hall (WinterScreen)
 	selected = journey.c.band.location
 	canvas = MapCanvas.new()
 	canvas.screen = self
@@ -216,6 +217,9 @@ func refresh() -> void:
 		return
 	if not journey.fight.is_empty():
 		host.start_battle()
+		return
+	if journey.in_winter():
+		WinterScreen.show_on(self, journey)
 		return
 	var band := journey.c.band
 	if selected != "" and (journey.c.world.place(selected) == null or not band.knows(selected)):
