@@ -643,7 +643,7 @@ repetitive or exploitable, most of it before the fixes above:
 
 ## Tests
 
-`tests/test_balance.gd` (new, 15 tests): the slave market fills and mends;
+`tests/test_balance.gd` (new, 17 tests): the slave market fills and mends;
 captives a burden and selling costs honor; kin ransom only their own; luck
 crests (and by chance on the map) and drifts back; benches and thwarts are
 the ceiling (hiring greyed with why, no lent men past it); the stand-in
@@ -652,7 +652,8 @@ heir's honest answers; the challenge is no foregone loss (the stand-in heir
 over twelve seeds); the benches judge by the chest; an outlaw's land forfeit
 or held by kin; the stand-in outlaw seeks his peace; the vengeance outlook;
 the king judges for his great man; the hall warns when the band outgrows its
-boat.
+boat; the saga tells oaths by the count and no line twice; no going where
+he already is.
 
 Pinned numbers changed in other files:
 - `test_unfree.gd::test_sold_abroad_costs_standing_and_a_named_woman_honor`:
@@ -665,7 +666,7 @@ Pinned numbers changed in other files:
   marriage (a fostering house's call now waits) and is not crowded out by
   fosterlings (`asks_per_summer` 10).
 
-The suite: `582 tests, 0 failed`, 5 min 22 s on this machine (others'
+The suite: `583 tests, 0 failed`, 5 min 16 s on this machine (others'
 batches were running on it; the brief's "about 9 minutes" was not measured
 here). `test_balance.gd` adds about 10 s, most of it two tests that play a
 year with the stand-in. No slow test was made cheaper.
