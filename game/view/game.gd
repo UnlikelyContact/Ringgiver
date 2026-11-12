@@ -22,6 +22,9 @@ const CONFIG_PATH := "user://ringgiver.cfg"
 ## Tools set this to keep the player's config out of a run.
 var use_config := true
 var _escape_done_override := -1
+## The last saga that came to an end (Chronicle.saga's values), for the
+## title's "Read the last saga"; kept in the config between visits.
+var last_saga := {}
 
 
 func _ready() -> void:
@@ -109,6 +112,11 @@ func show_title() -> void:
 	var skirmish := UiTheme.secondary("A single fight", start_skirmish, 220.0)
 	skirmish.tooltip_text = "The battle on its own: a band, a field, an enemy"
 	row.add_child(skirmish)
+	if not saved_saga().is_empty():
+		var read := UiTheme.secondary("Read the last saga", show_last_saga, 220.0)
+		read.name = "ReadLastSaga"
+		read.tooltip_text = "The saga that ended last, told from its beginning"
+		row.add_child(read)
 	var stamp := UiTheme.label("build " + UiTheme.build_stamp(), "KeyLabel", false)
 	stamp.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	stamp.grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -222,6 +230,39 @@ func remember_escape() -> void:
 	cfg.load(CONFIG_PATH)  # missing is fine: a new file
 	cfg.set_value("tutorial", "escape_done", true)
 	cfg.save(CONFIG_PATH)
+
+
+## Keeps an ended saga for the title (the config, or this visit only when
+## the tools keep the config out).
+func remember_saga(saga: Dictionary) -> void:
+	last_saga = saga
+	if not use_config:
+		return
+	var cfg := ConfigFile.new()
+	cfg.load(CONFIG_PATH)  # missing is fine: a new file
+	cfg.set_value("saga", "last", saga)
+	cfg.save(CONFIG_PATH)
+
+
+func saved_saga() -> Dictionary:
+	if not last_saga.is_empty() or not use_config:
+		return last_saga
+	var cfg := ConfigFile.new()
+	if cfg.load(CONFIG_PATH) != OK:
+		return {}
+	var v: Variant = cfg.get_value("saga", "last", {})
+	return v if v is Dictionary else {}
+
+
+## The last saga told, over the title (SagaScreen).
+func show_last_saga() -> void:
+	var told := saved_saga()
+	if told.is_empty() or screen == null:
+		return
+	var m := UiModal.new()
+	m.max_width = 1000.0
+	screen.add_child(m)
+	SagaScreen.fill(m, told, [["Back", func() -> void: m.queue_free(), "PrimaryButton"]])
 
 
 # --- Another beginning -------------------------------------------------------------

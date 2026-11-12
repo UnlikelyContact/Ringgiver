@@ -57,6 +57,7 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	journey = p_journey
 	host = p_host
 	journey.stepped_winter = true  # the winter is played in the hall (WinterScreen)
+	journey.played_succession = true  # a death is the death card and the grave-ale
 	selected = journey.c.band.location
 	canvas = MapCanvas.new()
 	canvas.screen = self
@@ -113,10 +114,10 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	log_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	log_label.resized.connect(_skip_log)
 	_log_box.add_child(log_label)
-	var book := UiIconButton.new("book", "The chronicle: everything told so far")
+	var book := UiIconButton.new("book", "The saga: everything told so far")
 	book.custom_minimum_size = Vector2(46, 46)
 	book.size_flags_vertical = Control.SIZE_SHRINK_END
-	book.pressed.connect(_show_chronicle)
+	book.pressed.connect(_show_saga)
 	_log_box.add_child(book)
 	resized.connect(_place_log)
 
@@ -302,8 +303,8 @@ func _process(delta: float) -> void:
 
 ## What the right-hand panel depends on: redrawn when this changes.
 func _state_key() -> String:
-	return "%s|%d|%s|%s|%d|%s" % [journey.c.band.location, journey.decisions.size(), journey.moving(), selected,
-			journey.winter_report.size(), journey.c.over]
+	return "%s|%d|%s|%s|%d|%s|%d" % [journey.c.band.location, journey.decisions.size(), journey.moving(), selected,
+			journey.winter_report.size(), journey.c.over, journey.years_told.size()]
 
 
 # --- Reading the journey ---------------------------------------------------------
@@ -511,13 +512,15 @@ func _fill_modal() -> void:
 	modal.clear()  # still shown, if it was: a new matter does not flash it
 	var c := journey.c
 	if c.over:
-		modal.open("The saga of %s is ended" % Way.title(c.band))
-		var told := PackedStringArray()
-		for line in c.band.chronicle.slice(maxi(0, c.band.chronicle.size() - 12)):
-			told.append(line)
-		modal.body.add_child(UiTheme.label("%s." % Journey._cap(c.over_reason), "StrongLabel"))
-		modal.body.add_child(_parchment("\n".join(told)))
-		modal.add_button("Another saga", func() -> void: host.show_title(), "PrimaryButton", 220.0)
+		_show_ending()
+		return
+	if not journey.years_told.is_empty():
+		SagaScreen.years(modal, journey, func() -> void:
+			journey.years_told = {}
+			selected = journey.c.band.location
+			canvas.follow = true
+			canvas.centre_on(journey.roam.pos)
+			refresh())
 		return
 	if not journey.winter_report.is_empty():
 		modal.open("The winter of %d" % (c.cal.year - 1))
@@ -534,8 +537,9 @@ func _fill_modal() -> void:
 		modal.visible = false
 		return
 	var titles := {"fight": "A fight offers", "merchant": "A sail on the sea", "spine": "Word comes", "demand": "A feud", "house": "A house sends word"}
-	modal.open(str(titles.get(d.kind, "A choice")))
-	modal.body.add_child(UiTheme.label(str(d.text).strip_edges(), "SagaLabel"))
+	modal.open(str(d.get("title", titles.get(d.kind, "A choice"))))
+	var words := str(d.text).strip_edges()
+	modal.body.add_child(UiTheme.label(words, "SagaLabel" if words.length() < 300 else "BodyLabel"))
 	if d.kind == "fight":
 		quick_box = CheckBox.new()
 		quick_box.text = "Let the saga tell it (do not fight it yourself)"
@@ -784,6 +788,28 @@ func _show_families() -> void:
 			col.add_child(UiTheme.label("; ".join(r.ties), "SmallLabel"))
 		grid.add_child(card)
 	_close_side(box)
+
+
+## The saga told generation by generation (SagaScreen), with this
+## summer's telling a press away.
+func _show_saga() -> void:
+	SagaScreen.fill(side_panel, journey.saga(), [
+		["This summer", _show_chronicle, ""],
+		["Back to the map", func() -> void:
+			side_panel.close()
+			refresh(), "PrimaryButton"]])
+
+
+## The saga is ended (Journey.end_saga, or the line dying out): the closing
+## card with its reckoning, the saga to read, and a new one. The saga is
+## kept for the title's "Read the last saga".
+func _show_ending() -> void:
+	var told := journey.saga()
+	if host != null and host.has_method("remember_saga"):
+		host.remember_saga(told)
+	SagaScreen.ending(modal, journey, [
+		["Read the saga", func() -> void: SagaScreen.fill(side_panel, told, [["Back", func() -> void: side_panel.close(), "PrimaryButton"]]), ""],
+		["Another saga", func() -> void: host.show_title(), "PrimaryButton"]])
 
 
 ## Everything the saga has told this summer, on parchment.
