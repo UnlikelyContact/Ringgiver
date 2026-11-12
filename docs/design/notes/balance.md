@@ -835,3 +835,33 @@ After:
 | Skald | 6/6 | +82 | +144 | 115/165/315/533/712/872/1135/1233/1345/1452 | 4.7/6.2/9.8/12.0/16.5/18.3/19.7/20.2/21.0/21.2 | 3.0 | 99 | 91 | 5.7 (0/0) | 16.8/0.8 | 0.0 | 0/0/1/2/3/4/6/6/6/6 | 1.8 | 5.7/1.0/2.7/0.7/0.0/3.0/1.8/0.8 | 0 (0) | 6.3 | 0.0 | 0/0 | 0.0 | 26 |
 | King's man | 6/6 | +64 | +125 | 133/290/420/581/689/802/886/977/1191/1263 | 4.0/6.0/9.7/12.5/16.8/21.7/26.3/29.5/31.5/32.8 | 2.7 | 93 | 52 | 6.7 (2/0) | 11.5/3.3 | 0.3 | 0/0/6/6/6/6/6/6/6/6 | 4.5 | 27.0/3.8/1.8/0.5/0.0/4.5/2.0/2.2 | 0 (0) | 5.3 | 0.0 | 0/0 | 1.7 | 34 |
 
+
+## After the wider world, men and silver, and battles 2 (12 Nov 2026, main at 948a30b)
+
+Measured on the whole game once the three later packages were merged:
+`batch_ways -- 8 5 1 all younger_son`, no STALL, no saga ended.
+
+| Way | worth a year | laid out a year | men at year 5 | honor |
+|---|---|---|---|---|
+| Viking | +175 | 35 | 25.0 | 3 |
+| Trader | +112 | 3 | 8.5 | 48 |
+| Law-wise man | +148 | 4 | 10.0 | 99 |
+| Berserk | +142 | 25 | 12.9 | 37 |
+| Skald | +174 | 18 | 17.5 | 65 |
+| King's man | +143 | 2 | 18.5 | 47 |
+
+Richest to poorest is 1.56. Two things to look at next: the trader is now
+the poorest way (he was the richest at +191 before the wider world; his
+stand-in's summers on the road east earn no more than summers at home,
+and silk still in the hold is not counted), and the Viking ends at honor
+3. The silver laid out is nearly all arms from the smith: the stand-ins
+seldom reach the hall's works in five years.
+
+`save_check -- 3 all all all 1` on the same code: 907 OK, 0 DIFF, 11
+never came to the point. Suite: 650 tests, 0 failed. `diag_identity -- 20 1`
+`ALL 1946475587`, `diag_mixed -- 40 1` `TOTAL 40 fights, 13 wins (32%)`.
+
+A rule changed while merging: `Families.asks` now sends a house's most
+pressing ask when it has more than one (wergild, then a call for help in
+a feud, then a daughter, then a fosterling). Before, the draw decided,
+and a kin house at feud could send its boy and say nothing of the feud.
