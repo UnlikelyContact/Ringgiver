@@ -32,6 +32,15 @@
 ## a man's numbers, before the next command; `scroll:<px>` scrolls the
 ## side panel down, `place:<px>` the place's list in the right-hand panel. `what` "settings" is the
 ## title with the settings open.
+## Generations (docs/design/notes/generations.md): die kills the leader in
+## battle (the death card), old:<age> sets his age, pick:<n> answers what
+## waits with its n-th option (the grave-ale's steps), family gives him a
+## wife of a friendly house and children (son:<age> one more son), strong
+## makes the sworn second a champion (to dispute the high seat),
+## years:<n> chooses the years to let pass at the spring step, saga opens
+## the saga, ending ends it (the vengeance taken), totitle goes to the
+## title after it, and totitle:read opens "Read the last saga" there;
+## wscroll:<px> scrolls the winter screen before the shot.
 extends SceneTree
 
 
@@ -84,6 +93,7 @@ func _init() -> void:
 	var out := args[0] if args.size() > 0 else "res://game.png"
 	var what := args[1] if args.size() > 1 else "title"
 	var seed_in := int(args[2]) if args.size() > 2 else 7
+	var wscroll := -1  # wscroll:<px>: the winter screen scrolled before the shot
 	var game: Node = load("res://view/game.tscn").instantiate()
 	game.fixed_seed = true
 	Settings.persist = false
@@ -221,6 +231,56 @@ func _init() -> void:
 			elif cmd == "trade":
 				map._show_trade()
 				continue
+			elif cmd == "saga":
+				map._show_saga()
+				continue
+			elif cmd == "die":
+				j.c.band.leader.alive = false
+				j.c.succession("battle")
+				j._settle()
+			elif cmd.begins_with("old:"):
+				j.c.band.leader.age = int(cmd.trim_prefix("old:"))
+			elif cmd.begins_with("pick:"):
+				var d: Dictionary = j.current()
+				if not d.is_empty():
+					j.answer(str(d.options[mini(int(cmd.trim_prefix("pick:")), d.options.size() - 1)].id))
+			elif cmd == "family":
+				var fs := j.c.world.families
+				var friend := ""
+				for n in fs.names():
+					if Families.is_friend(j.c.world_rules, j.c.band, n):
+						friend = n
+						break
+				if friend != "" and j.c.band.wife == "":
+					fs.marry_into(j.c.world_rules, j.c.rules, SimRng.new(1), j.c.band, friend, "Asgerd", PackedStringArray())
+				var who := j.c.band.leader.display_name
+				var y := j.c.cal.year
+				j.c.band.sons.append({"name": "Thorstein", "born": y - 16, "alive": true, "daughter": false, "fostered_with": friend, "craft": 3, "father": who, "potential": [6, 5, 5, 6, 5]})
+				j.c.band.sons.append({"name": "Ketil", "born": y - 12, "alive": true, "daughter": false, "fostered_with": "", "father": who, "potential": [5, 5, 6, 5, 5]})
+				j.c.band.sons.append({"name": "Thordis", "born": y - 15, "alive": true, "daughter": true, "father": who})
+				j.c.band.sons.append({"name": "Orm", "born": y - 3, "alive": true, "daughter": false, "fostered_with": "", "father": who, "potential": [5, 5, 5, 5, 5]})
+			elif cmd.begins_with("son:"):
+				j.c.band.sons.append({"name": "Hallbjorn", "born": j.c.cal.year - int(cmd.trim_prefix("son:")), "alive": true, "daughter": false,
+						"fostered_with": "", "father": j.c.band.leader.display_name, "potential": [6, 6, 6, 6, 6]})
+			elif cmd.begins_with("wscroll:"):
+				wscroll = int(cmd.trim_prefix("wscroll:"))
+				continue
+			elif cmd == "strong":
+				var sec := j.c.band.man_by_id(j.c.band.sworn_second_id)
+				if sec != null:
+					for k in 5:
+						sec.stats[k] = 8
+			elif cmd.begins_with("years:"):
+				j.winter_choose("years:" + cmd.trim_prefix("years:"))
+			elif cmd == "ending":
+				j.end_saga("vengeance")
+			elif cmd.begins_with("totitle"):
+				game.remember_saga(j.saga())
+				game.show_title()
+				if cmd == "totitle:read":
+					await process_frame
+					game.show_last_saga()
+				break
 			elif cmd.begins_with("year:"):
 				JourneyBot.play_year(j, int(cmd.trim_prefix("year:")))
 				j.quick = false
@@ -243,6 +303,10 @@ func _init() -> void:
 					j.winter_choose("next" if int(j.winter_state().step) < want else "back")
 			elif cmd.begins_with("wchoose:"):
 				j.winter_choose(cmd.trim_prefix("wchoose:"))
+				if not j.in_winter():
+					for ch in map.get_children():
+						if ch is WinterScreen:
+							ch.queue_free()
 			elif cmd == "wauto":
 				j.winter_auto()
 				for ch in map.get_children():
@@ -289,6 +353,12 @@ func _init() -> void:
 				map.canvas.centre_on(j.roam.pos)
 				map.refresh()
 	for i in 4:
+		await process_frame
+	if wscroll >= 0 and game.map != null:
+		for ch in game.map.get_children():
+			if ch is WinterScreen:
+				ch._scroll.scroll_vertical = wscroll
+		await process_frame
 		await process_frame
 	if game.battle_node != null and game.battle_node.camera != null:
 		# The camera eases toward the men; a still shows where it settles.

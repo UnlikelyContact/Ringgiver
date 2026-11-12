@@ -67,6 +67,10 @@ var told := PackedStringArray()
 var verse := PackedStringArray()
 var spring_to := ""
 var given := {}  # man id -> what he was given, in words
+# Spring (Years): the years to let pass after this winter (0: play the
+# summer), or the candidate an old leader steps down for.
+var years := 0
+var step_down := ""
 var _facts := {}
 
 
@@ -101,6 +105,7 @@ static func open(j: Journey, p: Place) -> WinterHall:
 		var card := WinterEvents.card(r.fork("card:" + kind), c.rules, band, kind)
 		if not card.is_empty():
 			h.talk.append(card)
+	h.talk.append_array(Family.hall_cards(c))
 	h.talk.append(_vow_card(c))
 	h._facts = h._year_facts(c)
 	h._defaults(j)
@@ -265,6 +270,8 @@ func default_choice(j: Journey, card: Dictionary) -> String:
 			return "settle" if j.c.band.silver >= 2 * j.c.rules.settle_quarrel_ounces + 20 else "for_a"
 		"thrall_unrest":
 			return "let"
+		"household":
+			return str(card.get("default", opts[opts.size() - 1].id))
 	for o in opts:
 		if j.c.band.silver + int(o.get("silver", 0)) >= 0:
 			return str(o.id)
@@ -495,6 +502,8 @@ func choose(j: Journey, id: String) -> void:
 			"spring":
 				if arg == "" or _spring_places(j).any(func(d: Dictionary) -> bool: return str(d.id) == arg):
 					spring_to = arg if arg != "" else place_id
+			"years", "stepdown":
+				Years.choose(j, self, key, arg)
 		return
 	match key:
 		"buy+":
@@ -564,7 +573,7 @@ func choose(j: Journey, id: String) -> void:
 				var card: Dictionary = talk[i3]
 				var want := ":".join(parts.slice(2))
 				for o in card.options:
-					if str(o.id) == want and (silver_after(j) + int(_option(card).get("silver", 0)) + int(o.get("silver", 0)) >= 0):
+					if str(o.id) == want and (int(o.get("silver", 0)) >= 0 or silver_after(j) + int(_option(card).get("silver", 0)) + int(o.get("silver", 0)) >= 0):
 						card.choice = want
 
 
@@ -697,6 +706,8 @@ func resolve(j: Journey) -> void:
 					vow = VOWS[clampi(int(choice.trim_prefix("vow:")), 0, VOWS.size() - 1)]
 			"house":
 				j._answer_house(card.ask, choice)
+			"household":
+				lines.append_array(Family.answer_card(c, card, choice, log))
 			_:
 				var ev := WinterEvents.resolve(r.fork("talk:" + str(card.kind)), rules, band, c.cal, card, choice, band.ship, log)
 				_after_talk(j, ev)
@@ -845,6 +856,7 @@ func _tell(j: Journey, mark: int, chron: int, lines: PackedStringArray) -> void:
 	var band := c.band
 	told = PackedStringArray()
 	verse = _verse(j)
+	Chronicle.keep_verse(band, year, verse)
 	told.append("The skald's verse")
 	for v in verse:
 		told.append("  " + v)
@@ -868,7 +880,8 @@ func _tell(j: Journey, mark: int, chron: int, lines: PackedStringArray) -> void:
 		if not (line.ends_with(".") or line.ends_with(")") or line.ends_with("!")):
 			line += "."
 		told.append("  " + Journey._cap(line))
-	if band.wife != "" or not band.sons.is_empty():
+	if (band.wife != "" or not band.sons.is_empty()) and not j.stepped_winter:
+		# The stepped winter shows the household as rows (`_household_rows`).
 		told.append("")
 		told.append("The household")
 		if band.wife != "":
@@ -992,8 +1005,8 @@ func state(j: Journey) -> Dictionary:
 		"told":
 			_state_told(j, s)
 		"spring":
-			_state_spring(j, s)
 			s.next_label = "Begin the summer"
+			_state_spring(j, s)
 	return s
 
 
@@ -1172,6 +1185,7 @@ func _state_men(j: Journey, s: Dictionary) -> void:
 
 func _state_talk(j: Journey, s: Dictionary) -> void:
 	s.text = "The hall's talk: who came through the snow this winter, and what was asked of you."
+	s.notes.append_array(Family.counsel(j.c, talk, maxi(0, -food_end(j))))
 	for i in talk.size():
 		var card: Dictionary = talk[i]
 		var btns: Array = []
@@ -1181,18 +1195,20 @@ func _state_talk(j: Journey, s: Dictionary) -> void:
 			if int(o.get("silver", 0)) != 0:
 				cost = " (%d oz)" % -int(o.silver)
 			btns.append(_btn("talk:%d:%s" % [i, o.id], str(o.label) + cost,
-					silver_after(j) + int(_option(card).get("silver", 0)) + int(o.get("silver", 0)) >= 0, str(o.id) == str(card.get("choice", ""))))
+					int(o.get("silver", 0)) >= 0 or silver_after(j) + int(_option(card).get("silver", 0)) + int(o.get("silver", 0)) >= 0, str(o.id) == str(card.get("choice", ""))))
 			if str(card.get("choice", "")) == str(o.id) and str(o.get("hint", "")) != "":
 				hints.append(str(o.hint))
 		var title: String = {"vow": "The Yule cup", "house": "A house sends word", "quarrel": "A quarrel", "skald": "A skald",
 				"trader": "A trader", "sickness": "Sickness", "storm": "A storm", "envoy": "An envoy", "outlaw_shelter": "An outlaw at the door",
-				"thrall_unrest": "The stores", "feud_attack": "Spears in the snow", "hall_burning": "Fire in the night", "marriage_offer": "A marriage"}.get(str(card.kind), "In the hall")
+				"thrall_unrest": "The stores", "feud_attack": "Spears in the snow", "hall_burning": "Fire in the night", "marriage_offer": "A marriage",
+				"household": "The household"}.get(str(card.kind), "In the hall")
 		s.rows.append(_row(str(title), str(card.text) + ((" " + " ".join(hints)) if not hints.is_empty() else ""), "", btns))
 
 
 func _state_told(j: Journey, s: Dictionary) -> void:
 	var band := j.c.band
 	s.text = "The year told. %s." % Way.title(band)
+	_household_rows(j, s)
 	var free := Way.points_free(band)
 	if free > 0:
 		s.notes.append("%d point%s to spend down the ways of life." % [free, "" if free == 1 else "s"])
@@ -1210,6 +1226,10 @@ func _state_told(j: Journey, s: Dictionary) -> void:
 
 func _state_spring(j: Journey, s: Dictionary) -> void:
 	s.text = "The ice goes out of the fjords. Where does the summer begin?"
+	if not j.c.pending_death.is_empty():
+		s.text = "%s is dead. When the ice goes out, the grave-ale must be held." % str(j.c.pending_death.name)
+		s.next_label = "The grave-ale"
+	Years.spring_rows(j, self, s)
 	s.rows.append(_row("Here, at %s" % place_name, "Where you wintered.", "chosen" if spring_to == place_id else "",
 			[_btn("spring:", "Begin here", true, spring_to == place_id)]))
 	for d in _spring_places(j):
@@ -1217,3 +1237,24 @@ func _state_spring(j: Journey, s: Dictionary) -> void:
 		s.rows.append(_row(Journey._cap(str(d.name)), "%d days over the hills at the thaw%s." % [int(d.days),
 				"; your ship stays where she lies" if j.c.band.ship != null and j.roam.aboard else ""], "chosen" if on else "",
 				[_btn("spring:" + str(d.id), "Begin there", true, on)]))
+
+
+## The household as rows of the year told: the wife and her keys, the old
+## man by the fire, each child of the house and what is to become of him
+## (Journey.household).
+func _household_rows(j: Journey, s: Dictionary) -> void:
+	var hh := j.household()
+	var wife: Dictionary = hh.wife
+	if not wife.is_empty():
+		var from := str(wife.house)
+		s.rows.append(_row(str(wife.short), "Your wife%s. She keeps the keys of the stores%s." % [(", of %s" % from) if from != "" else "",
+				(" and stretches them by %d a turn" % int(wife.skill)) if int(wife.skill) > 0 else ""], "the keys", []))
+	elif str(hh.mother) != "":
+		s.rows.append(_row(Family.short_name(str(hh.mother)), "Your mother, the old leader's widow. She keeps the keys until you marry.", "the keys", []))
+	var old: Dictionary = hh.old_man
+	if not old.is_empty():
+		s.rows.append(_row("Old %s" % str(old.name), "%d winters old. He sits by the fire and gives counsel." % int(old.age), "by the fire", []))
+	for ch in hh.children:
+		var who := "son" if ch.son else "daughter"
+		var whose := "Your %s" % who if ch.own else "Of your father's blood: a %s" % who
+		s.rows.append(_row(str(ch.name), "%s, %d winters old: %s." % [whose, int(ch.age), str(ch.state)], str(ch.tag), []))

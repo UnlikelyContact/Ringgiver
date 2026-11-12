@@ -44,6 +44,21 @@ var winter_report := PackedStringArray()
 ## step through it: `winter_state`, `winter_choose`, `winter_end`.
 var stepped_winter := false
 var winter_hall: WinterHall = null
+## The leader's death is played (docs/design/notes/generations.md): the
+## death card, the grave-ale in steps (who takes the high seat, the feast,
+## the vow, a challenge fought on the island) through `decisions`, and the
+## saga's endings. Off (the default, for the sandbox AI and old callers),
+## Campaign.succession passes the high seat at once as before. The map
+## screen and the stand-in players turn it on.
+var played_succession := false:
+	set(v):
+		played_succession = v
+		if c != null:
+			c.played_succession = v
+## What the last years let pass told (Years.let_pass), for the screen; {}
+## once read.
+var years_told := {}
+var _ale := {}  # the grave-ale in hand: {cand, feast, vow, vengeance}
 var _rng: SimRng
 var _n := 0
 var _offers := {}  # place id -> the work on offer, rolled once a visit
@@ -261,6 +276,8 @@ func answer(id: String) -> void:
 			_answer_house(d, id)
 		"world":
 			WorldLife.answer(self, d, id)
+		"saga":
+			_answer_saga(d, id)
 		"fight":
 			_answer_fight(d, int(id))
 			return  # _answer_fight settles when the fight is over
@@ -361,6 +378,7 @@ func ground_here() -> String:
 func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 	var wr := c.world_rules
 	var won := result != null and result.winner == 0
+	_note_death(ctx)
 	match ctx.get("kind", ""):
 		"sea":
 			if result != null:
@@ -404,6 +422,8 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 			_after_house_fight(ctx, result)
 		"world_fight":
 			WorldLife.after_fight(self, ctx, result)
+		"challenge":
+			_after_challenge(ctx, result)
 	_killed_their_men(ctx, result)
 	# The party it was fought with: beaten, it is gone; otherwise it keeps
 	# its distance for a while.
@@ -467,6 +487,7 @@ func _vengeance() -> void:
 	band.log("%s had his vengeance for the burning of his father's hall" % band.leader.display_name)
 	band.fame = clampi(band.fame + 10, 0, 100)
 	band.vengeance = ""
+	offer_ending("vengeance")
 
 
 # --- Going about ------------------------------------------------------------------
@@ -1550,6 +1571,7 @@ func _settle() -> void:
 	var guard := 0
 	while guard < 8:
 		guard += 1
+		_saga_beats()
 		if c.over:
 			decisions.clear()
 			fight = {}
@@ -1704,9 +1726,341 @@ func winter_end(settle := true) -> void:
 		winter_report = PackedStringArray()  # read on the winter screen already
 	c.cal.next_year()
 	c.band.year = c.cal.year
-	begin_summer()
+	if not Years.after_winter(self, h):
+		begin_summer()
 	if settle:
 		_settle()
+
+
+# --- Generations: death, the grave-ale, the saga's ends (docs/design/notes/generations.md)
+
+## The household as plain values for the view (Family.household): the
+## wife, the mother, the old man by the fire, the children of the house.
+func household() -> Dictionary:
+	return Family.household(c)
+
+
+## The saga as told so far (Chronicle.saga): {title, chapters, closing, text}.
+func saga() -> Dictionary:
+	return Chronicle.saga(c.band, kin_name(), c.rules)
+
+
+## What the first leader is named by: his father's hall (the burned hall's
+## Hardanger), else the place he began from.
+func kin_name() -> String:
+	var d := Origins.def(c.band.origin) if c.band.origin != "" else {}
+	var key := str(d.get("feud_with", "")) if str(d.get("feud_with", "")) != "" else str(d.get("at", ""))
+	var p: Place = c.world.place(key) if key != "" else null
+	if p == null:
+		return ""
+	var n := p.display_name.trim_prefix("the ")
+	return n.split(" ")[0]
+
+
+## What waits on the saga itself, checked whenever the journey settles: a
+## leader's death waiting for its card (put before anything else), and a
+## great arc completed (a jarl's rank).
+func _saga_beats() -> void:
+	if not c.pending_death.is_empty() and not c.pending_death.get("carded", false):
+		c.pending_death["carded"] = true
+		roam.stop()
+		wintering = false
+		decisions.push_front(_death_card())
+		return
+	if not c.over and c.pending_death.is_empty() and c.band.rank >= WorldTypes.Rank.JARL:
+		offer_ending("jarl")
+
+
+## The fight the leader died in: where, and the house whose men it was.
+func _note_death(ctx: Dictionary) -> void:
+	if c.pending_death.is_empty() or c.pending_death.has("where"):
+		return
+	c.pending_death["where"] = _where_words()
+	var fam := str(ctx.get("family", ""))
+	var p: Place = ctx.get("place", null)
+	if fam == "" and p != null:
+		fam = p.family
+	if c.world.families != null and c.world.families.house(fam) != null:
+		c.pending_death["house"] = fam
+
+
+func _where_words() -> String:
+	var p := here()
+	if p != null:
+		return "at " + p.display_name
+	return "at sea" if roam.afloat() else "in the wilds"
+
+
+## The death card: how he died, where, what the men said; then the grave-ale.
+func _death_card() -> Dictionary:
+	var pd := c.pending_death
+	var band := c.band
+	if not pd.has("where"):
+		var hall: Place = c.world.place(c.band.home) if c.band.home != "" else null
+		pd["where"] = _where_words() if not pd.get("winter", false) else ("at " + hall.display_name if hall != null else "in his hall")
+	Chronicle.died_at(band, str(pd.where))
+	var name := str(pd.name)
+	var title := Way.title(band)
+	var text := ""
+	match str(pd.cause):
+		"battle":
+			var by := str(pd.get("killer", ""))
+			var house := str(pd.get("house", ""))
+			text = "%s is dead. He fell %s%s%s." % [title, str(pd.where), (" fighting the men of " + house) if house != "" else "",
+					("; it was %s who struck him down" % by) if by != "" else ""]
+		"old":
+			text = "%s is dead. He died in his bed %s, old and full of years." % [title, str(pd.where)]
+		_:
+			text = "%s is dead%s." % [title, Succession._cause_phrase(str(pd.cause))]
+	var from := int(Chronicle._current(band).from)
+	text += " He was %d winters old, and had led the band %s." % [int(pd.age), "one summer" if c.cal.year <= from else "%d summers" % (c.cal.year - from + 1)]
+	var said_lines := PackedStringArray()
+	for i in range(band.chronicle.size() - 1, maxi(-1, band.chronicle.size() - 12), -1):
+		var l := band.chronicle[i]
+		if l.contains("swore over %s's grave" % name):
+			said_lines.append(Chronicle._sentence(l.substr(l.find(": ") + 2)))
+			break
+	if band.fame >= 50:
+		said_lines.append("His men said there had been no better ring-giver in the west.")
+	elif band.honor >= 60:
+		said_lines.append("His men said he had never broken his word to them.")
+	else:
+		said_lines.append("His men said he had been a hard man to follow, and a harder one to lose.")
+	text += " " + " ".join(said_lines)
+	var cands := Succession.candidates(c)
+	var opts: Array[Dictionary] = []
+	if not cands.is_empty():
+		opts.append({"id": "ale", "label": "Hold the grave-ale"})
+		if str(pd.cause) == "old" or int(pd.age) >= c.rules.old_age:
+			opts.append({"id": "end", "label": "Here the saga ends"})
+	else:
+		text += " He leaves no son of age and no sworn man to take up his name."
+		opts.append({"id": "scatter", "label": "The band scatters"})
+	return {"kind": "saga", "step": "death", "title": "%s is dead" % name, "text": text, "options": opts}
+
+
+## The grave-ale and the saga's ends, a step at a time (decisions of kind
+## "saga": death, heir, feast, vow, challenge, told, arc).
+func _answer_saga(d: Dictionary, id: String) -> void:
+	var band := c.band
+	var rules := c.rules
+	match str(d.step):
+		"death":
+			match id:
+				"ale":
+					_ale = {}
+					decisions.push_front(_heir_card())
+				"end":
+					end_saga("old_age")
+				_:
+					end_saga("no_heir")
+		"heir":
+			for cand in Succession.candidates(c):
+				if str(cand.id) == id:
+					_ale = {"cand": cand}
+			if _ale.is_empty():
+				_ale = {"cand": Succession.candidates(c)[0]}
+			var men := band.living_men().size()
+			var open := maxi(rules.grave_ale_open_min, rules.grave_ale_open_per_man * men)
+			var plain := rules.grave_ale_ounces
+			decisions.push_front({"kind": "saga", "step": "feast", "title": "The grave-ale",
+					"text": "%s holds the grave-ale for %s. The men will drink to him, or not, by how they are feasted. An open-handed feast holds the men and is talked of; a mean one loses some of them. %d oz in the chest." % [
+							str(_ale.cand.name), str(c.pending_death.name), band.silver],
+					"options": [
+						{"id": str(open), "label": "An open-handed feast (%d oz)" % open, "enabled": band.silver >= open},
+						{"id": str(plain), "label": "A plain feast (%d oz)" % plain, "enabled": band.silver >= plain},
+						{"id": "0", "label": "A mean feast (nothing)"}]})
+		"feast":
+			_ale.feast = mini(int(id), band.silver)
+			decisions.push_front(_vow_card())
+		"vow":
+			_hold_ale(id)
+		"challenge":
+			var ch := band.man_by_id(int(d.man))
+			match id:
+				"fight":
+					_say("%s and %s go out to the island to settle who holds the high seat." % [band.leader.display_name, ch.display_name])
+					_duel(ch.to_warrior(1, rules, 0), {"kind": "challenge", "man": ch.id})
+					return
+				"pay":
+					var oz := mini(rules.challenge_buyoff_ounces, band.silver)
+					band.silver -= oz
+					Loyalty.adjust(ch, rules.challenge_bond)
+					band.remove_meta(Succession.PENDING_CHALLENGE_META)
+					_say("%s gives %s %d oz and the seat at his right hand, and %s drinks the oath cup after all." % [band.leader.display_name, ch.display_name, oz, ch.display_name])
+					band.log("%s bought the goodwill of %s for %d oz" % [band.leader.display_name, ch.display_name, oz])
+				_:
+					band.remove_man(ch)
+					var gone := 1
+					for m in band.living_men():
+						if band.bond_kind(ch, m) == CampaignTypes.BondKind.OATH_BROTHER:
+							band.remove_man(m)
+							gone += 1
+					band.remove_meta(Succession.PENDING_CHALLENGE_META)
+					_say("%s will not fight his own man for the seat: %s goes, and %s with him." % [band.leader.display_name, ch.display_name,
+							"nobody" if gone == 1 else "%d others" % (gone - 1)])
+					band.log("%s left the band rather than serve %s" % [ch.display_name, band.leader.display_name])
+			decisions.push_front(_told_card())
+		"told":
+			pass
+		"arc":
+			if id == "end":
+				end_saga(str(d.arc))
+			else:
+				_say("But the saga does not end there.")
+
+
+func _heir_card() -> Dictionary:
+	var cands := Succession.candidates(c)
+	var opts: Array[Dictionary] = []
+	var lines := PackedStringArray()
+	for cand in cands:
+		var who := "%s, %d winters old" % [str(cand.name), int(cand.age)]
+		opts.append({"id": str(cand.id), "label": str(cand.name)})
+		lines.append("%s: %s" % [who, str(cand.line)])
+	return {"kind": "saga", "step": "heir", "title": "Who takes the high seat?",
+			"text": "\n".join(lines), "options": opts}
+
+
+func _vow_card() -> Dictionary:
+	var pd := c.pending_death
+	var heir := str(_ale.cand.name)
+	var opts: Array[Dictionary] = []
+	var house := str(pd.get("house", ""))
+	if str(pd.cause) == "battle" and house != "":
+		opts.append({"id": "vengeance:" + house, "label": "Vengeance on %s" % house})
+	elif c.band.vengeance != "":
+		opts.append({"id": "vengeance:" + c.band.vengeance, "label": "Vengeance on %s" % c.band.vengeance})
+	opts.append({"id": "fame", "label": "A deed of fame"})
+	opts.append({"id": "peace", "label": "To hold what he held"})
+	var text := "The bragarfull is carried in, and %s stands to drink it and swear his vow before he sits in the high seat." % heir
+	if str(pd.cause) == "battle":
+		text += " %s was killed: to leave it unanswered is a shame on the house." % str(pd.name)
+	text += " A vow of vengeance makes a feud of it; a deed of fame must be done this summer (win %d fights); a peaceful vow asks nothing and promises nothing." % c.rules.vow_wins_needed
+	return {"kind": "saga", "step": "vow", "title": "The bragarfull", "text": text, "options": opts}
+
+
+## Does the grave-ale with the choices made, then the challenge if a strong
+## second disputes it, then the telling.
+func _hold_ale(vow_id: String) -> void:
+	var pd := c.pending_death
+	var band := c.band
+	var old := str(pd.name)
+	var vow := "to hold what %s held" % old
+	var vengeance := ""
+	if vow_id.begins_with("vengeance:"):
+		vengeance = vow_id.trim_prefix("vengeance:")
+		vow = "to avenge %s on %s" % [old, vengeance]
+	elif vow_id == "fame":
+		vow = WinterHall.VOWS[0]
+	var mark := said.size()
+	var lines := Succession.grave_ale(c, _ale.cand, int(_ale.get("feast", 0)), vow, vengeance, str(pd.cause), said)
+	if vow_id == "peace":
+		c._pending_vow = ""  # a peaceful vow is kept by keeping the peace
+	_ale.lines = lines
+	c.pending_death = {}
+	if band.has_meta(Succession.PENDING_CHALLENGE_META):
+		var ch := band.man_by_id(int(band.get_meta(Succession.PENDING_CHALLENGE_META)))
+		if ch != null and band.men.has(ch):
+			decisions.push_front({"kind": "saga", "step": "challenge", "man": ch.id, "title": "A challenge",
+					"text": "%s would not drink to %s. He stands up at the grave-ale and says the high seat should be his, and that he will hold the island against any man who says otherwise. He is %s, and the men listen to him." % [
+							ch.display_name, band.leader.display_name, Potential.hint(c.rules, ch, Potential.best_stat(ch), 2)],
+					"options": [{"id": "fight", "label": "Meet him on the island"},
+						{"id": "pay", "label": "Buy his goodwill (%d oz)" % mini(c.rules.challenge_buyoff_ounces, band.silver), "enabled": band.silver > 0},
+						{"id": "go", "label": "Let him go"}]})
+			return
+		band.remove_meta(Succession.PENDING_CHALLENGE_META)
+	decisions.push_front(_told_card())
+
+
+## The holmgang for the high seat is fought.
+func _after_challenge(ctx: Dictionary, result: BattleResult) -> void:
+	var ch := c.band.man_by_id(int(ctx.get("man", -1)))
+	if c.band.leader == null or not c.band.leader.alive:
+		if c.band.has_meta(Succession.PENDING_CHALLENGE_META):
+			c.band.remove_meta(Succession.PENDING_CHALLENGE_META)
+		return  # he fell on the island: the death card comes next
+	var won := result == null or result.winner != 1
+	for l in Succession.challenge_done(c, ch, won, said):
+		_say(l)
+	decisions.push_front(_told_card())
+
+
+func _told_card() -> Dictionary:
+	var band := c.band
+	var heir := band.leader
+	var bits := PackedStringArray()
+	bits.append("%s sits in the high seat now, %d winters old, with %d men sworn to him." % [heir.display_name, heir.age, band.living_men().size()])
+	var feuds := band.unsettled_feuds()
+	if not feuds.is_empty():
+		var names := PackedStringArray()
+		for f in feuds:
+			names.append(str(f.get("family", f.get("against", ""))))
+		bits.append("The feuds are his now: %s." % ", ".join(names))
+	bits.append("Fame %d, honor %d, luck %d." % [band.fame, band.honor, band.luck])
+	if not Succession.line_holds(band):
+		bits.append("The high seat has gone out of the blood of %s." % str(Chronicle.chapters(band)[0].name))
+	var lines: PackedStringArray = _ale.get("lines", PackedStringArray())
+	var told := PackedStringArray()
+	for l in lines:
+		if l.contains(" drank the oath cup to "):
+			continue
+		told.append(Chronicle._sentence(l))
+	return {"kind": "saga", "step": "told", "title": "%s takes the high seat" % heir.display_name,
+			"text": " ".join(told) + "\n" + " ".join(bits), "options": [{"id": "go", "label": "Go on"}]}
+
+
+## Offers to end the saga after a great arc is completed ("vengeance",
+## "jarl", "iceland"): "Here the saga ends", or "But the saga does not end
+## there" (the open sandbox). Offered once each. A later package adds an
+## arc by calling this (the land-take: `offer_ending("iceland")`), or ends
+## it outright with `end_saga`.
+func offer_ending(kind: String) -> void:
+	var arcs: Dictionary = c.band.get_meta(&"saga_arcs", {}) if c.band.has_meta(&"saga_arcs") else {}
+	if arcs.has(kind) or c.over:
+		return
+	arcs[kind] = c.cal.year
+	c.band.set_meta(&"saga_arcs", arcs)
+	if kind == "vengeance":
+		# The men who followed him for the vengeance have it.
+		for m in c.band.living_men():
+			if m.ambition == CampaignTypes.Ambition.VENGEANCE:
+				Loyalty.ambition_progress(c.rules, c.band, m, c.rules.ambition_fulfilled, said)
+	var who := Way.title(c.band)
+	var text: String = {
+		"vengeance": "The burning is answered. %s has done what he swore in the smoke at Hardanger. A saga could end here, with the hall avenged." % who,
+		"jarl": "%s is a jarl now, and men stand when he comes into a hall. A saga could end here, at the height of it." % who,
+		"iceland": "%s has taken land in Iceland, out of reach of kings. A saga could end here, with the land carried round with fire." % who,
+	}.get(kind, "A saga could end here.")
+	decisions.push_front({"kind": "saga", "step": "arc", "arc": kind, "title": "Here the saga could end", "text": text,
+			"options": [{"id": "end", "label": "Here the saga ends"}, {"id": "go_on", "label": "But the saga does not end there"}]})
+
+
+## Ends the saga (`kind`: Chronicle.ENDINGS): the leader's chapter closes,
+## the reckoning is made, and nothing more can be done but read it. The
+## one call a later package needs for an ending of its own.
+func end_saga(kind: String) -> void:
+	if c.over:
+		return
+	var band := c.band
+	var arcs: Dictionary = band.get_meta(&"saga_arcs", {}) if band.has_meta(&"saga_arcs") else {}
+	var ending := {"kind": kind, "year": c.cal.year, "vengeance_done": arcs.has("vengeance") or kind == "vengeance"}
+	if not c.pending_death.is_empty():
+		Chronicle.close_chapter(band, c.cal.year, str(c.pending_death.cause))
+		c.pending_death = {}
+	elif band.leader != null:
+		Chronicle.close_chapter(band, c.cal.year, "ended")
+	band.set_meta(Chronicle.ENDING_META, ending)
+	c.over = true
+	c.over_reason = str(Chronicle.ENDINGS.get(kind, Chronicle.ENDINGS.chosen))
+	if kind == "no_heir":
+		band.log("%s died with no heir, and the band scattered" % (band.leader.display_name if band.leader != null else "The leader"))
+	else:
+		band.log("Here the saga of %s ends" % Way.title(band))
+	decisions.clear()
+	fight = {}
+	roam.stop()
+	_say("The saga of %s ends here: %s." % [Way.title(band), c.over_reason])
 
 
 # --- Small things -----------------------------------------------------------------

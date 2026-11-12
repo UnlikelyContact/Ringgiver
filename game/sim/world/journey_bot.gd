@@ -7,12 +7,21 @@ extends RefCounted
 ## balance batches; fights are told quickly (Journey.quick).
 
 
+## Years he lets pass at each spring (Years), 0 to play every summer: the
+## batches set it to measure a saga that sits at home against one that
+## plays. `ends` lets him end the saga when one is offered (old age, an
+## arc completed); off, he always goes on.
+static var let_years := 0
+static var ends := false
+
+
 ## Plays until the year turns (or the saga ends). Returns the steps taken.
 ## With `stop_at_winter` he stops when the band goes into its winter
 ## quarters, the winter's choices still to make (tools).
 static func play_year(j: Journey, bent: int, stop_at_winter := false) -> int:
 	j.quick = true
 	j.stepped_winter = true
+	j.played_succession = true
 	var year := j.c.cal.year
 	var steps := 0
 	while not j.c.over and j.c.cal.year == year and steps < 900:
@@ -79,7 +88,7 @@ static func winter(j: Journey, bent: int) -> void:
 			j.winter_choose("war:%d" % best.id)
 		if not h.keeps_back:
 			j.winter_choose("keep")
-	if bent == Way.Id.VIKING:
+	if bent == Way.Id.VIKING and let_years <= 0:
 		for i in h.talk.size():
 			if str(h.talk[i].kind) == "vow":
 				j.winter_choose("talk:%d:vow:0" % i)
@@ -89,6 +98,15 @@ static func winter(j: Journey, bent: int) -> void:
 		j.winter_choose("next")
 	if j.in_winter():
 		_spend(j, bent)
+		# An old man steps down for his son; otherwise the years he lets pass.
+		var old := c.band.leader != null and c.band.leader.alive and c.band.leader.age >= c.rules.step_down_age + 4 and c.pending_death.is_empty()
+		if old:
+			for cand in Succession.candidates(c):
+				if str(cand.kind) == "son":
+					j.winter_choose("stepdown:" + str(cand.id))
+					break
+		if let_years > 0 and h.step_down == "" and Years.blocked(j) == "":
+			j.winter_choose("years:%d" % let_years)
 	j.winter_end()
 
 
@@ -126,6 +144,8 @@ static func _answer(j: Journey, d: Dictionary, bent: int) -> String:
 			return _answer_house(j, d, bent)
 		"world":
 			return _answer_world(j, d, bent)
+		"saga":
+			return _answer_saga(j, d, bent)
 	return str(d.options[0].id)
 
 
@@ -164,6 +184,36 @@ static func _answer_world(j: Journey, d: Dictionary, bent: int) -> String:
 					pick = str(side[0])
 			return pick if pick != "" else "away"
 	return str(d.options[0].id)
+
+
+## The death card and the grave-ale: the first heir the hall would name, a
+## plain feast (an open-handed one from a full chest), vengeance when it is
+## owed (a peaceful vow otherwise), the island for a challenger; the saga
+## goes on unless he is told he may end it.
+static func _answer_saga(j: Journey, d: Dictionary, _bent: int) -> String:
+	var ids := []
+	for o in d.options:
+		if o.get("enabled", true):
+			ids.append(str(o.id))
+	match str(d.step):
+		"death":
+			if ends and ids.has("end"):
+				return "end"
+			return "ale" if ids.has("ale") else str(ids[0])
+		"feast":
+			if j.c.band.silver >= 150 and not ids.is_empty():
+				return str(ids[0])
+			return str(ids[1]) if ids.size() > 2 else str(ids[-1])
+		"vow":
+			for id in ids:
+				if str(id).begins_with("vengeance:"):
+					return str(id)
+			return "peace"
+		"challenge":
+			return "fight"
+		"arc":
+			return "end" if ends else "go_on"
+	return str(ids[0]) if not ids.is_empty() else str(d.options[0].id)
 
 
 ## The houses' asks, as a man of his bent would answer them: the fighting
