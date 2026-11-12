@@ -409,14 +409,18 @@ func test_the_stand_in_spends_on_the_works() -> void:
 	var sunk := 0
 	for s in 3:
 		var j := Journey.begin(300 + s, "younger_son", "Egil")
-		# Five years: a trader is past his reserve (JourneyBot's 350 oz and 15
-		# a man) by the fifth, a little later since the wider world's markets.
+		# The Viking: he is past the stand-in's reserve (350 oz and 15 a man)
+		# by his fourth year in every saga measured; a trader comes to it in
+		# his fifth or sixth, too near the edge for a test to lean on.
+		var first := j.c.band.leader
 		for y in 5:
-			JourneyBot.play_year(j, Way.Id.TRADER)
+			JourneyBot.play_year(j, Way.Id.VIKING)
 			if j.c.over:
 				break
 		sunk += j.c.band.estate.sunk
-		assert_true(not j.c.band.leader.natures.is_empty(), "the stand-in has a nature")
+		# The man the saga began with (he may have fallen since, and a second
+		# who takes the high seat brings no chosen nature).
+		assert_true(not first.natures.is_empty(), "the stand-in has a nature")
 	assert_true(sunk > 0, "silver laid out on works and arms in five years: %d" % sunk)
 
 
