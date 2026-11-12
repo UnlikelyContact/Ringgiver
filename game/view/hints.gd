@@ -192,6 +192,9 @@ func check() -> void:
 		var p = _map.get(name)
 		if p != null and (p as Control).visible:
 			busy = true
+	for ch in _map.get_children():
+		if ch is WinterScreen:
+			busy = true  # the hall covers the map (a saga loaded in winter)
 	if busy:
 		_card.visible = false
 		return

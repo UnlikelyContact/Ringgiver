@@ -297,6 +297,26 @@ func _skip_log() -> void:
 	_log_box.queue_redraw()
 
 
+## Where the map looks and what is picked on it, for the save
+## (view/game.gd): plain values.
+func view_state() -> Dictionary:
+	return {"cam": [canvas.cam.x, canvas.cam.y], "zoom": canvas.zoom, "follow": canvas.follow, "selected": selected, "paused": paused}
+
+
+## Puts the map back as `view_state` had it.
+func restore_view(v: Dictionary) -> void:
+	var cam: Variant = v.get("cam", [])
+	if cam is Array and (cam as Array).size() == 2:
+		canvas.cam = Vector2(float(cam[0]), float(cam[1]))
+	canvas.zoom = clampf(float(v.get("zoom", canvas.zoom)), MapCanvas.ZOOM_MIN, MapCanvas.ZOOM_MAX)
+	canvas.follow = bool(v.get("follow", canvas.follow))
+	paused = bool(v.get("paused", paused))
+	var sel := str(v.get("selected", selected))
+	if sel == "" or journey.c.world.place(sel) != null:
+		selected = sel
+	refresh()
+
+
 # --- The days passing ---------------------------------------------------------------
 
 func _process(delta: float) -> void:
@@ -308,6 +328,8 @@ func _process(delta: float) -> void:
 	if modal.visible or side_panel.visible or paused or not journey.moving():
 		return
 	journey.advance(delta * DAYS_PER_SECOND * (3.0 if fast else 1.0))
+	if host.has_method("autosave_travel"):
+		host.autosave_travel()  # now and then on the road (view/game.gd)
 	if not journey.fight.is_empty():
 		refresh()
 		return
@@ -339,6 +361,8 @@ func refresh() -> void:
 	if not journey.fight.is_empty():
 		host.start_battle()
 		return
+	if host != null and host.has_method("autosave"):
+		host.autosave()  # every redraw follows a beat of the saga (view/game.gd)
 	if journey.in_winter():
 		WinterScreen.show_on(self, journey)
 		return

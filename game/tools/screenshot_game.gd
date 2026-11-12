@@ -52,7 +52,55 @@
 ## thralls:<n>, captives:<n>:<place> (the captives' decision after a raid
 ## there), omen:<id> (raven, stumble, dream, fetch, eagle), seer (one comes
 ## to the hall at winter), landmodal (your land and household).
+## The save (docs/design/notes/save.md; the tool's saves go to
+## user://shot_saves/, never the player's): on the map, `save` writes the
+## autosave, `save:<slot>` a slot (slot1..slot3), `load` saves and loads the
+## autosave into a new map (as Continue does), `sagas` opens the Sagas modal
+## over the map, `paste` its "Paste a save". `what` "continue" is the title with a saga to continue
+## (a year played by the stand-in viking, saved, a slot kept too), "sagas"
+## that title with the Sagas modal open, "confirm" that title asking
+## before a new saga is begun.
 extends SceneTree
+
+
+## The save's commands on the map. True when `cmd` was one.
+func _save_cmd(game: Node, cmd: String) -> bool:
+	if cmd == "save" or cmd.begins_with("save:"):
+		game.save_now(cmd.trim_prefix("save:") if cmd.begins_with("save:") else SaveStore.AUTO)
+		return true
+	if cmd == "load":
+		game.save_now()
+		var err: String = game.load_saga(SaveStore.AUTO)
+		if err != "":
+			push_error("load: " + err)
+		await process_frame
+		if game.map != null:
+			game.map.paused = true
+		return true
+	if cmd == "sagas" or cmd == "paste":
+		var m := SavesModal.open(game.map if game.map != null else game.screen, game)
+		if cmd == "paste":
+			SavesModal._paste(m, game)
+		return true
+	return false
+
+
+## The title with a saga in the autosave (and slot one), for "continue",
+## "sagas" and "confirm".
+func _title_with_save(game: Node, what: String) -> void:
+	for slot in [SaveStore.AUTO, SaveStore.BACKUP] + SaveStore.SLOTS:
+		SaveStore.remove(slot)
+	game.begin_saga("younger_son", "Egil")
+	JourneyBot.play_year(game.journey, Way.Id.VIKING)
+	game.journey.quick = false
+	game.save_now(SaveStore.AUTO)
+	game.save_now("slot1")
+	game.show_title()
+	await process_frame
+	if what == "sagas":
+		SavesModal.open(game.screen, game)
+	elif what == "confirm":
+		game._ask_before_new(game.show_name)
 
 
 ## The shell's commands, on whatever screen is up. True when `cmd` was one.
@@ -110,9 +158,18 @@ func _init() -> void:
 	Settings.persist = false
 	game.seed_in = seed_in
 	game.use_config = false
+	SaveStore.dir = "user://shot_saves/"
 	get_root().add_child(game)
 	await process_frame
-	if what == "settings":
+	# Saving on, into the tool's own directory, only for the save's shots:
+	# the others look as they always did.
+	var saving := what in ["continue", "sagas", "confirm"]
+	for i in range(3, args.size()):
+		saving = saving or args[i] in ["load", "sagas", "paste"] or args[i].begins_with("save")
+	game.autosave_on = saving
+	if what == "continue" or what == "sagas" or what == "confirm":
+		await _title_with_save(game, what)
+	elif what == "settings":
 		for i in range(3, args.size()):
 			await _shell(game, args[i])
 		game.show_title()
@@ -214,6 +271,8 @@ func _init() -> void:
 				game.hints.check()
 			await process_frame
 	elif what != "title":
+		for slot in [SaveStore.AUTO, SaveStore.BACKUP]:
+			SaveStore.remove(slot)
 		game.begin_saga(what, "Egil")
 		var j: Journey = game.journey
 		var map: MapScreen = game.map
@@ -223,6 +282,11 @@ func _init() -> void:
 			if await _shell(game, cmd):
 				await process_frame
 				map = game.map  # "large" builds the map again
+				continue
+			if await _save_cmd(game, cmd):
+				await process_frame
+				map = game.map  # "load" builds the map again
+				j = game.journey
 				continue
 			if cmd == "quick":
 				j.quick = true

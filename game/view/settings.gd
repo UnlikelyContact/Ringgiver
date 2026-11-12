@@ -237,6 +237,9 @@ static func _fill(m: UiModal, game: Node) -> void:
 		said.text = "The hints will come again as you go, and the burned hall will be taught again.", 0.0)
 	more.add_child(again)
 	more.add_child(said)
+	if game != null and game.has_method("load_saga") and bool(game.get("autosave_on")):
+		var host := m.get_parent() as Control
+		more.add_child(UiTheme.secondary("Sagas: keep, load, copy", func() -> void: SavesModal.open(host, game), 0.0))
 	more.add_child(UiTheme.quiet("About the game", func() -> void: _about(m, game), 0.0))
 	m.add_button("Done", m.close, "PrimaryButton", 200.0)
 
