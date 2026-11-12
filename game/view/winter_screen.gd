@@ -29,63 +29,33 @@ var _step_seen := -1
 
 ## The look of every part of the screen, by role: the one place to change it.
 static func _style(c: Control, role: String) -> void:
-	var gold := Color("c9a227")
-	var text := Color("e8e2d6")
-	var dim := Color("a39c90")
+	# Every role maps onto the shared look (UiTheme, docs/design/notes/ui.md).
 	match role:
 		"title":
-			c.add_theme_font_size_override("font_size", 26)
-			c.add_theme_color_override("font_color", gold)
+			c.theme_type_variation = &"TitleLabel"
 		"where", "dim":
-			c.add_theme_font_size_override("font_size", 15)
-			c.add_theme_color_override("font_color", dim)
-		"tally":
-			c.add_theme_font_size_override("font_size", 17)
-			c.add_theme_color_override("font_color", text)
-		"body":
-			c.add_theme_font_size_override("font_size", 17)
-			c.add_theme_color_override("font_color", text)
+			c.theme_type_variation = &"SmallLabel"
+		"tally", "body", "row_detail", "told", "tag":
+			c.theme_type_variation = &"BodyLabel"
 		"note":
-			c.add_theme_font_size_override("font_size", 16)
-			c.add_theme_color_override("font_color", Color("e0b43a"))
-		"row_title":
-			c.add_theme_font_size_override("font_size", 19)
-			c.add_theme_color_override("font_color", gold)
-		"row_detail":
-			c.add_theme_font_size_override("font_size", 16)
-			c.add_theme_color_override("font_color", text)
-		"tag":
-			c.add_theme_font_size_override("font_size", 16)
-			c.add_theme_color_override("font_color", Color("e4dccb"))
-		"told_head":
-			c.add_theme_font_size_override("font_size", 19)
-			c.add_theme_color_override("font_color", gold)
-		"told":
-			c.add_theme_font_size_override("font_size", 16)
-			c.add_theme_color_override("font_color", text)
+			c.theme_type_variation = &"BodyLabel"
+			c.add_theme_color_override("font_color", Palette.UI_GOLD)
+		"row_title", "told_head":
+			c.theme_type_variation = &"HeadingLabel"
 		"bar":
-			c.add_theme_stylebox_override("panel", _box(Color(0.09, 0.075, 0.06, 0.94), Color(gold, 0.45), 8))
+			c.theme_type_variation = &"FramePanel"
 		"sheet":
-			c.add_theme_stylebox_override("panel", _box(Color(0.12, 0.105, 0.09, 0.82), Color(gold, 0.3), 10))
+			c.add_theme_stylebox_override("panel", UiTheme.box(Color(Palette.UI_NIGHT, 0.8), Palette.UI_RULE_DIM, 1))
 		"row":
-			c.add_theme_stylebox_override("panel", _box(Color(0.17, 0.15, 0.13, 0.95), Color(0.35, 0.3, 0.24, 0.8), 8))
-		"button", "button_on", "go":
-			c.add_theme_font_size_override("font_size", 17)
-			var base := Color("3a3026") if role == "button" else (Color("6b4a2e") if role == "button_on" else Color("8b2a24"))
-			for st in ["normal", "hover", "pressed", "focus", "disabled"]:
-				var col := base
-				if st == "hover":
-					col = base.lightened(0.12)
-				elif st == "pressed":
-					col = base.darkened(0.2)
-				elif st == "disabled":
-					col = Color(0.16, 0.14, 0.12)
-				var sb := _box(col, Color(gold, 0.7 if role != "button" else 0.35), 8)
-				if st == "focus":
-					sb.bg_color = Color(0, 0, 0, 0)
-				c.add_theme_stylebox_override(st, sb)
-			c.add_theme_color_override("font_color", text)
-			c.add_theme_color_override("font_disabled_color", Color(0.45, 0.42, 0.38))
+			c.theme_type_variation = &"CardPanel"
+		"button":
+			c.custom_minimum_size.y = TAP
+		"button_on":
+			c.theme_type_variation = &"CommandButton"
+			c.add_theme_color_override("font_color", Palette.UI_GOLD)
+			c.custom_minimum_size.y = TAP
+		"go":
+			c.theme_type_variation = &"PrimaryButton"
 			c.custom_minimum_size.y = TAP
 
 
