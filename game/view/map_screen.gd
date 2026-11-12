@@ -303,6 +303,7 @@ func _fill_place() -> void:
 		place_box.add_child(go)
 		return
 	# The market first, then the deeds.
+	place_box.add_child(_small("What sells where, and men for hire", _show_trade))
 	var goods := journey.market()
 	if not goods.is_empty():
 		place_box.add_child(_text("The market (what you pay / what you are paid, an ounce a unit):", 13, Palette.TEXT))
@@ -576,6 +577,37 @@ func _show_families() -> void:
 		list.add_child(_text(about, 12, Palette.TEXT))
 		if not (r.ties as PackedStringArray).is_empty():
 			list.add_child(_text("; ".join(r.ties), 12, Palette.DIM))
+	_close_side(box)
+
+
+## What sells where (Journey.price_book) and the men for hire where the
+## band stands (Journey.men_for_hire): plain values from the sim, read
+## out. Hiring itself is among the place's deeds.
+func _show_trade() -> void:
+	var box := _open_side("What sells where")
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	var book := journey.price_book()
+	var runs := PackedStringArray()
+	for r in (book.runs as Array).slice(0, 6):
+		runs.append("%s: buy at %s for %d, sell at %s for %d" % [str(r.name).capitalize(), r.from_name, int(r.buy), r.to_name, int(r.sell)])
+	list.add_child(_text("The best carries you know of", 15, Palette.GOLD))
+	list.add_child(_text("\n".join(runs) if not runs.is_empty() else "You have seen too few prices yet. Every market and farm stall you come to is remembered.", 12, Palette.TEXT))
+	for pl in book.places:
+		var goods := PackedStringArray()
+		for row in pl.rows:
+			goods.append("%s %s/%s" % [row.name, str(row.buy) if int(row.buy) > 0 else "-", str(row.sell) if int(row.sell) > 0 else "-"])
+		list.add_child(_text("%s (%s): %s" % [Journey._cap(str(pl.name)), pl.when, ", ".join(goods)], 12, Palette.DIM))
+	var men := journey.men_for_hire()
+	if not men.is_empty():
+		list.add_child(_text("Men for hire here", 15, Palette.GOLD))
+		for o in men:
+			list.add_child(_text("%s, %d oz and %d a month, %s" % [o.text, int(o.price), int(o.wage), o.tier], 12, Palette.TEXT))
 	_close_side(box)
 
 
