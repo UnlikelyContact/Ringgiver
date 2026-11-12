@@ -12,6 +12,7 @@ func _band(n: int) -> Band:
 		b.add_man(m)
 	b.silver = 50
 	b.food = 30
+	b.captives = 1  # a thrall kept, so thrall unrest can be drawn
 	return b
 
 

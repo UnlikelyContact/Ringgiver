@@ -6,6 +6,12 @@
 ## answer:<id>, select:<place>, invest:<way>, silver:<oz>, zoom:<px>,
 ## quick (tell fights quickly), men, ways, families, chronicle, year:<way> (the stand-in player
 ## plays a year with that bent), rounds:<n> and leave (on the battle screen).
+## The winter (WinterScreen): summer:<way> lets the stand-in player of that
+## bent play on until the band goes into winter quarters; winter answers what waits and winters where
+## the band stands, wstep:<n> goes to step n (0 the store .. 6 spring; past
+## the hall's talk the winter is lived through), wchoose:<id> makes a
+## choice by its id (Journey.winter_choose), wauto keeps the choices as
+## they stand and begins the spring.
 ##
 ## The opening (docs/design/notes/tutorial.md): `what` "begin" is the name
 ## screen, "night:<n>" the night's card n, "escape" the burned hall's fight
@@ -148,6 +154,30 @@ func _init() -> void:
 			elif cmd.begins_with("year:"):
 				JourneyBot.play_year(j, int(cmd.trim_prefix("year:")))
 				j.quick = false
+				j.stepped_winter = true
+			elif cmd.begins_with("summer:"):
+				JourneyBot.play_year(j, int(cmd.trim_prefix("summer:")), true)
+				j.quick = false
+				j.stepped_winter = true
+			elif cmd == "winter":
+				j.quick = true
+				while not j.decisions.is_empty():
+					j.answer(str(j.current().options[0].id))
+				j.quick = false
+				j.act("winter")
+			elif cmd.begins_with("wstep:"):
+				var want := int(cmd.trim_prefix("wstep:"))
+				var guard := 0
+				while j.in_winter() and guard < 12 and int(j.winter_state().step) != want:
+					guard += 1
+					j.winter_choose("next" if int(j.winter_state().step) < want else "back")
+			elif cmd.begins_with("wchoose:"):
+				j.winter_choose(cmd.trim_prefix("wchoose:"))
+			elif cmd == "wauto":
+				j.winter_auto()
+				for ch in map.get_children():
+					if ch is WinterScreen:
+						ch.queue_free()
 			elif cmd.begins_with("invest:"):
 				j.invest(int(cmd.trim_prefix("invest:")))
 			elif cmd.begins_with("silver:"):

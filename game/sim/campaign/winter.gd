@@ -40,11 +40,20 @@ static func run_turn(rng: SimRng, rules: CampaignRules, band: Band, cal: Calenda
 			CampaignTypes.Task.REPAIR:
 				rep.shields_mended = true
 				var amount := 2 if hall.has(CampaignTypes.Building.SMITHY) else 1
-				var done := mini(amount, band.ship_damage)
-				band.ship_damage -= done
-				rep.repaired += done
+				# The ship on the map carries her own hurt; the old field is
+				# the hurt of a band with no Ship (the plain campaign).
+				if band.ship != null:
+					var done_ship := mini(amount, band.ship.damage)
+					band.ship.damage -= done_ship
+					rep.repaired += done_ship
+				else:
+					var done := mini(amount, band.ship_damage)
+					band.ship_damage -= done
+					rep.repaired += done
 			CampaignTypes.Task.HUNT:
 				var got := maxi(0, rules.hunt_rations + rng.randi_range(-rules.hunt_spread, rules.hunt_spread))
+				if plan.cold:
+					got += rules.camp_hunt_bonus
 				band.food += got
 				log.append("%s: %s hunted and brought in %d rations." % [when, m.display_name, got])
 			CampaignTypes.Task.FISH:
@@ -70,11 +79,13 @@ static func run_turn(rng: SimRng, rules: CampaignRules, band: Band, cal: Calenda
 	if hall.has(CampaignTypes.Building.BYRE):
 		band.food += rules.byre_rations
 	if rep.repaired > 0:
-		log.append("%s: the ship was mended (%d damage restored, %d left)." % [when, rep.repaired, band.ship_damage])
+		log.append("%s: the ship was mended (%d damage restored, %d left)." % [when, rep.repaired,
+				band.ship.damage if band.ship != null else band.ship_damage])
 	rep.food_gained = band.food - food_before
 
-	# Events.
-	rep.events = WinterEvents.roll(rng, rules, band, cal, guarded, log)
+	# Events (unless the hall's talk has had them already).
+	if plan.events:
+		rep.events = WinterEvents.roll(rng, rules, band, cal, guarded, log)
 	for ev in rep.events:
 		if ev.has("battle_required") and rep.battle_required.is_empty():
 			rep.battle_required = ev.battle_required
@@ -88,7 +99,8 @@ static func run_turn(rng: SimRng, rules: CampaignRules, band: Band, cal: Calenda
 		var m := band.man_by_id(id)
 		if m != null and m.alive:
 			eaters.append(m)
-	var budget := band.food + maxi(0, band.household_skill)
+	var board := maxi(0, band.household_skill) + maxi(0, plan.host_rations)
+	var budget := band.food + board
 	var unfed := PackedStringArray()
 	for m in eaters:
 		var ok := budget > 0
@@ -98,7 +110,7 @@ static func run_turn(rng: SimRng, rules: CampaignRules, band: Band, cal: Calenda
 		if not ok:
 			unfed.append(m.display_name)
 	var fed_count := eaters.size() - unfed.size()
-	rep.food_eaten = mini(band.food, maxi(0, fed_count - maxi(0, band.household_skill)))
+	rep.food_eaten = mini(band.food, maxi(0, fed_count - board))
 	band.food -= rep.food_eaten
 	if not unfed.is_empty():
 		log.append("%s: the stores ran short; %s went hungry." % [when, ", ".join(unfed)])
@@ -131,9 +143,11 @@ static func run_turn(rng: SimRng, rules: CampaignRules, band: Band, cal: Calenda
 			rep.gifts[id] = given
 			log.append("%s: %s was given %d oz of silver." % [when, m.display_name, given])
 
-	# Seating.
+	# Seating (in a camp there are no benches, and no one is shamed by it:
+	# the cold is what the camp costs).
+	rep.cold = plan.cold
 	for m in men:
-		var ok := hall.is_seated(m.id)
+		var ok := plan.cold or hall.is_seated(m.id)
 		rep.seated[m.id] = ok
 		if not ok and not hall.winter_unseated.has(m.id):
 			hall.winter_unseated.append(m.id)

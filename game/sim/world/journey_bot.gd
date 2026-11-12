@@ -8,12 +8,20 @@ extends RefCounted
 
 
 ## Plays until the year turns (or the saga ends). Returns the steps taken.
-static func play_year(j: Journey, bent: int) -> int:
+## With `stop_at_winter` he stops when the band goes into its winter
+## quarters, the winter's choices still to make (tools).
+static func play_year(j: Journey, bent: int, stop_at_winter := false) -> int:
 	j.quick = true
+	j.stepped_winter = true
 	var year := j.c.cal.year
 	var steps := 0
 	while not j.c.over and j.c.cal.year == year and steps < 900:
 		steps += 1
+		if j.in_winter():
+			if stop_at_winter:
+				break
+			winter(j, bent)
+			continue
 		if not j.decisions.is_empty():
 			j.answer(_answer(j, j.current(), bent))
 			continue
@@ -25,6 +33,63 @@ static func play_year(j: Journey, bent: int) -> int:
 		_spend(j, bent)
 		_act(j, bent)
 	return steps
+
+
+## The winter in the hall, as a man of his bent keeps it (WinterHall):
+## the store as the sensible defaults have it; rings for every great deed
+## and silver for the cold-hearted from a raider, a berserk, a skald or a
+## king's man, a few ounces to every man from the law-wise, the defaults
+## from the trader; the fighting ways drill the boar's snout and swear
+## "Swine!", the king's man and the law-wise the hedgehog; the law-wise
+## names a war-leader and keeps out of the wall himself; a raider vows at
+## Yule. Then the points are spent and the spring begins. Always ends the
+## winter: it never waits on anything.
+static func winter(j: Journey, bent: int) -> void:
+	var h := j.winter_hall
+	var c := j.c
+	var band := c.band
+	var men := band.living_men()
+	match bent:
+		Way.Id.VIKING, Way.Id.BERSERK, Way.Id.SKALD, Way.Id.KINGS_MAN:
+			for m in men:
+				if WinterHall.great_deed(c.rules, m):
+					while int(h.gifts.get(m.id, 0)) < 2 and h.silver_after(j) >= 30:
+						j.winter_choose("gift+:%d" % m.id)
+			for m in men:
+				if m.loyalty < 40 and int(h.gifts.get(m.id, 0)) == 0 and h.silver_after(j) >= 30:
+					j.winter_choose("gift+:%d" % m.id)
+		Way.Id.LAWMAN:
+			for m in men:
+				if int(h.gifts.get(m.id, 0)) == 0 and h.silver_after(j) >= 30:
+					j.winter_choose("gift+:%d" % m.id)
+	if bent == Way.Id.VIKING or bent == Way.Id.BERSERK:
+		j.winter_choose("shape:boar's snout")
+		if band.custom_shouts.is_empty():
+			j.winter_choose("shout:boar's snout")
+	elif bent == Way.Id.KINGS_MAN or bent == Way.Id.LAWMAN:
+		j.winter_choose("shape:refused flanks")
+		if band.custom_shouts.is_empty():
+			j.winter_choose("shout:refused flanks")
+	if bent == Way.Id.LAWMAN and not men.is_empty():
+		var best: Man = null
+		for m in men:
+			if best == null or m.tier > best.tier or (m.tier == best.tier and m.stat(CombatTypes.Stat.SKILL) + m.stat(CombatTypes.Stat.NERVE) > best.stat(CombatTypes.Stat.SKILL) + best.stat(CombatTypes.Stat.NERVE)):
+				best = m
+		if h.war_leader != best.id:
+			j.winter_choose("war:%d" % best.id)
+		if not h.keeps_back:
+			j.winter_choose("keep")
+	if bent == Way.Id.VIKING:
+		for i in h.talk.size():
+			if str(h.talk[i].kind) == "vow":
+				j.winter_choose("talk:%d:vow:0" % i)
+	var guard := 0
+	while j.in_winter() and not h.resolved and guard < 10:
+		guard += 1
+		j.winter_choose("next")
+	if j.in_winter():
+		_spend(j, bent)
+	j.winter_end()
 
 
 ## Points go down his own path first, then wherever they will.

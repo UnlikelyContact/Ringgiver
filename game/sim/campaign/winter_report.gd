@@ -19,6 +19,7 @@ var vow := ""
 var gifts := {}  # man id -> ounces actually given (for Module F to score)
 var events: Array[Dictionary] = []
 var battle_required := {}  # {} or {kind, attackers, tier, against}
+var cold := false  # wintered in a camp: the loop cools every man
 var men_without_seat: Array[int] = []  # at THAW: everyone unseated at any turn this winter
 
 

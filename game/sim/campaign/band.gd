@@ -20,6 +20,11 @@ var luck := 5
 var fame := 10
 var honor := 50
 var sworn_second_id := -1
+## The war-leader (the stallari) who can lead the wall, and whether he
+## does so in the leader's place (Campaign.line_men): the law-wise man's
+## answer to standing in the wall himself.
+var war_leader_id := -1
+var leader_keeps_back := false
 
 # Family (Module H).
 var wife := ""
@@ -35,6 +40,9 @@ var ship: Ship = null
 var cargo := {}  # WorldTypes.Good -> units
 var location := ""  # place id
 var home := ""  # place id of the hall
+## Where the band's own hall stands (the benches it builds): its origin's
+## place on the map unless it is given another. "" before the first winter.
+var hall_at := ""
 var known_places := {}  # place id -> true
 var captives := 0
 var land := 0  # units of farmland held; yields food and silver each winter
@@ -147,6 +155,14 @@ func fighters(rules: CampaignRules = null) -> Array[Man]:
 		if rules == null or not m.too_hurt_to_fight(rules):
 			out.append(m)
 	return out
+
+
+## The named war-leader, if he is living and still sworn, or null.
+func war_leader() -> Man:
+	var m := man_by_id(war_leader_id)
+	if m == null or m == leader or not m.alive or not men.has(m):
+		return null
+	return m
 
 
 ## The living men left at the ship, too hurt to fight (never the leader).
