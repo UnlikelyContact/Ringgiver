@@ -256,7 +256,7 @@ func _year_facts(c: Campaign) -> Dictionary:
 		if best == null or m.this_year("kills") > best.this_year("kills"):
 			best = m
 	return {"wins": c._summer_wins, "kills": kills, "best": best.display_name if best != null and best.this_year("kills") > 0 else "",
-			"best_kills": best.this_year("kills") if best != null else 0}
+			"best_kills": best.this_year("kills") if best != null else 0, "best_him": best.him() if best != null else "him"}
 
 
 ## The sensible winter, as the old plan made it: hunters when the store
@@ -685,7 +685,7 @@ func resolve(j: Journey) -> void:
 		band.remove_man(m)
 		for brother in Bonds.oath_brothers(band, m):
 			Loyalty.adjust(brother, -rules.bond_brother_left)
-		lines.append("%s let %s go, with thanks for his service." % [who, m.display_name])
+		lines.append("%s let %s go, with thanks for %s service." % [who, m.display_name, m.his()])
 		band.log("%s let %s go" % [who, m.display_name])
 	var away: Array[Man] = []
 	for id in sent_home:
@@ -695,7 +695,7 @@ func resolve(j: Journey) -> void:
 		band.remove_man(m)
 		Loyalty.adjust(m, -rules.loyalty_sent_home)
 		away.append(m)
-		lines.append("%s went home to his kin for the winter." % m.display_name)
+		lines.append("%s went home to %s kin for the winter." % [m.display_name, m.his()])
 	for cd in candidates:
 		if not cd.taken or band.living_men().size() >= c.room():
 			continue
@@ -755,6 +755,8 @@ func resolve(j: Journey) -> void:
 		band.food += grain(j) * rules.grain_rations
 		lines.append("The grain in the hold went to the store: %d rations." % (grain(j) * rules.grain_rations))
 		band.cargo.erase(WorldTypes.Good.GRAIN)
+	# The skald kept at the hall, the boathouse (Estate).
+	Estate.on_winter(j, self, lines)
 	# The hall's talk. A fight at the hall played on the battle screen
 	# stops it here; the rest is done when that fight is over.
 	_held = {"mark": mark, "chron": chron, "said_mark": said_mark, "lines": lines, "away": away, "vow": ""}
@@ -890,7 +892,7 @@ func _give(j: Journey, lines: PackedStringArray) -> void:
 	for m in men:
 		if great_deed(rules, m) and not given.has(m.id) and chest >= rules.miser_chest:
 			Loyalty.adjust(m, -rules.loyalty_passed_over)
-			lines.append("%s did great things this summer and was given nothing for it; he takes it ill." % m.display_name)
+			lines.append("%s did great things this summer and was given nothing for it; %s takes it ill." % [m.display_name, m.he()])
 	var n := maxi(1, men.size())
 	if not men.is_empty() and total >= rules.open_hand_ounces * n:
 		band.fame = clampi(band.fame + rules.fame_open_hand, 0, 100)
@@ -1021,7 +1023,7 @@ func _verse(j: Journey) -> PackedStringArray:
 	else:
 		out.append("no raven followed his ship this summer;")
 	if str(_facts.get("best", "")) != "":
-		out.append("%s fed the wolf, and %d men lay down before him;" % [_facts.best, int(_facts.best_kills)])
+		out.append("%s fed the wolf, and %d men lay down before %s;" % [_facts.best, int(_facts.best_kills), str(_facts.get("best_him", "him"))])
 	else:
 		out.append("the swords hung on the wall and grew no rust;")
 	if hand == "open":
@@ -1172,8 +1174,8 @@ func _state_store(j: Journey, s: Dictionary) -> void:
 		if let_go.has(m.id):
 			continue
 		var home := sent_home.has(m.id)
-		rows.append(_row(m.display_name, "Send him home to his kin: one mouth fewer. He comes back at the thaw if he is content.",
-				"at home" if home else "in the hall", [_btn("home:%d" % m.id, "Keep him" if home else "Send home", true, home)]))
+		rows.append(_row(m.display_name, "Send %s home to %s kin: one mouth fewer. %s comes back at the thaw if %s is content." % [m.him(), m.his(), m.he(true), m.he()],
+				"at home" if home else "in the hall", [_btn("home:%d" % m.id, ("Keep %s" % m.him()) if home else "Send home", true, home)]))
 
 
 func _state_gifts(j: Journey, s: Dictionary) -> void:
@@ -1235,7 +1237,7 @@ func _state_yard(j: Journey, s: Dictionary) -> void:
 		var role: int = roles.get(m.id, m.role)
 		var is_banner := banner == m.id or (banner < 0 and m.is_banner)
 		s.rows.append(_row(m.display_name, "Stands in the %s.%s" % [ROLE_PLACES[role].to_lower(), " Carries the banner at your shoulder." if is_banner else ""],
-				ROLE_PLACES[role], [_btn("role:%d" % m.id, "Move him"), _btn("banner:%d" % m.id, "Banner", not is_banner, is_banner)]))
+				ROLE_PLACES[role], [_btn("role:%d" % m.id, "Move %s" % m.him()), _btn("banner:%d" % m.id, "Banner", not is_banner, is_banner)]))
 
 
 static func _fam_words(f: float) -> String:
@@ -1269,9 +1271,9 @@ func _state_men(j: Journey, s: Dictionary) -> void:
 		s.rows.append(_row("%s comes to the hall" % m.display_name, str(cd.line), "taken on" if cd.taken else "",
 				[_btn("take:%d" % i, "Turn away" if cd.taken else "Take him", cd.taken or silver_after(j) >= int(cd.ask), cd.taken)]))
 	var wl := band.man_by_id(war_leader)
-	s.rows.append(_row("Lead the wall yourself", ("%s, your war-leader, leads it in your place: his eyes and voice, half the fame of it yours, and you safe at the ship." % wl.display_name) \
+	s.rows.append(_row("Lead the wall yourself", ("%s, your war-leader, leads it in your place: %s eyes and voice, half the fame of it yours, and you safe at the ship." % [wl.display_name, wl.his()]) \
 			if wl != null and keeps_back else "You stand in the wall in every fight.", "in your place" if keeps_back else "yourself",
-			[_btn("keep", "He leads" if not keeps_back else "I lead", war_leader >= 0, keeps_back)]))
+			[_btn("keep", ("%s leads" % (wl.he(true) if wl != null else "He")) if not keeps_back else "I lead", war_leader >= 0, keeps_back)]))
 	var order := seating(j)
 	for idx in order.size():
 		var m := band.man_by_id(order[idx])

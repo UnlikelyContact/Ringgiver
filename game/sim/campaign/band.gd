@@ -123,6 +123,10 @@ var taken: Array[Dictionary] = []
 var settled_iceland := false
 var law := {}
 var foretold := {}
+## Men and silver (docs/design/notes/men-silver.md): the hall's works, the
+## skald, the ship's fittings, the smiths' stock, the arms chest, the dead
+## honoured, the shieldmaidens (Estate).
+var estate: Estate = Estate.new()
 var _bonds := {}  # "lo:hi" -> int
 var _bond_kinds := {}  # "lo:hi" -> CampaignTypes.BondKind
 var _next_id := 1

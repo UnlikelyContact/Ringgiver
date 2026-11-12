@@ -35,7 +35,7 @@ static func hint(rules: CampaignRules, m: Man, stat: CombatTypes.Stat, judge_lev
 	var cap: int = m.potential[stat]
 	if level == 1:
 		var room := 1 if cap > m.stats[stat] else 0
-		return "his %s %s" % [CombatTypes.STAT_NAMES[stat], rules.hint_room_phrases[room]]
+		return "%s %s %s" % [m.his(), CombatTypes.STAT_NAMES[stat], rules.hint_room_phrases[room]]
 	var phrase: String = rules.hint_phrases[stat][bucket(cap)]
 	if level == 3 and stat == best_stat(m):
 		phrase += rules.hint_best_marker

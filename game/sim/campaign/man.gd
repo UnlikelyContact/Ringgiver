@@ -77,6 +77,40 @@ var wage := 0
 var paid_until := 0.0
 var hire_kind := ""
 var lent_by := ""
+## Men and silver (docs/design/notes/men-silver.md). A woman of the band:
+## a shieldmaiden, a rare exception (Shieldmaidens). Nothing in the fight
+## differs for her; the saga's words do (`he`, `his`, `him`, `man_word`).
+var woman := false
+## The leader's nature (Natures keys): two traits chosen at the saga's
+## start, or a son's share of his father's. Empty for most men, whose
+## nature is their `personality`.
+var natures: PackedStringArray = []
+## A sword with a name, bought from a great smith (Estate): "" for none.
+var sword_name := ""
+
+
+## The saga's words for this man or woman: "he"/"she", "his"/"her",
+## "him"/"her", "man"/"woman", "son"/"daughter"; `cap` raises the first letter.
+func he(cap := false) -> String:
+	var w := "she" if woman else "he"
+	return w.capitalize() if cap else w
+
+
+func his(cap := false) -> String:
+	var w := "her" if woman else "his"
+	return w.capitalize() if cap else w
+
+
+func him() -> String:
+	return "her" if woman else "him"
+
+
+func himself() -> String:
+	return "herself" if woman else "himself"
+
+
+func man_word() -> String:
+	return "woman" if woman else "man"
 
 
 ## One of this year's counts (`year_tally`), 0 when none.

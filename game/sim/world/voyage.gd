@@ -166,7 +166,7 @@ static func _wreck(rng: SimRng, rules: WorldRules, world: World, band: Band, sho
 	for m in drowned:
 		m.alive = false
 		band.remove_man(m)
-		log.append("%s drowns%s." % [m.display_name, " in his mail" if m.armor == CombatTypes.Armor.MAIL else ""])
+		log.append("%s drowns%s." % [m.display_name, (" in %s mail" % m.his()) if m.armor == CombatTypes.Armor.MAIL else ""])
 
 
 static func _drownable(band: Band) -> Array[Man]:

@@ -124,4 +124,5 @@ static func son_of(rng: SimRng, rules: CampaignRules, father: Man, mother_potent
 		m.stats[s] = mini(m.stats[s], caps[s])
 	m.potential = caps
 	m.traits.append("son of %s" % father.display_name)
+	m.natures = Natures.inherit(rng.fork("nature"), rules, father)
 	return m

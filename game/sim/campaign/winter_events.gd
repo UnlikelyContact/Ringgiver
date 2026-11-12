@@ -276,8 +276,8 @@ static func card(rng: SimRng, rules: CampaignRules, band: Band, kind: String) ->
 						a.display_name, b.display_name, a.display_name, b.display_name]
 			else:
 				c.text = "%s and %s quarrel over the ale until others pull them apart. It is for you to judge between them." % [a.display_name, b.display_name]
-			opts.append({"id": "for_a", "label": "Find for %s" % a.display_name, "hint": "He is the warmer for it, %s the colder." % b.display_name})
-			opts.append({"id": "for_b", "label": "Find for %s" % b.display_name, "hint": "He is the warmer for it, %s the colder." % a.display_name})
+			opts.append({"id": "for_a", "label": "Find for %s" % a.display_name, "hint": "%s is the warmer for it, %s the colder." % [a.he(true), b.display_name]})
+			opts.append({"id": "for_b", "label": "Find for %s" % b.display_name, "hint": "%s is the warmer for it, %s the colder." % [b.he(true), a.display_name]})
 			opts.append({"id": "settle", "label": "Make them drink together", "silver": -2 * rules.settle_quarrel_ounces,
 					"hint": "A gift to each from you, and the matter is let lie."})
 			if c.holmgang:
@@ -415,7 +415,7 @@ static func resolve(rng: SimRng, rules: CampaignRules, band: Band, cal: Calendar
 					loser.healing_turns = maxi(loser.healing_turns, rules.quarrel_island_turns)
 					band.add_bond(a, b, -rules.quarrel_island_bond)
 					Bonds.update_kind(rules, band, a, b, log)
-					said = "%s and %s went to the island over a quarrel; %s came back with his blood let." % [a.display_name, b.display_name, loser.display_name]
+					said = "%s and %s went to the island over a quarrel; %s came back with %s blood let." % [a.display_name, b.display_name, loser.display_name, loser.his()]
 				_:
 					said = "%s and %s quarreled over the ale until others pulled them apart." % [a.display_name, b.display_name]
 		"feud_attack", "hall_burning":

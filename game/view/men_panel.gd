@@ -25,6 +25,8 @@ const STEPS := [
 ]
 ## The highest stat value of each step but the last.
 const STEP_TOPS := [3, 5, 7]
+## A woman's birth, by CampaignTypes.Origin: whose daughter she is.
+const DAUGHTER_OF := ["fisherman's house", "farmer's house", "house of outlaws", "freedman's house", "jarl's house"]
 ## His nature (CombatTypes.Personality): a word, and what it means.
 const NATURES := [
 	["steady", "keeps his place in the line when others would not"],
@@ -86,22 +88,23 @@ static func judge_level(band: Band) -> int:
 
 
 static func loyalty_words(rules: CampaignRules, m: Man) -> String:
+	var he := m.he(true)
 	if m.loyalty < rules.loyalty_leave_below:
-		return "He will leave at the thaw unless something changes."
+		return "%s will leave at the thaw unless something changes." % he
 	if m.loyalty < 35:
-		return "He grumbles, and his oath sits loosely on him."
+		return "%s grumbles, and %s oath sits loosely on %s." % [he, m.his(), m.him()]
 	if m.loyalty < 60:
-		return "He serves you, as he swore to."
+		return "%s serves you, as %s swore to." % [he, m.he()]
 	if m.loyalty < 80:
-		return "He is loyal to you."
-	return "He would die at your side."
+		return "%s is loyal to you." % he
+	return "%s would die at your side." % he
 
 
 static func ambition_words(rules: CampaignRules, m: Man) -> String:
 	var want: String = CampaignTypes.AMBITION_NAMES[m.ambition]
-	var head := "He wants %s" % want
+	var head := "%s wants %s" % [m.he(true), want]
 	if m.ambition == CampaignTypes.Ambition.HOME:
-		head = "He wants to go home"
+		head = "%s wants to go home" % m.he(true)
 	if m.ambition_met:
 		return "%s, and has had it in your service." % head
 	var part := float(m.ambition_progress) / maxf(1.0, float(rules.ambition_fulfilled))
@@ -161,7 +164,7 @@ static func years_words(band: Band, m: Man) -> String:
 static func known_for(rules: CampaignRules, m: Man) -> String:
 	var born: String = rules.origin_traits.get(m.origin, "")
 	if not m.deeds.is_empty():
-		return "Known for this: he %s." % m.deeds[m.deeds.size() - 1]
+		return "Known for this: %s %s." % [m.he(), m.deeds[m.deeds.size() - 1]]
 	if m.kills >= 2:
 		return "Has put down %d men." % m.kills
 	for t in m.traits:
@@ -180,6 +183,8 @@ static func known_for(rules: CampaignRules, m: Man) -> String:
 static func what_he_is(m: Man) -> String:
 	if m.is_leader:
 		return "%d, leader of the band" % m.age
+	if m.woman:
+		return "%d, a %s shieldmaiden%s" % [m.age, CombatTypes.TIER_NAMES[m.tier], ["", " of the second rank", " with the bow"][m.role]]
 	var role := ["shield-man", "spearman", "bowman"][m.role] as String
 	return "%d, a %s %s" % [m.age, CombatTypes.TIER_NAMES[m.tier], role]
 
@@ -242,6 +247,8 @@ func _row(m: Man) -> Button:
 	top.add_child(_quiet(UiTheme.label(title, "StrongLabel", false)))
 	if m == band.leader:
 		top.add_child(_quiet(UiTheme.chip("You", Palette.UI_GOLD)))
+	elif m.woman:
+		top.add_child(_quiet(UiTheme.chip("Shieldmaiden", Palette.UI_TEAL)))
 	top.add_child(_quiet(UiTheme.label(what_he_is(m), "SmallLabel", false)))
 	var line := UiTheme.label(known_for(c.rules, m), "SmallLabel")
 	line.add_theme_color_override("font_color", Palette.UI_TEXT.darkened(0.12))
@@ -293,14 +300,14 @@ func show_man(m: Man) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", UiTheme.S2)
 	box.add_child(head)
-	var about := PackedStringArray([what_he_is(m), "born a %s" % CampaignTypes.ORIGIN_NAMES[m.origin]])
+	var about := PackedStringArray([what_he_is(m), ("of a %s" % DAUGHTER_OF[m.origin]) if m.woman else "born a %s" % CampaignTypes.ORIGIN_NAMES[m.origin]])
 	var with_you := years_words(band, m)
 	if with_you != "":
 		about.append(with_you)
 	if m.is_banner:
-		about.append("he carries the banner")
+		about.append("%s carries the banner" % m.he())
 	if m.is_horn:
-		about.append("he blows the horn")
+		about.append("%s blows the horn" % m.he())
 	if band.sworn_second_id == m.id and not leader:
 		about.append("your sworn second")
 	var al := UiTheme.label(Journey._cap(", ".join(about)) + ".", "SmallLabel")
@@ -315,28 +322,34 @@ func show_man(m: Man) -> void:
 	grid.add_theme_constant_override("v_separation", UiTheme.S2)
 	box.add_child(grid)
 
-	# His nature, and what life has put on him.
-	var nature := _card(grid, "His nature")
-	if m.personality.is_empty():
-		nature.add_child(UiTheme.label("Nothing in him stands out yet: an even-tempered man.", "BodyLabel"))
+	# His nature, and what life has put on him. The leader's own (Natures),
+	# with what each trait does; a man's personality, in words.
+	var nature := _card(grid, "%s nature" % m.his(true))
+	for k in m.natures:
+		nature.add_child(UiTheme.label(Natures.name_of(k), "StrongLabel"))
+		var nl := UiTheme.label(Natures.line(rules, k), "SmallLabel")
+		nature.add_child(nl)
+	if m.personality.is_empty() and m.natures.is_empty():
+		nature.add_child(UiTheme.label("Nothing in %s stands out yet: an even-tempered %s." % [m.him(), m.man_word()], "BodyLabel"))
 	for p in m.personality:
 		var n: Array = NATURES[p]
-		nature.add_child(UiTheme.label("%s: he %s." % [Journey._cap(str(n[0])), n[1]]))
+		var says := str(n[1]).replace("his ", m.his() + " ").replace(" he ", " %s " % m.he())
+		nature.add_child(UiTheme.label("%s: %s %s." % [Journey._cap(str(n[0])), m.he(), says]))
 	var earned := PackedStringArray()
 	for t in m.traits:
 		earned.append(str(t))
 	for mm in m.maims:
-		earned.append("he carries %s" % CampaignTypes.MAIM_NAMES[mm])
+		earned.append("%s carries %s" % [m.he(), CampaignTypes.MAIM_NAMES[mm]])
 	if not earned.is_empty():
 		nature.add_child(UiTheme.label(Journey._cap("; ".join(earned)) + ".", "SmallLabel"))
 
 	# His strengths, in words; the numbers only if asked for.
-	var strength := _card(grid, "His strength")
+	var strength := _card(grid, "%s strength" % m.his(true))
 	for s in 5:
 		strength.add_child(_stat_line(s, m.stats[s]))
 
 	# What he may become, as far as the leader can judge it.
-	var may := _card(grid, "What he may become")
+	var may := _card(grid, "What %s may become" % m.he())
 	var judge := judge_level(band)
 	var hints := Potential.hints(rules, m, judge)
 	var lines := PackedStringArray()
@@ -344,32 +357,33 @@ func show_man(m: Man) -> void:
 		lines.append(str(h))
 	may.add_child(UiTheme.label(Journey._cap("; ".join(lines)) + ".", "BodyLabel"))
 	if Potential.is_coal_biter(rules, m) and judge >= 2:
-		may.add_child(UiTheme.label("Some would call him a coal-biter: little now, more later.", "SmallLabel"))
+		may.add_child(UiTheme.label("Some would call %s a coal-biter: little now, more later." % m.him(), "SmallLabel"))
 	var judged := ["not at all", "only by guessing", "fairly well", "well"][judge] as String
-	may.add_child(UiTheme.label("%s %s, by your wits." % ["You know yourself" if leader else "You read him", judged], "SmallLabel"))
+	may.add_child(UiTheme.label("%s %s, by your wits." % ["You know yourself" if leader else "You read %s" % m.him(), judged], "SmallLabel"))
 
 	# His deeds.
-	var deeds := _card(grid, "His deeds")
+	var he := m.he(true)
+	var deeds := _card(grid, "%s deeds" % m.his(true))
 	var told := PackedStringArray()
 	if m.battles_survived > 0:
-		told.append("He has come through %s." % _count(m.battles_survived, "fight", "fights"))
+		told.append("%s has come through %s." % [he, _count(m.battles_survived, "fight", "fights")])
 	else:
-		told.append("He has not yet stood in a fight with you.")
+		told.append("%s has not yet stood in a fight with you." % he)
 	if m.kills > 0:
-		told.append("He has put down %s." % _count(m.kills, "man", "men"))
+		told.append("%s has put down %s." % [he, _count(m.kills, "man", "men")])
 	if m.broke_count > 0:
-		told.append("He has broken and run %s." % _count(m.broke_count, "time", "times").replace("1 time", "once").replace("2 times", "twice"))
+		told.append("%s has broken and run %s." % [he, _count(m.broke_count, "time", "times").replace("1 time", "once").replace("2 times", "twice")])
 	for d in m.deeds:
-		told.append("He %s." % d)
+		told.append("%s %s." % [he, d])
 	var wound := m.current_wound(rules)
 	if wound != CombatTypes.Wound.UNHURT:
-		told.append("He is %s now, and has %s of healing to do." % [CombatTypes.WOUND_NAMES[wound], _count(m.healing_turns, "turn", "turns")])
+		told.append("%s is %s now, and has %s of healing to do." % [he, CombatTypes.WOUND_NAMES[wound], _count(m.healing_turns, "turn", "turns")])
 	for t in told:
 		deeds.add_child(UiTheme.label(t))
 
 	if not leader:
 		# His oath, and what he wants of it.
-		var oath := _card(grid, "His oath")
+		var oath := _card(grid, "%s oath" % m.his(true))
 		var ll := UiTheme.label(loyalty_words(rules, m), "StrongLabel")
 		if m.loyalty < rules.loyalty_leave_below:
 			ll.add_theme_color_override("font_color", Palette.UI_BLOOD.lightened(0.25))
@@ -379,13 +393,13 @@ func show_man(m: Man) -> void:
 			oath.add_child(UiTheme.label("Loyalty %d of 100." % m.loyalty, "SmallLabel"))
 
 	# His bonds in the band.
-	var bonds := _card(grid, "His bonds")
+	var bonds := _card(grid, "%s bonds" % m.his(true))
 	var brothers := Bonds.oath_brothers(band, m)
 	var rivals := Bonds.rivals(band, m)
 	if not brothers.is_empty():
 		bonds.add_child(UiTheme.label("Sworn brother of %s: they mixed their blood under the turf." % _names(brothers)))
 	if not rivals.is_empty():
-		var rl := UiTheme.label("There is bad blood between him and %s." % _names(rivals))
+		var rl := UiTheme.label("There is bad blood between %s and %s." % [m.him(), _names(rivals)])
 		rl.add_theme_color_override("font_color", Palette.UI_BLOOD.lightened(0.3))
 		bonds.add_child(rl)
 	var close := PackedStringArray()
@@ -393,10 +407,11 @@ func show_man(m: Man) -> void:
 		if other != m and not brothers.has(other) and not rivals.has(other) and band.bond(m, other) >= 25:
 			close.append(other.display_name)
 	if not close.is_empty():
-		bonds.add_child(UiTheme.label("He stands closest to %s." % ", ".join(close), "SmallLabel"))
+		bonds.add_child(UiTheme.label("%s stands closest to %s." % [he, ", ".join(close)], "SmallLabel"))
 	if brothers.is_empty() and rivals.is_empty() and close.is_empty():
-		bonds.add_child(UiTheme.label("He has sworn no brotherhood and made no enemy in the band.", "SmallLabel"))
+		bonds.add_child(UiTheme.label("%s has sworn no brotherhood and made no enemy in the band." % he, "SmallLabel"))
 
+	_gear_card(grid, m)
 	if leader:
 		_leader_cards(grid)
 
@@ -458,6 +473,46 @@ func _leader_cards(grid: GridContainer) -> void:
 	var second := band.man_by_id(band.sworn_second_id) if band.sworn_second_id >= 0 else null
 	if second != null and second.alive:
 		home.add_child(UiTheme.label("His sworn second is %s." % second.display_name, "SmallLabel"))
+
+
+## His arms, and what may be given him now (Journey.gift_options): silver
+## as at Yule, or arms from the chest, once a summer a man. The smith is
+## at the market towns and kings' halls (EstatePanel).
+func _gear_card(grid: GridContainer, m: Man) -> void:
+	var c := journey.c
+	var leader := m == c.band.leader
+	var card := _card(grid, "%s arms" % m.his(true))
+	card.add_child(UiTheme.label("%s %s." % ["You have" if leader else "%s has" % m.he(true), Estate.gear_words(m)]))
+	if m.sword_name != "":
+		card.add_child(UiTheme.label("The sword %s is talked of wherever %s goes." % [m.sword_name, "you go" if leader else m.he()], "SmallLabel"))
+	if leader:
+		return
+	var opts := journey.gift_options(m.id)
+	if opts.is_empty():
+		return
+	card.add_child(UiTheme.label("Give %s..." % m.him(), "StrongLabel"))
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", UiTheme.S2)
+	flow.add_theme_constant_override("v_separation", UiTheme.S2)
+	card.add_child(flow)
+	var why := ""
+	for o in opts:
+		var what := str(o.id)
+		var b := UiTheme.secondary(str(o.label), func() -> void:
+			if journey.give(m.id, what):
+				Audio.play("coin")
+				map.refresh()
+				show_man(m))
+		b.custom_minimum_size.y = UiTheme.TOUCH
+		b.disabled = not bool(o.enabled)
+		b.tooltip_text = str(o.get("hint", ""))
+		flow.add_child(b)
+		if not bool(o.enabled) and why == "":
+			why = str(o.get("hint", ""))
+	if why != "":
+		card.add_child(UiTheme.label(why, "SmallLabel"))
+	elif Estate.of(c.band).chest.is_empty():
+		card.add_child(UiTheme.label("Arms bought at a smith for the chest can be given from here.", "SmallLabel"))
 
 
 ## A titled card in the grid; returns its body.

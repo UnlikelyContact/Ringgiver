@@ -417,7 +417,7 @@ static func lost_fight(j: Journey, ctx: Dictionary, result: BattleResult) -> voi
 	var where := j.c.world.place(at).display_name
 	band.log("%s was taken alive and carried off to be sold at %s" % [m.display_name, where])
 	j.decisions.push_front({"kind": "unfree", "step": "taken", "name": m.display_name, "title": "Taken",
-			"text": "%s was taken alive when the fight went against you, and carried off. Word is he will be sold at %s." % [m.display_name, where],
+			"text": "%s was taken alive when the fight went against you, and carried off. Word is %s will be sold at %s." % [m.display_name, m.he(), where],
 			"detail": "He can be bought back there for about %d oz, or taken back by force, before he is sold on east." % price,
 			"options": [{"id": "after", "label": "Go after him"}, {"id": "lost", "label": "Give him up for lost"}]})
 

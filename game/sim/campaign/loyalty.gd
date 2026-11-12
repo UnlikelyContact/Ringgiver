@@ -22,6 +22,7 @@ static func gift(rules: CampaignRules, band: Band, m: Man, silver: int, log: Pac
 		gain += rules.loyalty_ring_bonus
 	if m.ambition == CampaignTypes.Ambition.SILVER:
 		gain += rules.ambition_gift_bonus
+	gain = roundi(gain * float(band.gift("gift_bind", 1.0)))  # the leader's open hand or closed fist (Natures)
 	adjust(m, gain)
 	log.append("%s is given %d oz of silver: loyalty +%d (%d)" % [m.display_name, silver, gain, m.loyalty])
 	if ring:
@@ -55,8 +56,9 @@ static func gift_gear(rules: CampaignRules, band: Band, m: Man, item: String, lo
 		_:
 			log.append("%s cannot be given '%s': no such gear" % [m.display_name, item])
 			return
-	adjust(m, rules.loyalty_gear_gift)
-	log.append("%s is given a %s: loyalty +%d (%d)" % [m.display_name, item, rules.loyalty_gear_gift, m.loyalty])
+	var gain := roundi(rules.loyalty_gear_gift * float(band.gift("gift_bind", 1.0)))
+	adjust(m, gain)
+	log.append("%s is given a %s: loyalty +%d (%d)" % [m.display_name, item, gain, m.loyalty])
 	if item == "sword" or item == "mail":
 		band.log("%s gave %s a %s." % [_giver(band), m.display_name, "mail shirt" if item == "mail" else item])
 
@@ -68,7 +70,9 @@ static func gift_gear(rules: CampaignRules, band: Band, m: Man, item: String, lo
 static func share_plunder(rules: CampaignRules, band: Band, total_silver: int, leader_share: float, log: PackedStringArray) -> void:
 	if total_silver <= 0:
 		return
-	var share := clampf(leader_share, 0.0, 1.0)
+	# A close-fisted leader keeps more, and his men expect no better of him (Natures).
+	var keep := float(band.gift("keep_share", 0.0))
+	var share := clampf(leader_share + keep, 0.0, 1.0)
 	var men := band.living_men()
 	if men.is_empty():
 		band.silver += total_silver
@@ -78,7 +82,7 @@ static func share_plunder(rules: CampaignRules, band: Band, total_silver: int, l
 	var each := (total_silver - leader_part) / men.size()
 	var kept := total_silver - each * men.size()
 	band.silver += kept
-	var unfair := share > rules.fair_leader_share
+	var unfair := share > rules.fair_leader_share + keep + 0.0001
 	var delta := -rules.loyalty_unfair_share if unfair else rules.loyalty_fair_share
 	log.append("plunder of %d oz shared: the leader keeps %d, each man gets %d (%s)" % [
 		total_silver, kept, each, "grudged" if unfair else "fair"])
@@ -102,8 +106,8 @@ static func ambition_progress(rules: CampaignRules, band: Band, m: Man, amount: 
 	m.ambition_met = true
 	adjust(m, rules.loyalty_ambition_met)
 	var want: String = CampaignTypes.AMBITION_NAMES[m.ambition]
-	log.append("%s has what he wanted (%s): loyalty +%d (%d)" % [
-		m.display_name, want, rules.loyalty_ambition_met, m.loyalty])
+	log.append("%s has what %s wanted (%s): loyalty +%d (%d)" % [
+		m.display_name, m.he(), want, rules.loyalty_ambition_met, m.loyalty])
 	band.log("%s won %s in %s's service." % [m.display_name, want, _giver(band)])
 
 
@@ -120,7 +124,7 @@ static func winter_drift(rules: CampaignRules, band: Band, m: Man, fed: bool, se
 		delta -= rules.loyalty_unseated
 		why.append("no bench")
 	if fed and seated:
-		delta += rules.loyalty_winter_rest
+		delta += rules.loyalty_winter_rest + Estate.adorn_rest(rules, band)
 	if band.luck > rules.luck_loyalty_above:
 		delta += rules.loyalty_luck_bonus
 		why.append("lucky lord")
@@ -148,8 +152,8 @@ static func departures(rng: SimRng, rules: CampaignRules, band: Band, log: Packe
 		if turncoat and rng.randf() < rules.turn_chance:
 			var stolen := mini(rules.turn_theft_ounces, band.silver)
 			band.silver -= stolen
-			log.append("%s turns at the thaw and takes %d oz of silver with him" % [m.display_name, stolen])
-			band.log("%s broke his oath and stole %d ounces as he went." % [m.display_name, stolen])
+			log.append("%s turns at the thaw and takes %d oz of silver with %s" % [m.display_name, stolen, m.him()])
+			band.log("%s broke %s oath and stole %d ounces as %s went." % [m.display_name, m.his(), stolen, m.he()])
 		elif m.ambition == CampaignTypes.Ambition.HOME:
 			log.append("%s goes home at the thaw (loyalty %d)" % [m.display_name, m.loyalty])
 			band.log("%s went home and did not come back." % m.display_name)

@@ -24,6 +24,7 @@ static func play_year(j: Journey, bent: int, stop_at_winter := false) -> int:
 	j.played_succession = true
 	var year := j.c.cal.year
 	var steps := 0
+	_nature(j, bent)
 	while not j.c.over and j.c.cal.year == year and steps < 900:
 		steps += 1
 		if j.in_winter():
@@ -393,6 +394,9 @@ static func _act(j: Journey, bent: int) -> void:
 	# The law, the land and the unfree first: an outlaw's way out, the
 	# land he can buy, the men he left at home, a man held for sale.
 	if _law_land(j, bent, ids):
+		return
+	# Silver a man of standing lays out: arms, the hall, feasts, the dead.
+	if _men_silver(j, bent, ids):
 		return
 	# A watch on the ship where she lies, once he has learned what a strange
 	# beach costs (she was taken from him before), or when it is nothing to him.
@@ -935,4 +939,88 @@ static func _law_land(j: Journey, bent: int, ids: Dictionary) -> bool:
 			and band.location != "iceland" and j.days_to("iceland") >= 0 and j.days_to("iceland") + 10 <= j.days_left():
 		if _go(j, "iceland"):
 			return true
+	return false
+
+
+# --- Men and silver (docs/design/notes/men-silver.md) ------------------------------------
+
+## The nature a man of his bent would choose (Natures), once.
+static func _nature(j: Journey, bent: int) -> void:
+	if j.c.band.leader == null or not j.c.band.leader.natures.is_empty():
+		return
+	var pick := {
+		Way.Id.VIKING: ["reckless", "open_handed"], Way.Id.TRADER: ["close_fisted", "deep_minded"],
+		Way.Id.LAWMAN: ["steady", "silver_tongued"], Way.Id.BERSERK: ["grim", "quick_to_anger"],
+		Way.Id.SKALD: ["open_handed", "silver_tongued"], Way.Id.KINGS_MAN: ["steady", "open_handed"],
+	}
+	j.choose_nature(PackedStringArray(pick.get(bent, ["steady", "open_handed"])))
+
+
+## What he keeps in the chest whatever he buys: a year's living for the band.
+static func _reserve(j: Journey) -> int:
+	return 200 + 10 * j.c.band.fighters().size()
+
+
+## Silver laid out where it does some good, above the reserve: helmets,
+## then mail and swords for the men at a smith (a sword with a name for
+## himself when rich); at his own hall the adornment, a skald, the
+## district's feast, a stone for the fallen; a feast for a house he is not
+## yet friends with (two a summer); a sail for the ship, then shields on her
+## rail. True when he did something.
+static func _men_silver(j: Journey, bent: int, ids: Dictionary) -> bool:
+	var c := j.c
+	var band := c.band
+	var spare := band.silver - _reserve(j)
+	if spare <= 0:
+		return false
+	if ids.has("smith"):
+		var s := j.smith()
+		if not s.is_empty():
+			if not (s.named as Dictionary).is_empty() and spare >= int(s.named.price) + 300 and band.leader.sword_name == "":
+				return j.buy_arms("named", band.leader.id)
+			for item in ["helmet", "mail", "sword"]:
+				var price := 0
+				var left := 0
+				for r in s.rows:
+					if str(r.item) == item:
+						price = int(r.price)
+						left = int(r.left)
+				if left <= 0 or spare < price + (0 if item == "helmet" else 60):
+					continue
+				# The leader first, then the men by how long they have stood with him.
+				var men: Array[Man] = [band.leader]
+				men.append_array(band.living_men())
+				for m in men:
+					if m.lent_by == "" and Estate.lacks(m, item) and (item != "sword" or m.role == CombatTypes.Role.SHIELD) \
+							and (item == "helmet" or m == band.leader or m.tier >= CombatTypes.Tier.VETERAN):
+						if j.buy_arms(item, m.id):
+							return true
+	if not ids.has("works"):
+		return false
+	var want := {}
+	for w in j.works():
+		if bool(w.enabled):
+			want[str(w.id)] = int(w.cost)
+	var order: Array = []
+	order.append(["fit:sail", 150])
+	if want.has("feast_house") and int(j.life.get("bot_feasts:%d" % c.cal.year, 0)) < 2:
+		var fam := j.here().family
+		var st := Families.standing(band, fam)
+		if st > -20 and st < c.world_rules.standing_friend:
+			order.append(["feast_house", 150])
+	for id in want:
+		if str(id).begins_with("stone:"):
+			order.append([id, 100])
+			break
+	order.append(["skald", 250 if bent == Way.Id.SKALD or bent == Way.Id.KINGS_MAN else 400])
+	order.append(["adorn", 2 * int(want.get("adorn", 0))])
+	order.append(["feast_district", 200])
+	order.append(["fit:shields", 250])
+	order.append(["fit:prow", 450])
+	for o in order:
+		var id := str(o[0])
+		if want.has(id) and spare >= int(want[id]) + int(o[1]):
+			if id == "feast_house":
+				j.life["bot_feasts:%d" % c.cal.year] = int(j.life.get("bot_feasts:%d" % c.cal.year, 0)) + 1
+			return j.do_work(id)
 	return false

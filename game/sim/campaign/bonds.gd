@@ -19,8 +19,8 @@ static func after_battle(rules: CampaignRules, band: Band, survivors: Array[Man]
 		for f in fallen:
 			if band.bond_kind(s, f) == CampaignTypes.BondKind.OATH_BROTHER:
 				Loyalty.adjust(s, -rules.loyalty_grief)
-				log.append("%s grieves for his oath brother %s: loyalty -%d (%d)" % [
-					s.display_name, f.display_name, rules.loyalty_grief, s.loyalty])
+				log.append("%s grieves for %s oath brother %s: loyalty -%d (%d)" % [
+					s.display_name, s.his(), f.display_name, rules.loyalty_grief, s.loyalty])
 	for i in survivors.size():
 		for j in range(i + 1, survivors.size()):
 			update_kind(rules, band, survivors[i], survivors[j], log)
@@ -113,9 +113,9 @@ static func on_death(rules: CampaignRules, band: Band, dead: Man, killer: String
 			b.ambition = CampaignTypes.Ambition.VENGEANCE
 			b.ambition_progress = 0
 			b.ambition_met = false
-		log.append("%s vows vengeance on %s for his oath brother %s" % [b.display_name, killer, dead.display_name])
+		log.append("%s vows vengeance on %s for %s oath brother %s" % [b.display_name, killer, b.his(), dead.display_name])
 		if against == "":
-			band.log("%s swore over %s's grave that %s would pay, though no house answers for him." % [b.display_name, dead.display_name, killer])
+			band.log("%s swore over %s's grave that %s would pay, though no house answers for %s." % [b.display_name, dead.display_name, killer, dead.him()])
 		else:
 			band.log("%s swore over %s's grave that %s would pay." % [b.display_name, dead.display_name, against if house != OLD_WAYS else killer])
 

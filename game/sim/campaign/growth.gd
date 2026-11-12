@@ -15,7 +15,7 @@ static func nature_multiplier(rules: CampaignRules, m: Man, stat: CombatTypes.St
 			mult *= rules.nature_up
 		elif pair[1] == stat:
 			mult *= rules.nature_down
-	return mult
+	return mult * Natures.multiplier(rules, m, stat)
 
 
 static func age_multiplier(rules: CampaignRules, m: Man) -> float:
