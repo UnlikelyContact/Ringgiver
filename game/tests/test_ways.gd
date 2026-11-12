@@ -259,7 +259,9 @@ func test_a_man_walks_until_he_has_a_hull() -> void:
 	assert_true(j.sail_speed() > j.foot_speed())
 	var by_boat := j.days_to("hardanger")
 	assert_true(by_boat < on_foot, "by boat %d days, on foot %d" % [by_boat, on_foot])
-	assert_eq(j.days_to("orkney"), -1, "but a færing keeps out of the deep")
+	# (Since the wider world gave the Baltic a southern shore she can creep
+	# round to Orkney by the Wendish, Frisian and English coasts: weeks.)
+	assert_true(j.days_to("orkney") == -1 or j.days_to("orkney") > 40, "but a færing keeps out of the deep: %d days" % j.days_to("orkney"))
 	# More men than she carries, and she is no use.
 	for i in 5:
 		band.add_man(Recruits.random(SimRng.new(i), j.c.rules, band.next_id()))

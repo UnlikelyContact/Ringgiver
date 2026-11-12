@@ -156,6 +156,7 @@ func test_the_felag_carries_a_partners_goods_for_a_share() -> void:
 	if j.c.band.location != to:
 		j.roam.pos = MapGrid.centre(j.roam.grid.place_cell[to])
 		j.c.band.location = to
+		j.decisions.clear()  # whatever stopped him on the way (a merchant hailing)
 	var sell := ""
 	for a in j.actions():
 		if str(a.id).begins_with("felag_sell:"):

@@ -38,6 +38,11 @@ const PEAK_STEP := 2.0
 const PEAK_STEP_FAR := 4.2
 const WOOD_HIGH := 0.42
 const WOOD_INLAND := 1.6
+## The flats (MapGrid.flat, the Rus' forests and the steppe): the land is
+## held below this, gently rolling, so no fells stand there; the forest is
+## thicker than elsewhere and the steppe bare.
+const FLAT_HIGH := 0.2
+const FLAT_WOOD_FROM := 0.3
 ## The glyph meshes are cut into square tiles this many leagues across, so
 ## that only the tiles on screen are drawn.
 const TILE := 30
@@ -117,10 +122,16 @@ func _fields() -> void:
 			# The grid's mountains are never painted as low land.
 			if _grid.cells[i] == MapGrid.T.MOUNTAIN:
 				h = maxf(h, 0.36 + 0.06 * wobble)
+			var flat := int(_grid.flat[i])
+			if flat != 0:
+				h = minf(h, FLAT_HIGH + 0.06 * wobble)
 			_h[i] = h
+			if flat == 2:
+				continue  # the steppe: grass to the sky
 			if d >= WOOD_INLAND and h < WOOD_HIGH:
 				var w := wf.get_noise_2d(x, y) * 0.5 + 0.5
-				_wood[i] = clampf((w - 0.42) * 3.2, 0.0, 1.0) * clampf((WOOD_HIGH - h) * 6.0, 0.0, 1.0)
+				var from := FLAT_WOOD_FROM if flat == 1 else 0.42
+				_wood[i] = clampf((w - from) * 3.2, 0.0, 1.0) * clampf((WOOD_HIGH - h) * 6.0, 0.0, 1.0)
 
 
 ## Leagues from every cell centre to the nearest centre of a cell whose

@@ -543,6 +543,7 @@ func _about_place(p: Place) -> void:
 	if not Feud.find(band, p.family).is_empty():
 		about += " There is a feud between you."
 	place_box.add_child(UiTheme.label(about, "SmallLabel"))
+	_wider_about(p)
 	var house := _house_line(p)
 	if house != "":
 		var hl := UiTheme.label(house.strip_edges(), "SmallLabel")
@@ -1079,3 +1080,14 @@ func tap_map(at: Vector2) -> void:
 		journey.go_to_point(canvas.from_px(at))
 	canvas.follow = true
 	refresh()
+
+
+# --- The wider world (docs/design/notes/wider-world.md) ----------------------------------
+
+## What a far place is, in a line or two (EastRoad.about), under its kind.
+func _wider_about(p: Place) -> void:
+	var lore := EastRoad.about(p.id)
+	if lore != "":
+		var l := UiTheme.label(lore, "SmallLabel")
+		l.add_theme_color_override("font_color", Palette.UI_MUTED.lightened(0.25))
+		place_box.add_child(l)

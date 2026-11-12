@@ -1070,3 +1070,91 @@ var volva_chance := 0.35
 var volva_fee := 8
 ## Her early winter: the summer is this many days short.
 var early_winter_days := 25
+
+# --- The wider world (east_road.gd, roam.gd, market.gd; notes/wider-world.md) ---
+## The Baltic markets at the western end of the river road: the east's
+## own merchants ply between them and the eastern towns.
+const EAST_ROAD_MARKETS := ["birka", "gotland"]
+## Leagues east beyond which a point is on the river road: its tidings are
+## told at its own towns, the home waters' at home (WorldLife.hear_news).
+const EAST_FROM_X := 128.0
+## The east's own parties (Roam._populate_wider): Rus merchants on the
+## river road, carrying one of `east_merchant_goods`; and a viking ship
+## out of one of `wider_raider_lairs` in the west, that first goes about
+## the places within `wider_raider_reach` leagues of it.
+## At these markets there is talk of the road east: a band that comes
+## there hears of Birka, where it begins (EastRoad.arrived).
+var east_talk_markets := ["kaupang", "lade", "bjarkoy", "hedeby", "ribe", "dublin"]
+var roam_east_merchants := 2
+var east_merchant_goods := [WorldTypes.Good.FURS, WorldTypes.Good.AMBER, WorldTypes.Good.SILK, WorldTypes.Good.WALRUS_IVORY]
+var roam_wider_raiders := 1
+var wider_raider_lairs := ["shetland", "hebrides", "skye"]
+var wider_raider_reach := 25.0
+## Place -> {Good -> multiplier}: where a town's prices differ from its
+## region's (`region_factor`). Going east, furs, amber and walrus ivory
+## fetch more at every stage and silk costs less; Holmgard is the fur
+## market itself; the Greeks make wine and want no Frankish blades.
+var place_factor := {
+	"aldeigjuborg": {WorldTypes.Good.FURS: 1.0, WorldTypes.Good.AMBER: 1.3, WorldTypes.Good.WALRUS_IVORY: 1.4, WorldTypes.Good.SILK: 0.8,
+		WorldTypes.Good.FRANKISH_BLADES: 1.6, WorldTypes.Good.WINE: 1.6},
+	"holmgard": {WorldTypes.Good.FURS: 0.8, WorldTypes.Good.AMBER: 1.4, WorldTypes.Good.WALRUS_IVORY: 1.5, WorldTypes.Good.SILK: 0.75,
+		WorldTypes.Good.FRANKISH_BLADES: 1.8, WorldTypes.Good.WINE: 1.7},
+	"koenugard": {WorldTypes.Good.FURS: 1.6, WorldTypes.Good.AMBER: 1.8, WorldTypes.Good.WALRUS_IVORY: 2.0, WorldTypes.Good.SILK: 0.6,
+		WorldTypes.Good.FRANKISH_BLADES: 2.0, WorldTypes.Good.WINE: 1.4},
+	"miklagard": {WorldTypes.Good.FURS: 2.4, WorldTypes.Good.AMBER: 2.4, WorldTypes.Good.WALRUS_IVORY: 2.4, WorldTypes.Good.SILK: 0.35,
+		WorldTypes.Good.FRANKISH_BLADES: 1.0, WorldTypes.Good.WINE: 0.6, WorldTypes.Good.IRON: 1.3},
+}
+## Place -> the goods whose stock it makes good each year, in place of its
+## region's (`good_sources`): the eastern towns are markets, not sources,
+## save Holmgard for the forest furs. Silk at Miklagard stays at its price
+## by the drift alone, so a year's buying there is felt the next.
+var place_sources := {
+	"aldeigjuborg": [], "holmgard": [WorldTypes.Good.FURS], "koenugard": [], "miklagard": [],
+}
+## Place -> a market's stock at its mean prices, in place of
+## `stock_baseline`: the Great City is a deep market, where a knarr's hold
+## of silk bought or of furs sold moves the price a third as much.
+var place_depth := {"miklagard": 60}
+## Place -> the middlemen's take there, in place of `market_spread`: the
+## princes' tithe on the river road, the emperor's at Miklagard.
+var place_spread := {"aldeigjuborg": 0.15, "holmgard": 0.15, "koenugard": 0.15, "miklagard": 0.2}
+## Where captives are bought besides `slave_markets`, and what a head
+## fetches there before the glut: dearer the further east.
+var place_captive_price := {"holmgard": 16, "koenugard": 18, "miklagard": 26}
+## The western isles' own stalls (TradeRoad.open_stalls, as `local_trade`):
+## Shetland quarries soapstone and lacks iron; Ketil's hall wants iron and
+## wine; Skye wants iron. (Not ivory: a hall's want is dear, and ivory is
+## dear already in the west, so the Isles would be a gold mine for it.)
+var wider_local_trade := {
+	"shetland": {WorldTypes.Good.SOAPSTONE: "sells", WorldTypes.Good.IRON: "buys"},
+	"hebrides": {WorldTypes.Good.IRON: "buys", WorldTypes.Good.WINE: "buys"},
+	"skye": {WorldTypes.Good.IRON: "buys"},
+}
+## The portages (EastRoad, MapGrid.PORTAGES): leagues a day a hull is
+## hauled on rollers (a small boat goes quickly, a laden knarr or a
+## longship slowly); the chance a day of hauling that the band is fallen
+## on, by whom ([men, tier, words] per portage, men give or take
+## `portage_ambush_spread`); after a haul each man has this chance of a
+## strained back (a turn's healing) and every man's loyalty drops so much.
+var portage_haul := {
+	WorldTypes.ShipKind.FAERING: 2.0, WorldTypes.ShipKind.KARVE: 1.2, WorldTypes.ShipKind.SNEKKJA: 0.9,
+	WorldTypes.ShipKind.KNARR: 0.6, WorldTypes.ShipKind.LONGSHIP: 0.5,
+}
+var portage_ambush_day := 0.025
+var portage_ambushers := [
+	[6, CombatTypes.Tier.GREEN, "Men of the forest come out of the trees while your ship is on the rollers, %d of them, and want what she carries."],
+	[8, CombatTypes.Tier.BLOODED, "Pecheneg riders come down on the haul round the rapids, %d of them, while your men are bent to the ropes."],
+]
+var portage_ambush_spread := 2
+var portage_strain := 0.15
+var portage_loyalty := 2
+## A season in the emperor's guard at Miklagard (EastRoad): the rest of
+## the summer and the winter in his service, for `guard_pay` and
+## `guard_pay_man` a man, fame, honor and a lord's deeds; a band of fewer
+## than `guard_min_men` is not taken on.
+var guard_pay := 40
+var guard_pay_man := 6
+var guard_fame := 8
+var guard_honor := 2
+var guard_deeds := 3
+var guard_min_men := 3

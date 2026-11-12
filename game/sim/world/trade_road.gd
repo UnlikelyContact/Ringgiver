@@ -17,13 +17,14 @@ extends RefCounted
 ## Puts every farm's and hall's stall on the world (WorldRules.local_trade):
 ## what it makes and what it lacks, `local_stock` units of each.
 static func open_stalls(rules: WorldRules, world: World) -> void:
-	for id in rules.local_trade:
-		var p := world.place(str(id))
-		if p == null or p.has_market:
-			continue
-		p.trade = (rules.local_trade[id] as Dictionary).duplicate()
-		for g in p.trade:
-			p.stock[g] = rules.local_stock
+	for table: Dictionary in [rules.local_trade, rules.wider_local_trade]:
+		for id in table:
+			var p := world.place(str(id))
+			if p == null or p.has_market:
+				continue
+			p.trade = (table[id] as Dictionary).duplicate()
+			for g in p.trade:
+				p.stock[g] = rules.local_stock
 
 
 ## What a man does at this place to make his living by this road:
@@ -203,7 +204,7 @@ static func felag_offer(j: Journey) -> Dictionary:
 		var here_price := Market.price(wr, p, g)
 		for id in band.known_places:
 			var q := j.c.world.place(str(id))
-			if q == null or q.id == p.id or not q.is_open(j.c.world.year) or not Market.buys_here(q, g):
+			if q == null or q.id == p.id or not q.is_open(j.c.world.year) or not Market.buys_here(q, g) or Roam.far_east(q) != Roam.far_east(p):
 				continue
 			var days := j.days_to(q.id)
 			if days < 0 or days > wr.crew_max_days * 2:
@@ -267,6 +268,8 @@ static func escort_offer(j: Journey) -> Dictionary:
 		var q := j.c.world.place(str(id))
 		if q == null or q.id == p.id or not q.is_open(j.c.world.year) or not (q.has_market or q.kind == WorldTypes.PlaceKind.TOWN or q.kind == WorldTypes.PlaceKind.HALL):
 			continue
+		if Roam.far_east(q) != Roam.far_east(p):
+			continue  # (a merchant's guard does not go up the river road)
 		var d := j.days_to(q.id)
 		if d > 0 and d <= wr.crew_max_days * 2:
 			cands.append(q.id)
@@ -329,8 +332,8 @@ static func crew_offer(j: Journey) -> Dictionary:
 		if q.id == p.id or not q.is_open(j.c.world.year) or q.region == WorldTypes.Region.ICELAND \
 				or not (q.has_market or q.kind == WorldTypes.PlaceKind.HALL or q.kind == WorldTypes.PlaceKind.TOWN):
 			continue
-		if not j.roam.grid.place_cell.has(q.id):
-			continue
+		if not j.roam.grid.place_cell.has(q.id) or Roam.far_east(q) != Roam.far_east(p):
+			continue  # (not over the river road: that is a venture, not a passage)
 		var days := j.roam.place_days(p.id, q.id, 0.0001, wr.merchant_speed, true)
 		if days > 0.0 and days <= wr.crew_max_days:
 			cands.append(q.id)

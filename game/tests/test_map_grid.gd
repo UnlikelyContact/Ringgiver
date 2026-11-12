@@ -44,8 +44,11 @@ func test_a_band_on_foot_cannot_cross_water_and_a_ship_is_quicker() -> void:
 		assert_true(not on_foot.aboard[i])
 	assert_true((g.find_path(hardanger, orkney, 2.0, 0.0, false).cells as Array).is_empty(), "nobody walks to Orkney")
 	assert_true(not (g.find_path(hardanger, orkney, 2.0, 7.0, true).cells as Array).is_empty(), "a ship gets there")
-	# A small boat keeps out of the deep, so it does not.
-	assert_true((g.find_path(hardanger, orkney, 2.0, 5.0, true, Vector2i(-1, -1), false).cells as Array).is_empty(), "not in a færing")
+	# A small boat keeps out of the deep, so it does not cross: since the
+	# wider world gave the Baltic a southern shore it can creep round by
+	# the Wendish, Frisian and English coasts, many times as long.
+	var creep := g.find_path(hardanger, orkney, 2.0, 5.0, true, Vector2i(-1, -1), false)
+	assert_true((creep.cells as Array).is_empty() or creep.days > 4.0 * g.find_path(hardanger, orkney, 2.0, 7.0, true).days, "not across in a færing")
 	print("    gate: Hardanger to Fitjar: %.1f days on foot, %.1f by ship; to Orkney %.1f by ship" % [
 			on_foot.days, by_ship.days, g.find_path(hardanger, orkney, 2.0, 7.0, true).days])
 

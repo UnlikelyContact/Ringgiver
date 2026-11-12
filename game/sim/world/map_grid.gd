@@ -9,12 +9,20 @@ extends RefCounted
 ##
 ## Coordinates: leagues, x east and y south, as Place.pos. Cell (cx, cy)
 ## covers [ORIGIN + (cx, cy), +1). One grid serves every world: `norway()`.
+##
+## The wider world (docs/design/notes/wider-world.md) reaches east to the
+## Rus' lands and south to Miklagard: lakes and the Black Sea are cut out
+## of the land (NorwayData.WATERS), rivers a cell wide are cut along lines
+## (RIVERS: water, but a ship makes only RIVER_PACE of her pace on them),
+## the portages are land a ship may be hauled over (PORTAGES: `find_path`'s
+## `haul`), and the Rus' forests and the steppe never rise to mountain
+## (FLATS).
 
 enum T { DEEP, SEA, SHORE, LAND, MOUNTAIN }
 
 const ORIGIN := Vector2i(-58, -14)
-const W := 180
-const H := 140
+const W := 258
+const H := 176
 ## Days' worth of going per league, by terrain, as a multiple of the plain
 ## pace: the hills are slow and the mountains slower.
 const COST := [1.0, 1.0, 1.0, 1.6, 4.0]
@@ -23,11 +31,28 @@ const SHORE_WITHIN := 2
 const LAND_WITHIN := 5
 ## Sea this far from any land is the deep.
 const DEEP_BEYOND := 4
+## The share of a ship's pace she makes on a river (against the current,
+## picking through the shoals; the same both ways, for simplicity).
+const RIVER_PACE := 0.6
+## Leagues a day a ship is hauled over a portage when the caller does not
+## say (`find_path`'s haul < 0): this share of her pace. The band's own
+## ship is hauled at its hull's pace (WorldRules.portage_haul).
+const HAUL_SHARE := 0.15
 
 var cells := PackedByteArray()
 ## Place id -> its cell; cell index -> place id.
 var place_cell := {}
 var cell_place := {}
+## Per cell: 1 on a river; the portage's number (1, 2, ...) on a portage.
+var river := PackedByteArray()
+var portage := PackedByteArray()
+## Land that never rises to mountain (FLATS): 1 wooded, 2 open.
+var flat := PackedByteArray()
+## Going on foot over the flats, as a multiple of the terrain's COST, by
+## `flat`: trackless forest and bog, and the open steppe, where a band
+## without a ship gets on no faster than in the fells. (Without it the
+## steppe would be a road to Miklagard for a band that left its ship.)
+const FLAT_COST := [1.0, 3.0, 2.2]
 
 static var _norway: MapGrid = null
 
@@ -73,6 +98,24 @@ func is_land(c: Vector2i) -> bool:
 	return inside(c) and cells[index(c)] >= T.SHORE
 
 
+## Days' worth of going per league on foot over this cell, as a multiple
+## of the plain pace (COST, and FLAT_COST over the flats).
+func walk_cost(c: Vector2i) -> float:
+	if not inside(c):
+		return COST[T.DEEP]
+	var i := index(c)
+	return float(COST[cells[i]]) * float(FLAT_COST[flat[i]])
+
+
+func is_river(c: Vector2i) -> bool:
+	return inside(c) and river[index(c)] == 1
+
+
+## The portage (its index in NorwayData.PORTAGES) this cell is on, or -1.
+func portage_at(c: Vector2i) -> int:
+	return int(portage[index(c)]) - 1 if inside(c) else -1
+
+
 ## The place standing on this cell, or "".
 func place_at(v: Vector2) -> String:
 	return cell_place.get(index(cell_of(v)), "")
@@ -87,6 +130,12 @@ func _build() -> void:
 	var shores: Array[PackedVector2Array] = []
 	for s in NorwayData.SHORES:
 		shores.append(PackedVector2Array(s))
+	var waters: Array[PackedVector2Array] = []
+	for s in NorwayData.WATERS:
+		waters.append(PackedVector2Array(s))
+	river.resize(W * H)
+	portage.resize(W * H)
+	flat.resize(W * H)
 	for y in H:
 		for x in W:
 			var p := centre(Vector2i(x, y))
@@ -94,12 +143,21 @@ func _build() -> void:
 				if Geometry2D.is_point_in_polygon(p, poly):
 					land[y * W + x] = 1
 					break
+			for poly in waters:
+				if Geometry2D.is_point_in_polygon(p, poly):
+					land[y * W + x] = 0
+					break
+			for f in NorwayData.FLATS:
+				if Geometry2D.is_point_in_polygon(p, PackedVector2Array(f[0])):
+					flat[y * W + x] = 1 if bool(f[1]) else 2
+					break
 	# Every place stands on land, with water at its door.
 	for d in NorwayData.PLACES:
 		var c := cell_of(d.pos)
 		place_cell[d.id] = c
 		cell_place[index(c)] = d.id
 		land[index(c)] = 1
+	_rivers(land)
 	for d in NorwayData.PLACES:
 		_harbour(land, place_cell[d.id])
 	# Terrain by distance: land from the sea, sea from the land.
@@ -108,9 +166,49 @@ func _build() -> void:
 	for i in W * H:
 		if land[i] == 1:
 			var d: int = from_sea[i]
-			cells[i] = T.SHORE if d <= SHORE_WITHIN else (T.LAND if d <= LAND_WITHIN else T.MOUNTAIN)
+			cells[i] = T.SHORE if d <= SHORE_WITHIN else (T.LAND if d <= LAND_WITHIN or flat[i] != 0 else T.MOUNTAIN)
 		else:
 			cells[i] = T.DEEP if from_land[i] > DEEP_BEYOND else T.SEA
+
+
+## Cuts the rivers (water a cell wide, by steps that never turn a corner,
+## so a ship can follow them) and marks the portages (land, hauled over).
+## A place's own cell is never cut.
+func _rivers(land: PackedByteArray) -> void:
+	for line in NorwayData.RIVERS:
+		var pts: Array = line
+		for k in range(pts.size() - 1):
+			for c in steps(cell_of(pts[k]), cell_of(pts[k + 1])):
+				if inside(c) and not cell_place.has(index(c)):
+					land[index(c)] = 0
+					river[index(c)] = 1
+	for n in NorwayData.PORTAGES.size():
+		for v in NorwayData.PORTAGES[n][1]:
+			var c := cell_of(v)
+			if inside(c):
+				land[index(c)] = 1
+				portage[index(c)] = n + 1
+
+
+## The cells from `a` to `b` inclusive, four-way: each step along the axis
+## that is furthest behind the straight line.
+static func steps(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = [a]
+	var c := a
+	var tx := absi(b.x - a.x)
+	var ty := absi(b.y - a.y)
+	var guard := 0
+	while c != b and guard < 4096:
+		guard += 1
+		var done_x := absi(c.x - a.x)
+		var done_y := absi(c.y - a.y)
+		# Step x when x is behind its share of the way (or y is done).
+		if c.x != b.x and (c.y == b.y or done_x * ty <= done_y * tx):
+			c.x += signi(b.x - a.x)
+		else:
+			c.y += signi(b.y - a.y)
+		out.append(c)
+	return out
 
 
 ## Makes sure the place's cell has sea at one of its four sides: if not, a
@@ -194,9 +292,11 @@ const _DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
 ## ship (at sea, or on the cell where she is beached); else she lies at
 ## `ship_cell` ((-1, -1): nowhere). `deep_ok` false keeps a small boat out
 ## of the deep. A ship goes only by water and lands on any shore; a band
-## that walks on leaves her where she landed.
+## that walks on leaves her where she landed. On a river she makes
+## RIVER_PACE of `sail`; over a portage she is hauled at `haul` leagues a
+## day (below 0: HAUL_SHARE of `sail`; 0: she cannot be hauled).
 func find_path(from: Vector2i, to: Vector2i, foot: float, sail: float, aboard: bool,
-		ship_cell := Vector2i(-1, -1), deep_ok := true) -> Dictionary:
+		ship_cell := Vector2i(-1, -1), deep_ok := true, haul := -1.0) -> Dictionary:
 	var out := {"cells": [] as Array[Vector2i], "aboard": [] as Array[bool], "days": 0.0}
 	if not inside(from) or not inside(to) or from == to:
 		return out
@@ -212,6 +312,8 @@ func find_path(from: Vector2i, to: Vector2i, foot: float, sail: float, aboard: b
 	came.resize(n)
 	came.fill(-1)
 	var best_speed := maxf(foot, sail)
+	if haul < 0.0:
+		haul = sail * HAUL_SHARE
 	var start := index(from) * 2 + (1 if aboard and sail > 0.0 else 0)
 	g[start] = 0.0
 	# A binary heap of [f, node] kept in two parallel arrays.
@@ -273,15 +375,19 @@ func find_path(from: Vector2i, to: Vector2i, foot: float, sail: float, aboard: b
 				if d.x != 0 and d.y != 0 and (cells[index(c + Vector2i(d.x, 0))] > T.SEA or cells[index(c + Vector2i(0, d.y))] > T.SEA):
 					continue
 				n_with = true
-				cost = len / sail
+				cost = len / (sail * RIVER_PACE if river[ni] == 1 else sail)
 			elif c_sea:
 				if d.x != 0 and d.y != 0:
 					continue  # a ship lands square on
 				n_with = true  # beached where she lands
 				cost = len / sail
+			elif with_ship and portage[ni] != 0 and haul > 0.0:
+				# Hauled on rollers to the next water.
+				n_with = true
+				cost = len / haul
 			else:
 				n_with = ni == ship_i
-				cost = len * COST[cells[ni]] / foot
+				cost = len * COST[cells[ni]] * FLAT_COST[flat[ni]] / foot
 			var nn := ni * 2 + (1 if n_with else 0)
 			if closed[nn] == 1:
 				continue

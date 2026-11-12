@@ -37,7 +37,7 @@ static func build_norway(rules: WorldRules, p_year := 866) -> World:
 		p.open_year = d.get("open_year", 0)
 		if p.has_market:
 			for g in WorldTypes.Good.values():
-				p.stock[g] = rules.stock_baseline
+				p.stock[g] = Market.depth(rules, p)
 		elif p.kind == WorldTypes.PlaceKind.FARMSTEAD:
 			p.stock[WorldTypes.Good.GRAIN] = rules.stock_baseline
 		w.places[p.id] = p

@@ -52,6 +52,8 @@ class Party:
 	## A wreck's leavings: {silver, goods: {Good: n}, captives, survivor}.
 	var leavings := {}
 	var text := ""
+	## "east" for the river road's own parties: they keep to it.
+	var road := ""
 
 	func busy() -> bool:
 		return engaged != null or raiding_until >= 0.0
@@ -119,8 +121,9 @@ func ship_cell() -> Vector2i:
 
 ## Sets the band's course for a cell. Returns the days it will take, or
 ## -1 when there is no way (water and no ship; the deep in a small boat).
-func plot(to: Vector2i, foot: float, sail: float, deep_ok: bool) -> float:
-	var p := grid.find_path(cell(), to, foot, sail if has_reach(sail) else 0.0, aboard and sail > 0.0, ship_cell(), deep_ok)
+## `haul`: leagues a day the ship is hauled over a portage (MapGrid).
+func plot(to: Vector2i, foot: float, sail: float, deep_ok: bool, haul := -1.0) -> float:
+	var p := grid.find_path(cell(), to, foot, sail if has_reach(sail) else 0.0, aboard and sail > 0.0, ship_cell(), deep_ok, haul)
 	var cells: Array[Vector2i] = p.cells
 	if cells.is_empty():
 		return 0.0 if to == cell() else -1.0
@@ -139,15 +142,20 @@ func has_reach(sail: float) -> bool:
 
 ## Moves the band along its course for up to `dt` days and returns the
 ## days used: it stops at each cell's centre so that the caller can look
-## about. `foot` and `sail` are leagues a day.
-func step_band(dt: float, foot: float, sail: float) -> float:
+## about. `foot` and `sail` are leagues a day; `haul` the pace over a
+## portage (as MapGrid.find_path).
+func step_band(dt: float, foot: float, sail: float, haul := -1.0) -> float:
 	if not moving():
 		return dt
 	var next := route[route_at]
 	var target := MapGrid.centre(next)
 	var here := last_cell if MapGrid.inside(last_cell) else cell()
 	var by_ship: bool = route_aboard[route_at] and aboard and (grid.is_sea(next) or grid.is_sea(here))
-	var speed := sail if by_ship else foot / float(MapGrid.COST[grid.terrain(next)])
+	var speed := sail if by_ship else foot / grid.walk_cost(next)
+	if by_ship and grid.is_sea(next) and grid.is_river(next):
+		speed = sail * MapGrid.RIVER_PACE
+	elif not by_ship and route_aboard[route_at] and aboard and grid.portage_at(next) >= 0:
+		speed = haul if haul > 0.0 else sail * MapGrid.HAUL_SHARE
 	speed = maxf(speed, 0.05)
 	var dist := pos.distance_to(target)
 	if speed * dt < dist:
@@ -181,12 +189,12 @@ func sea_route(a: String, b: String) -> Array[Vector2i]:
 
 ## Days between two places for a band that starts with its ship (`sail`
 ## leagues a day, 0 for none) and walks at `foot`. Kept once found.
-func place_days(a: String, b: String, foot: float, sail: float, deep_ok: bool) -> float:
+func place_days(a: String, b: String, foot: float, sail: float, deep_ok: bool, haul := -1.0) -> float:
 	if a == b:
 		return 0.0
-	var key := "%s>%s:%.1f:%.1f:%s" % [a, b, foot, sail, deep_ok]
+	var key := "%s>%s:%.1f:%.1f:%s:%.2f" % [a, b, foot, sail, deep_ok, haul]
 	if not _place_days.has(key):
-		var p := grid.find_path(grid.place_cell[a], grid.place_cell[b], foot, sail, sail > 0.0, Vector2i(-1, -1), deep_ok)
+		var p := grid.find_path(grid.place_cell[a], grid.place_cell[b], foot, sail, sail > 0.0, Vector2i(-1, -1), deep_ok, haul)
 		_place_days[key] = p.days if not (p.cells as Array).is_empty() else -1.0
 	return _place_days[key]
 
@@ -204,7 +212,7 @@ func populate(rng: SimRng, rules: WorldRules, world: World, outlawed: bool) -> v
 	ids.sort()
 	for id in ids:
 		var p: Place = world.places[id]
-		if not p.is_open(world.year) or p.pos.distance_to(pos) < rules.sight_leagues + 2.0:
+		if not p.is_open(world.year) or p.pos.distance_to(pos) < rules.sight_leagues + 2.0 or far_east(p):
 			continue
 		if p.has_market:
 			markets.append(id)
@@ -276,6 +284,7 @@ func populate(rng: SimRng, rules: WorldRules, world: World, outlawed: bool) -> v
 			l.pos = MapGrid.centre(grid.place_cell[l.home])
 			_new_route(l, rng, coast)
 			parties.append(l)
+	_populate_wider(rng.fork("wider"), rules, world)
 
 
 ## Men of a house sent after the band (a feud with it): they put out from
@@ -474,6 +483,8 @@ func step_parties(dt: float, rng: SimRng, rules: WorldRules, world: World, band_
 					if home_places.is_empty():
 						home_places = _harbours(world, false, true)
 					_new_route(p, rng, home_places)
+				elif p.road == "east":
+					_new_route(p, rng, _east_markets(world))
 				else:
 					if places.is_empty():
 						places = _harbours(world, p.kind == "merchant")
@@ -494,7 +505,7 @@ func _harbours(world: World, markets_only: bool, home_only := false) -> Array[St
 	ids.sort()
 	for id in ids:
 		var p: Place = world.places[id]
-		if not p.is_open(world.year) or p.region == WorldTypes.Region.ICELAND:
+		if not p.is_open(world.year) or p.region == WorldTypes.Region.ICELAND or far_east(p):
 			continue
 		if home_only and not Families.HOME_REGIONS.has(p.region):
 			continue
@@ -508,11 +519,17 @@ func _follow(p: Party, dt: float) -> void:
 	while left > 0.0001 and p.at < p.route.size():
 		var target := MapGrid.centre(p.route[p.at])
 		var d := p.pos.distance_to(target)
-		if p.speed * left < d:
-			p.pos = p.pos.move_toward(target, p.speed * left)
+		# Slower up the rivers, and slower still on the rollers.
+		var speed := p.speed
+		if grid.portage_at(p.route[p.at]) >= 0:
+			speed *= MapGrid.HAUL_SHARE
+		elif grid.is_river(p.route[p.at]):
+			speed *= MapGrid.RIVER_PACE
+		if speed * left < d:
+			p.pos = p.pos.move_toward(target, speed * left)
 			return
 		p.pos = target
-		left -= d / p.speed
+		left -= d / speed
 		p.at += 1
 
 
@@ -549,7 +566,7 @@ func _chase_point(p: Party, to: Vector2, dt: float) -> void:
 			if best == here:
 				break  # no nearer by her own element: she stands off
 			target = MapGrid.centre(best)
-		var speed := p.speed if p.sails else p.speed / float(MapGrid.COST[grid.terrain(MapGrid.cell_of(target))])
+		var speed := p.speed if p.sails else p.speed / grid.walk_cost(MapGrid.cell_of(target))
 		var dist := p.pos.distance_to(target)
 		if speed * left < dist:
 			p.pos = p.pos.move_toward(target, speed * left)
@@ -601,7 +618,7 @@ func _wander(p: Party, dt: float, rng: SimRng) -> void:
 	var left := dt
 	while left > 0.0001 and p.at < p.route.size():
 		var target := MapGrid.centre(p.route[p.at])
-		var speed := p.speed / float(MapGrid.COST[grid.terrain(p.route[p.at])])
+		var speed := p.speed / grid.walk_cost(p.route[p.at])
 		var d := p.pos.distance_to(target)
 		if speed * left < d:
 			p.pos = p.pos.move_toward(target, speed * left)
@@ -609,3 +626,89 @@ func _wander(p: Party, dt: float, rng: SimRng) -> void:
 		p.pos = target
 		left -= d / speed
 		p.at += 1
+
+
+# --- The wider world (docs/design/notes/wider-world.md) -------------------------------
+
+## A place on the river road east: the parties of the home waters do not
+## ply there (it is weeks away); the east has its own (`_populate_wider`).
+static func far_east(p: Place) -> bool:
+	return p.region == WorldTypes.Region.EAST
+
+
+## Whether a point on the map lies on the river road east (beyond the
+## Baltic's eastern shore), for whose tidings are told where.
+static func far_east_at(v: Vector2) -> bool:
+	return v.x >= WorldRules.EAST_FROM_X
+
+
+## The east's own parties: Rus merchants plying the river road between its
+## towns and the Baltic markets, and sea-robbers off the Baltic's eastern
+## shore; and in the west a viking ship that wintered in Shetland or the
+## Hebrides. Drawn from their own fork, after the others, so the home
+## waters' parties are what they were.
+func _populate_wider(rng: SimRng, rules: WorldRules, world: World) -> void:
+	var east: Array[String] = []
+	var ids: Array = world.places.keys()
+	ids.sort()
+	for id in _east_markets(world):
+		if world.place(id).pos.distance_to(pos) >= rules.sight_leagues + 2.0:
+			east.append(id)
+	for i in rules.roam_east_merchants:
+		if east.size() < 2:
+			break
+		var m := Party.new()
+		m.kind = "merchant"
+		m.home = east[rng.randi_range(0, east.size() - 1)]
+		var town := world.place(m.home)
+		m.name = ("a Rus knarr out of %s" if far_east(town) else "a knarr out of %s") % town.display_name
+		m.men = rules.merchant_crew + 2
+		m.tier = rules.merchant_tier
+		m.speed = rules.merchant_speed
+		m.pos = MapGrid.centre(grid.place_cell[m.home])
+		var goods: Array = rules.east_merchant_goods
+		var good: WorldTypes.Good = goods[rng.randi_range(0, goods.size() - 1)]
+		m.offer = {"good": good, "units": rules.merchant_cargo, "price": maxi(1, int(round(rules.base_price[good] * rules.merchant_discount))),
+				"home": m.home, "family": town.family}
+		m.road = "east"
+		_new_route(m, rng, east)
+		parties.append(m)
+	var lairs: Array[String] = []
+	for id in rules.wider_raider_lairs:
+		var q := world.place(str(id))
+		if q != null and q.is_open(world.year) and grid.place_cell.has(q.id) and q.pos.distance_to(pos) >= rules.sight_leagues + 2.0:
+			lairs.append(q.id)
+	for i in rules.roam_wider_raiders:
+		if lairs.is_empty():
+			break
+		var r := Party.new()
+		r.kind = "raiders"
+		r.name = "a rival ship"
+		r.home = lairs[rng.randi_range(0, lairs.size() - 1)]
+		r.men = maxi(4, rules.rival_crew + rng.randi_range(-2, 2))
+		r.tier = Encounters.rival_tier(rules, world.region_alertness.get(world.place(r.home).region, 0))
+		r.speed = rules.raider_speed
+		r.pos = MapGrid.centre(grid.place_cell[r.home])
+		# Vikings who wintered here are no house's men.
+		var near: Array[String] = []
+		for id in ids:
+			var q2: Place = world.places[id]
+			if q2.is_open(world.year) and q2.id != r.home and q2.kind != WorldTypes.PlaceKind.THING_SITE and grid.place_cell.has(q2.id) \
+					and q2.pos.distance_to(world.place(r.home).pos) <= rules.wider_raider_reach:
+				near.append(q2.id)
+		near.append(r.home)
+		_new_route(r, rng, near)
+		parties.append(r)
+
+
+## The markets the river road's merchants ply between: the east's own and
+## the Baltic towns at its western end.
+func _east_markets(world: World) -> Array[String]:
+	var out: Array[String] = []
+	var ids: Array = world.places.keys()
+	ids.sort()
+	for id in ids:
+		var p: Place = world.places[id]
+		if p.is_open(world.year) and p.has_market and grid.place_cell.has(id) and (far_east(p) or WorldRules.EAST_ROAD_MARKETS.has(id)):
+			out.append(id)
+	return out

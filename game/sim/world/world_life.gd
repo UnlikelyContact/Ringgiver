@@ -742,6 +742,10 @@ static func hear_news(j: Journey) -> void:
 	for n in j.roam.news:
 		if j.roam.clock - float(n.at) > wr.news_days:
 			continue
+		# Tidings of the river road are told on it, and the home waters' at home.
+		if n.has("pos") and Roam.far_east_at(n.pos) != Roam.far_east_at(p.pos):
+			keep.append(n)
+			continue
 		if told < wr.news_per_place:
 			j._say("At %s they tell that %s." % [p.display_name, n.text])
 			told += 1
