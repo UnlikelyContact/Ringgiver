@@ -594,3 +594,11 @@ var origin_standing := {
 }
 ## Origins' ties to a house by place id: kin by blood.
 var origin_kin := {"burned_hall": ["sogn_farms"], "younger_son": ["hardanger"]}
+
+# --- Winter quarters (Journey winter, winter_hall.gd) -------------------------
+## A lord's hall takes the band in as his men for the winter, lodging and
+## board, when his realm thinks this well of it (FactionAI.relation).
+var lords_hall_relation := 40
+## At the thaw the band may go this many days by land to begin its summer
+## somewhere else; its ship, if it has one with it, stays where it lay.
+var spring_days := 6

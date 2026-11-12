@@ -345,3 +345,75 @@ var grave_ale_ounces := 20
 var leader_start_bonus := 1
 var recruit_cap := 16
 var old_leader_death_chance := 0.15
+
+# --- The winter hall, played (winter_hall.gd) --------------------------------
+## The store: rations are bought this many at a time from the house the
+## band winters at; a unit of grain in the hold feeds this many.
+var hall_buy_lot := 5
+var grain_rations := 5
+## The ring-giving: what the leader can give a man, smallest first. First
+## ounces of silver (the second is an arm-ring at `ring_gift_ounces`),
+## then arms the man lacks, at these prices.
+var hall_gift_ounces := [3, 8]
+var arms_price := {"helmet": 12, "sword": 25, "mail": 45}
+## Fine arms given in the hall bind a man this much more than the gear
+## gift alone (`loyalty_gear_gift`).
+var loyalty_arms_bonus := 5
+## A man whose summer was great (a deed told of him, or `great_deed_kills`
+## put down in the year) binds tighter for a gift that honours it, and
+## takes it ill to be passed over.
+var great_deed_kills := 3
+var loyalty_deed_honoured := 5
+var loyalty_passed_over := 10
+## Open-handedness: given at least `open_hand_ounces` a man on average,
+## the leader's name for it grows. A miser's hall: under `miser_ounces` a
+## man while the chest holds `miser_chest` or more, every man cools and men
+## say so.
+var open_hand_ounces := 4
+var fame_open_hand := 2
+var honor_open_hand := 1
+var miser_ounces := 1
+var miser_chest := 20
+var loyalty_miser := 6
+var honor_miser := 2
+## A man sent home for the winter does not eat at the band's board, cools
+## a little, and comes back at the thaw if his loyalty is at least
+## `sent_home_return_loyalty`, else with `sent_home_return_chance`.
+var loyalty_sent_home := 4
+var sent_home_return_loyalty := 40
+var sent_home_return_chance := 0.5
+## What a man who comes to the hall asks to swear, in ounces, by origin
+## (a jarl's son wants a ring for it; most ask a seat and their keep).
+var recruit_ask := {
+	CampaignTypes.Origin.EXILED_JARLS_SON: 10,
+	CampaignTypes.Origin.YOUNGER_SON: 3,
+}
+## The war-leader (stallari): when he leads the wall in the leader's
+## place, only this share of the fame of the fight is the leader's.
+var war_leader_fame_share := 0.5
+## The hall's talk: between these many visitors and troubles a winter.
+var hall_talk_min := 1
+var hall_talk_max := 3
+## A wise-woman sent for when sickness comes: her fee, and the turns of
+## sickness she spares each man.
+var wise_woman_fee := 4
+var wise_woman_turns := 2
+## A quarrel judged: the man found for gains, the man found against loses
+## `judge_loyalty`; settled with silver both ways it costs
+## `settle_quarrel_ounces` a man and warms both and their bond.
+var judge_loyalty := 6
+var settle_quarrel_ounces := 3
+var settle_quarrel_loyalty := 3
+var settle_quarrel_bond := 10
+## Taking in an outlaw over the winter costs a law-abiding band honor.
+var honor_outlaw_taken := 1
+## A camp in the wilds: every man cools this much a turn, and the hunt
+## brings in this much more a man.
+var camp_cold_loyalty := 3
+var camp_hunt_bonus := 1
+## Timber and pitch to mend the ship after a winter storm, in ounces.
+var storm_mend_ounces := 3
+## Two of the band's men sent to the island over a quarrel: the turns of
+## healing the loser takes away, and what it does to their bond.
+var quarrel_island_turns := 2
+var quarrel_island_bond := 15

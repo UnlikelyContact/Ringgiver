@@ -176,7 +176,7 @@ func offer_fight(kind: String, enemy_tier: CombatTypes.Tier, enemy_size: int, at
 	o.at_sea = at_sea
 	o.cornered = cornered
 	o.stat_center = stat_center
-	o.our_men = mini(band.fighters(rules).size(), MAX_FIGHTERS)
+	o.our_men = mini(line_men().size(), MAX_FIGHTERS)
 	if world_rules != null:
 		o.odds_max = world_rules.raid_odds_max
 	o.seed_value = rng.fork("battle:%d:%d" % [cal.year, tally.battles]).seed_value
@@ -256,7 +256,7 @@ func build_fight(offer: FightOffer, choice: int) -> Dictionary:
 	choice = settle_choice(offer, choice)
 	# The days between fights mend a turn; then the men who can stand.
 	band.mend(rules.mend_between_fights)
-	var fighters := band.fighters(rules)
+	var fighters := line_men()
 	if fighters.size() > MAX_FIGHTERS:
 		fighters = fighters.slice(0, MAX_FIGHTERS)
 	if offer.they_know_first:
@@ -269,6 +269,11 @@ func build_fight(offer: FightOffer, choice: int) -> Dictionary:
 	var ours: Array[Warrior] = []
 	for m in fighters:
 		ours.append(m.to_warrior(0, rules, combat_rules.javelins_per_man))
+	# The war-leader leads the wall in the leader's place: he is its head,
+	# its voice and its eyes, and the side's leader AI reads him.
+	var stallari := commanding()
+	if stallari != null and not ours.is_empty() and ours[0].id == stallari.id:
+		ours[0].is_leader = true
 	var center := offer.stat_center if offer.stat_center > 0 else _mean_stat(fighters)
 	var enemy := BandFactory.make_mixed_band(SimRng.new(seed_in).fork("enemy"), 1, offer.enemy_shields,
 			offer.enemy_spears, offer.enemy_bows, offer.enemy_tier, combat_rules, CombatTypes.Armor.NONE, 8, ENEMY_FIRST_ID, center)
@@ -294,7 +299,34 @@ func build_fight(offer: FightOffer, choice: int) -> Dictionary:
 	built.fighters = fighters
 	built.choice = choice
 	built.odds = float(fighters.size()) / maxf(1.0, float(offer.enemy_size))  # ours over theirs
+	built.war_leader = stallari.id if stallari != null else -1
 	return built
+
+
+## The war-leader when he leads the wall in the leader's place: named, the
+## leader keeping back, and fit to stand in a line. Null otherwise.
+func commanding() -> Man:
+	if not band.leader_keeps_back:
+		return null
+	var m := band.war_leader()
+	if m == null or m.too_hurt_to_fight(rules):
+		return null
+	return m
+
+
+## The men who stand in the band's line for a fight: the leader and every
+## man fit to fight (Band.fighters), or, when the war-leader commands in
+## his place (`commanding`), the war-leader first and the leader not at all.
+func line_men() -> Array[Man]:
+	var men := band.fighters(rules)
+	var stallari := commanding()
+	if stallari == null:
+		return men
+	var out: Array[Man] = [stallari]
+	for m in men:
+		if m != band.leader and m != stallari:
+			out.append(m)
+	return out
 
 
 ## A holmgang: the leader alone against `opponent`, to first blood
@@ -370,6 +402,7 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 	var on_land: bool = is_escape or (not is_duel and not offer.at_sea)
 	var told := Aftermath.apply(rules, band, ours, result, SimRng.new(seed_in).fork("aftermath"), on_land, log)
 	tally.recruits += told.joined.size()
+	_count_the_year(ours)
 	_arm_new_men()
 	var survivors: Array[Man] = []
 	var fallen: Array[Man] = []
@@ -397,7 +430,11 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 	# Luck, reputation, plunder. Getting out of the burned hall is none of
 	# these: the saga begins there, it is not judged by it.
 	if not is_duel and not is_escape:
+		var fame_before := band.fame
 		Leader.on_battle(rules, band, won, true, built.odds, log, outcome)
+		# Under the war-leader the fight is his as much as the leader's.
+		if int(built.get("war_leader", -1)) >= 0 and band.fame > fame_before:
+			band.fame -= (band.fame - fame_before) - roundi((band.fame - fame_before) * rules.war_leader_fame_share)
 	if won and not is_duel and not is_escape:
 		_summer_wins += 1
 		tally.wins += 1
@@ -410,6 +447,24 @@ func conclude_fight(offer: FightOffer, built: Dictionary, result: BattleResult) 
 	if band.leader != null and not band.leader.alive:
 		succession("battle")
 	return told
+
+
+## This year's part of each man's fight, for the ring-giving: the fight
+## stood, men put down, a wound taken, a break, a deed told.
+func _count_the_year(ours: Array[Warrior]) -> void:
+	for w in ours:
+		var m := band.man_by_id(w.id)
+		if m == null:
+			continue
+		var t := m.year_tally
+		t["fights"] = int(t.get("fights", 0)) + 1
+		t["kills"] = int(t.get("kills", 0)) + w.kills
+		if w.wound != CombatTypes.Wound.UNHURT or w.fate == CombatTypes.Fate.MAIMED:
+			t["wounds"] = int(t.get("wounds", 0)) + 1
+		if w.broken:
+			t["broke"] = int(t.get("broke", 0)) + 1
+		if w.kills >= rules.deed_kills:
+			t["deeds"] = int(t.get("deeds", 0)) + 1
 
 
 ## Gives every man who has no place in the line yet one: a shield-bearer,
@@ -452,14 +507,20 @@ func _settle_vow() -> void:
 
 # --- Winter -----------------------------------------------------------------
 
-func winter() -> void:
+## The four winter turns and the thaw. Each turn's plan comes from
+## `planner` (a Callable taking the rules, the band and the calendar and
+## returning a WinterPlan; Winter.default_plan when none is given). `opts`
+## is for the winter the player plays (WinterHall): "recruits" false keeps
+## the thaw from drawing men (they came to the hall already), "returning"
+## is men sent home for the winter, who come back or not at the thaw.
+func winter(planner := Callable(), opts := {}) -> void:
 	Hall.ensure(band, rules)
 	cal.start_winter()
 	var unseated_all := {}
 	for t in 4:
 		if over:
 			return
-		var plan := Winter.default_plan(rules, band, cal)
+		var plan: WinterPlan = planner.call(rules, band, cal) if planner.is_valid() else Winter.default_plan(rules, band, cal)
 		var report := Winter.run_turn(rng.fork("winter:%d:%d" % [cal.year, t]), rules, band, cal, plan, log)
 		_apply_report(plan, report)
 		for id in report.men_without_seat:
@@ -471,7 +532,7 @@ func winter() -> void:
 			if over:
 				return
 		if cal.winter_turn == CampaignTypes.WinterTurn.THAW:
-			_thaw()
+			_thaw(opts)
 		else:
 			cal.advance_turn()
 
@@ -489,17 +550,27 @@ func _apply_report(plan: WinterPlan, report: WinterReport) -> void:
 		var m := band.man_by_id(id)
 		if m != null:
 			Loyalty.gift(rules, band, m, plan.gifts[id], log)
+	if report.cold:
+		for m in band.living_men():
+			Loyalty.adjust(m, -rules.camp_cold_loyalty)
+		log.append("The cold of the camp gnaws at the men's goodwill.")
 	if report.feasted:
 		Leader.on_feast(rules, band, true, log)
 	if report.vow != "":
 		_pending_vow = report.vow
 	for ev in report.events:
+		# A skald's praise-poem and an envoy's regard are fame.
+		if int(ev.get("fame", 0)) != 0:
+			band.fame = clampi(band.fame + int(ev.fame), Leader.REP_MIN, Leader.REP_MAX)
 		if ev.get("recruit_request", false) and band.living_men().size() < rules.recruit_cap:
 			var m := Recruits.make(rng.fork("outlaw:%d:%d" % [cal.year, cal.winter_turn]), rules,
 					CampaignTypes.Origin.OUTLAW, 24, Recruits.NAMES[rng.fork("outlaw_name:%d" % cal.year).randi_range(0, Recruits.NAMES.size() - 1)], band.next_id())
 			band.add_man(m)
 			tally.recruits += 1
-		if ev.has("marriage_offer") and band.wife == "":
+		# Where the houses are, a daughter is offered by name, as a choice
+		# (WinterHall's talk); the old offer from nowhere is for the plain
+		# campaign alone.
+		if ev.has("marriage_offer") and band.wife == "" and (world == null or world.families == null):
 			var mr := rng.fork("marriage:%d" % cal.year)
 			var pot: Array[int] = []
 			for s in 5:
@@ -508,7 +579,7 @@ func _apply_report(plan: WinterPlan, report: WinterReport) -> void:
 			Family.marry(rules, band, "a daughter of %s" % house, pot, mr.randi_range(1, rules.household_skill_max), house, log)
 
 
-func _thaw() -> void:
+func _thaw(opts := {}) -> void:
 	# Land yields; the world moves on.
 	if world != null:
 		band.food += band.land * world_rules.land_food_per_unit
@@ -529,6 +600,22 @@ func _thaw() -> void:
 	for m in leavers:
 		band.remove_man(m)
 	tally.departures += leavers.size()
+	# Men sent home for the winter come back, or do not.
+	var rr := rng.fork("returning:%d" % cal.year)
+	for m: Man in opts.get("returning", []):
+		m.age += 1
+		if m.loyalty >= rules.sent_home_return_loyalty or rr.randf() < rules.sent_home_return_chance:
+			band.add_man(m, m.joined_year)
+			log.append("%s comes back from his kin at the thaw." % m.display_name)
+		else:
+			tally.departures += 1
+			log.append("%s stays with his kin, and does not come back." % m.display_name)
+			band.log("%s went home for the winter and did not come back." % m.display_name)
+	# The year's tallies of deeds are told; the next year starts clean.
+	for m in band.living_men():
+		m.year_tally = {}
+	if band.leader != null:
+		band.leader.year_tally = {}
 	# Old age can take the leader in his bed.
 	if band.leader != null and band.leader.age >= rules.old_age \
 			and rng.fork("old:%d" % cal.year).randf() < rules.old_leader_death_chance:
@@ -538,8 +625,8 @@ func _thaw() -> void:
 		if over:
 			return
 	_name_second_if_needed()
-	# Fame draws new men in spring.
-	var wanted := Leader.recruits_drawn(rules, band)
+	# Fame draws new men in spring (unless they came to the hall in winter).
+	var wanted := Leader.recruits_drawn(rules, band) if opts.get("recruits", true) else 0
 	for i in wanted:
 		if band.living_men().size() >= rules.recruit_cap:
 			break

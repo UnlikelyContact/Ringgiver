@@ -27,6 +27,10 @@ var healing_turns := 0
 var kills := 0
 var broke_count := 0
 var deeds: PackedStringArray = []
+## This year's part of it, for the ring-giving: fights stood, men put
+## down, wounds taken, times he broke, deeds told. Counted by
+## Campaign.conclude_fight, cleared at the thaw.
+var year_tally := {}
 ## His place in the line (CombatTypes.Role): a shield-bearer, a spearman
 ## of the second rank, or a bowman.
 var role: CombatTypes.Role = CombatTypes.Role.SHIELD
@@ -65,6 +69,11 @@ var is_leader := false
 var is_banner := false
 var is_horn := false
 var joined_year := 0
+
+
+## One of this year's counts (`year_tally`), 0 when none.
+func this_year(key: String) -> int:
+	return int(year_tally.get(key, 0))
 
 
 func stat(s: CombatTypes.Stat) -> int:

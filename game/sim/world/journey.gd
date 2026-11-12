@@ -37,6 +37,13 @@ var contract := {}
 var wintering := false
 ## What the last winter did, for the screen that reads it out.
 var winter_report := PackedStringArray()
+## The winter the player plays (WinterHall) while the band winters; null in
+## summer. With `stepped_winter` off (the default, for old callers) a
+## winter is lived through at once with the sensible choices
+## (`winter_auto`); the map screen and the stand-in players turn it on and
+## step through it: `winter_state`, `winter_choose`, `winter_end`.
+var stepped_winter := false
+var winter_hall: WinterHall = null
 var _rng: SimRng
 var _n := 0
 var _offers := {}  # place id -> the work on offer, rolled once a visit
@@ -179,7 +186,7 @@ func current() -> Dictionary:
 
 ## Whether the player is free to act: nothing to answer, no fight on.
 func can_act() -> bool:
-	return decisions.is_empty() and fight.is_empty() and not c.over
+	return decisions.is_empty() and fight.is_empty() and not c.over and winter_hall == null
 
 
 ## The place the band is at, or null in the wilds and at sea.
@@ -1453,7 +1460,7 @@ func _settle() -> void:
 			return
 		if c.world.families != null:
 			c.world.families.sync(c.world_rules, c.band)
-		if not decisions.is_empty() or not fight.is_empty():
+		if not decisions.is_empty() or not fight.is_empty() or winter_hall != null:
 			return
 		c.band.location = roam.grid.place_at(roam.pos)
 		if not contract.is_empty() and c.band.location == str(contract.get("to_place", "")):
@@ -1477,7 +1484,8 @@ func _winter() -> void:
 	var band := c.band
 	var p := here()
 	if p == null or not SETTLED.has(p.kind):
-		# Caught out by the snow: the band makes for the nearest roof it knows.
+		# Caught out by the snow: the band makes for the nearest roof it
+		# knows; with none, it makes a camp where it stands.
 		var best := ""
 		var best_d := INF
 		for id in band.known_places:
@@ -1493,16 +1501,9 @@ func _winter() -> void:
 			band.location = best
 			p = here()
 			_say("The snow catches the band abroad: it makes for %s." % p.display_name)
-	if p != null and p.id != band.home:
-		var cost := mini(band.silver, wr.guest_winter_per_man * band.fighters().size())
-		if Families.shelter(wr, band, p) == "free":
-			cost = 0
-		band.silver -= cost
-		band.home = p.id
-		if cost == 0:
-			_say("%s winters at %s as the guest of %s, who will take nothing for it." % [band.leader.display_name, p.display_name, p.family])
 		else:
-			_say("%s winters at %s as a guest (%d oz for the lodging)." % [band.leader.display_name, p.display_name, cost])
+			p = null
+			_say("The snow catches the band in the wilds with no roof it knows of: it makes a camp.")
 	# A promise to speak for a house at the Thing that was not kept.
 	for client in band.pledges.keys():
 		if int(band.pledges[client].get("year", -1)) <= c.cal.year:
@@ -1517,30 +1518,88 @@ func _winter() -> void:
 		Contracts.complete(wr, c.world, band, contract, false, said)
 		contract = {}
 	c._settle_vow()
-	var mark := c.log.size()
-	var chron := band.chronicle.size()
-	c.winter()
+	winter_begin(p)
+	if not stepped_winter:
+		winter_auto(false)
+
+
+# --- The winter in the hall ------------------------------------------------------------
+
+## The band goes into its winter quarters at `p` (null: a camp in the
+## wilds): the lodging is settled and the hall opened (WinterHall.open).
+func winter_begin(p: Place) -> void:
+	var band := c.band
 	winter_report = PackedStringArray()
-	for i in range(chron, band.chronicle.size()):
-		winter_report.append(band.chronicle[i])
-	for i in range(mark, c.log.size()):
-		var line := c.log[i]
-		if line.contains(" effort in ") or line.contains(" drills "):
-			continue  # the drill yard's bookkeeping is not the winter's story
-		winter_report.append(line)
-	if c.world.families != null:
-		var told := c.world.families.tidings_of(c.cal.year)
-		if not told.is_empty():
-			winter_report.append("Tidings of the houses this year:")
-			for line in told:
-				winter_report.append("  " + line)
+	winter_hall = WinterHall.open(self, p)
+	var h := winter_hall
+	if p != null and h.lodging != "home":
+		band.home = p.id
+	match h.lodging:
+		"guest":
+			_say("%s winters at %s as a guest (%d oz for the lodging)." % [band.leader.display_name, p.display_name, h.fee])
+		"friend":
+			_say("%s winters at %s as the guest of %s, who will take nothing for it." % [band.leader.display_name, p.display_name, p.family])
+		"lord":
+			_say("%s winters in %s's hall at %s, as his man." % [band.leader.display_name, h.host, p.display_name])
+		"home", "again":
+			_say("%s winters at %s." % [band.leader.display_name, p.display_name])
+
+
+## Whether the band is in its winter quarters, choosing.
+func in_winter() -> bool:
+	return winter_hall != null
+
+
+## The winter's step as plain values for the screen (WinterHall.state), or
+## {} in summer.
+func winter_state() -> Dictionary:
+	return winter_hall.state(self) if winter_hall != null else {}
+
+
+## Makes one winter choice by its id (the buttons' ids in `winter_state`),
+## or "next" / "back". "next" from the hall's talk lives through the
+## winter; "next" from the spring begins the summer (`winter_end`).
+func winter_choose(id: String) -> void:
+	if winter_hall == null:
+		return
+	if id == "next" and winter_hall.step == WinterHall.SPRING:
+		winter_end()
+		return
+	winter_hall.choose(self, id)
+	if winter_hall.resolved and c.over:
+		winter_end()
+
+
+## Keeps the choices as they stand (the sensible defaults, or what was
+## chosen) and goes on to the spring: what the stand-in players and the
+## tools use.
+func winter_auto(settle := true) -> void:
+	if winter_hall == null:
+		return
+	winter_hall.resolve(self)
+	winter_end(settle)
+
+
+## The winter is over: lived through if it was not yet, the band goes where
+## the summer begins, and the next spring begins (or the saga is ended).
+func winter_end(settle := true) -> void:
+	if winter_hall == null:
+		return
+	var h := winter_hall
+	h.resolve(self)
+	winter_hall = null
 	_say("Winter of %d passes." % c.cal.year)
 	if c.over:
-		_say("The saga of %s ends here: %s." % [Way.title(band), c.over_reason])
+		_say("The saga of %s ends here: %s." % [Way.title(c.band), c.over_reason])
 		return
+	h.go_in_spring(self)
+	if stepped_winter:
+		winter_report = PackedStringArray()  # read on the winter screen already
 	c.cal.next_year()
-	band.year = c.cal.year
+	c.band.year = c.cal.year
 	begin_summer()
+	if settle:
+		_settle()
 
 
 # --- Small things -----------------------------------------------------------------
