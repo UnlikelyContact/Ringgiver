@@ -107,7 +107,7 @@ func _pick(item: String, label: String, s: Dictionary) -> void:
 	box.add_child(UiTheme.label("%s, for one of your band. Given to a man, it binds him to you; on yourself, it is your own." % label, "SmallLabel"))
 	var any := false
 	for p in s.people:
-		if item != "named" and not (p.lacks as PackedStringArray).has(item):
+		if not (p.lacks as PackedStringArray).has(item):
 			continue
 		any = true
 		var id := int(p.id)

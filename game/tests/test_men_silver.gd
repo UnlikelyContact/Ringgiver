@@ -197,6 +197,7 @@ func test_a_sword_with_a_name() -> void:
 	band.silver = 1000
 	Estate._smith(j, j.here(), "great").named = "Legbiter"
 	var m := band.living_men()[0]
+	m.role = CombatTypes.Role.SHIELD  # a sword is for the front rank
 	var fame := band.fame
 	assert_true(j.buy_arms("named", m.id))
 	assert_eq(m.sword_name, "Legbiter")

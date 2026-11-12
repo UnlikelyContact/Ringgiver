@@ -129,6 +129,12 @@ func _init() -> void:
 			steps += Way.rank(band, way)
 			per_year += float(band.silver - start) / maxf(1.0, y)
 			mo.worth_year += float(worth(j) - start_worth) / maxf(1.0, y)
+			# Men and silver (docs/design/notes/men-silver.md): what went on works and arms.
+			var est := band.estate
+			mo["sunk_year"] = float(mo.get("sunk_year", 0.0)) + float(est.sunk) / maxf(1.0, y)
+			for kind in est.spent:
+				mo["spent:" + str(kind)] = int(mo.get("spent:" + str(kind), 0)) + int(est.spent[kind])
+			mo["maidens"] = int(mo.get("maidens", 0)) + est.maidens
 			mo.luck += band.luck
 			mo.luck_hi += 1 if band.luck >= 8 else 0
 			mo.luck_lo += 1 if band.luck <= 2 else 0
@@ -159,6 +165,11 @@ func _init() -> void:
 		for k in years:
 			wc.append("y%d %d/%.1f" % [k + 1, y_worth[k] / maxi(1, y_alive[k]), float(y_men[k]) / maxi(1, y_alive[k])])
 		print("   worth: %+.0f a year  by year worth/men: %s" % [float(mo.worth_year) / n, "  ".join(wc)])
+		var sp := PackedStringArray()
+		for k in ["smith", "hall", "skald", "feast", "dead", "ship"]:
+			sp.append("%s %.0f" % [k, float(mo.get("spent:" + k, 0)) / n])
+		print("   silver laid out: %.0f a year (worth and laid out %+.0f a year)  by kind, a saga: %s  shieldmaidens %d" % [
+				float(mo.get("sunk_year", 0.0)) / n, (float(mo.worth_year) + float(mo.get("sunk_year", 0.0))) / n, "  ".join(sp), int(mo.get("maidens", 0))])
 		print("   more: luck %.1f (8+ %d, 2- %d)  friends %.1f  ill-wishers %.1f  feuds open %.1f  hired %.1f  captive oz %.0f  most men %d  ladder %s" % [
 				float(mo.luck) / n, int(mo.luck_hi), int(mo.luck_lo), float(mo.friends) / n, float(mo.foes) / n, float(mo.feuds) / n,
 				float(mo.hired) / n, float(mo.slave_oz) / n, int(mo.max_men), "/".join(ladder.map(func(v: int) -> String: return "%.1f" % (float(v) / n)))])

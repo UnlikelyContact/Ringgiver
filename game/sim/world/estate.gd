@@ -124,22 +124,28 @@ static func arms_price(rules: CampaignRules, kind: String, item: String) -> int:
 	return base
 
 
-## Whether `m` would be the better for `item`: what he lacks.
+## Whether `m` would be the better for `item`: what he lacks. A sword or
+## a long axe is for a man of the front rank (the second rank fights with
+## the spear, the bowmen with the bow: Man.to_warrior); a bow is for a man
+## not yet among the bowmen, and takes him there.
 static func lacks(m: Man, item: String) -> bool:
+	var front := m.role == CombatTypes.Role.SHIELD
 	match item:
 		"helmet":
 			return not m.helmet
-		"sword":
-			return m.weapon != CombatTypes.Weapon.SWORD
+		"sword", "named":
+			return front and (m.weapon != CombatTypes.Weapon.SWORD or (item == "named" and m.sword_name == ""))
 		"mail":
 			return m.armor != CombatTypes.Armor.MAIL
 		"long axe":
-			return m.weapon != CombatTypes.Weapon.LONG_AXE
+			return front and m.weapon != CombatTypes.Weapon.LONG_AXE
 		"bow":
-			return m.weapon != CombatTypes.Weapon.BOW
+			return m.role != CombatTypes.Role.MISSILE and not m.is_leader
 	return false
 
 
+## The dead not yet honoured offered at once, the latest first.
+const MEMORIALS_SHOWN := 4
 ## CombatTypes.Weapon in words.
 const WEAPON_WORDS := ["a spear", "a bearded axe", "a sword", "a long axe", "a bow"]
 
@@ -186,7 +192,7 @@ static func smith_state(j: Journey) -> Dictionary:
 	everyone.append_array(c.band.living_men())
 	for m in everyone:
 		var l := PackedStringArray()
-		for item in c.rules.smith_items:
+		for item in c.rules.smith_items + ["named"]:
 			if lacks(m, item):
 				l.append(item)
 		people.append({"id": m.id, "name": m.display_name, "lacks": l, "gear": gear_words(m), "leader": m == c.band.leader})
@@ -233,7 +239,7 @@ static func buy_arms(j: Journey, item: String, man_id: int) -> bool:
 		return false
 	if item == "named":
 		var sword := str(s.named)
-		if sword == "" or m == null or band.silver < c.rules.smith_named_price:
+		if sword == "" or m == null or band.silver < c.rules.smith_named_price or not lacks(m, "named"):
 			return false
 		_pay(j, c.rules.smith_named_price, "smith")
 		s.named = ""
@@ -273,6 +279,9 @@ static func buy_arms(j: Journey, item: String, man_id: int) -> bool:
 static func _arm(j: Journey, m: Man, item: String, fine: bool) -> void:
 	var c := j.c
 	var said := PackedStringArray()
+	if item == "bow":
+		m.role = CombatTypes.Role.MISSILE  # he takes his place among the bowmen
+		m.armed = true
 	if m == c.band.leader:
 		var before := m.loyalty
 		Loyalty.gift_gear(c.rules, c.band, m, item, said)
@@ -420,11 +429,15 @@ static func works(j: Journey) -> Array[Dictionary]:
 						else "You have feasted the district this year.",
 				"enabled": e.district_feast != c.cal.year and band.silver >= dc and not d.is_empty(), "group": "feast"})
 		var fallen := _fallen(band)
-		for i in fallen.size():
+		var shown := 0
+		for i in range(fallen.size() - 1, -1, -1):  # the latest dead first, a few at a time
+			if shown >= MEMORIALS_SHOWN:
+				break
 			var f: Dictionary = fallen[i]
 			var key := "%s:%d" % [str(f.name), int(f.year)]
 			if e.memorials.has(key):
 				continue
+			shown += 1
 			var who := str(f.name)
 			var them := "her" if bool(f.get("woman", false)) else "him"
 			out.append({"id": "stone:%d" % i, "label": "Raise a stone for %s (%d oz)" % [who, rules.stone_cost], "cost": rules.stone_cost,
