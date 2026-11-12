@@ -67,7 +67,7 @@ static func build(rules: WorldRules, world: World, seed_in: int) -> Families:
 			fs.houses[h.name] = h
 			if authored.has(h.name):
 				var d: Dictionary = authored[h.name]
-				h.western = true
+				h.western = bool(d.get("western", true))
 				h.seat = str(d.seat)
 				h.head = str(d.head)
 				h.heir = str(d.heir)

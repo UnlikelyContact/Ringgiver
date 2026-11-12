@@ -234,7 +234,7 @@ static func captive_pace(j: Journey) -> float:
 static func sell(j: Journey, place: Place) -> int:
 	var band := j.c.band
 	var wr := j.c.world_rules
-	var base := wr.captive_price_dublin if place.id == "dublin" else wr.captive_price
+	var base := Market.captive_base(wr, place)
 	if Market.captive_price(wr, place) <= 0 or band.captives <= 0:
 		return 0
 	var earned := 0

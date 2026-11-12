@@ -457,6 +457,8 @@ static func _act(j: Journey, bent: int) -> void:
 		if str(id).begins_with("case:") or str(id).begins_with("speak:") or str(id).begins_with("answer:") or str(id).begins_with("case_land:"):
 			j.act(id)
 			return
+	if _wider(j, bent, ids):
+		return
 	if _houses(j, bent, ids):
 		return
 	if not j.contract.is_empty() and j.days_to(str(j.contract.to_place)) > 0:
@@ -577,6 +579,8 @@ static func _act(j: Journey, bent: int) -> void:
 	var cheapest := ""
 	var cost := 1 << 20
 	for o in j.passages():
+		if Roam.far_east(c.world.place(str(o.id))) and not Roam.far_east_at(j.roam.pos):
+			continue  # (the river road is a venture of its own)
 		if j.sail_speed() <= 0.0 and ids.has("passage:" + str(o.id)) and int(o.cost) < cost and int(o.cost) * 3 <= band.silver:
 			cost = int(o.cost)
 			cheapest = "passage:" + str(o.id)
@@ -727,8 +731,19 @@ static func _nearest(j: Journey, want: Callable) -> String:
 		var p := c.world.place(id)
 		if p == null or id == c.band.location or not p.is_open(c.world.year) or not want.call(p):
 			continue
+		# The river road is a venture of its own (_east), not the nearest anything;
+		# and the Isles are raiders' and outlaws' country (_wider), not where a
+		# man of the other ways looks for his living.
+		if Roam.far_east(p) and not Roam.far_east_at(j.roam.pos):
+			continue
+		if ISLES.has(p.id) and not Outlawry.is_outlawed(c.band, c.cal):
+			continue
 		var d := j.days_to(id)
 		if d < 0 or d >= best_days or d + 10 > j.days_left():
+			continue
+		# (The wider world: a færing can creep round the Baltic's shores to
+		# the far side of the map; nobody does that for the nearest living.)
+		if d > FAERING_REACH and c.band.ship != null and c.band.ship.kind == WorldTypes.ShipKind.FAERING:
 			continue
 		best_days = d
 		best = id
@@ -785,7 +800,7 @@ static func _trade(j: Journey, ids: Dictionary) -> bool:
 				continue
 			for id in band.known_places:
 				var q := c.world.place(str(id))
-				if q == null or q.id == here.id or not q.is_open(c.world.year) or not Market.buys_here(q, g):
+				if q == null or q.id == here.id or not q.is_open(c.world.year) or not Market.buys_here(q, g) or Roam.far_east(q):
 					continue
 				var days := j.days_to(q.id)
 				if days < 0 or days + 10 > j.days_left():
@@ -1071,4 +1086,189 @@ static func _men_silver(j: Journey, bent: int, ids: Dictionary) -> bool:
 			if id == "feast_house":
 				j.life["bot_feasts:%d" % c.cal.year] = int(j.life.get("bot_feasts:%d" % c.cal.year, 0)) + 1
 			return j.do_work(id)
+	return false
+
+
+# --- The wider world (docs/design/notes/wider-world.md) ------------------------------
+
+## The western isles of the wider world.
+const ISLES := ["shetland", "hebrides", "skye"]
+## Days a man in a færing will go for "the nearest" anything (_nearest).
+const FAERING_REACH := 30
+## The stops of the road east, Baltic end first.
+const EAST_ROAD := ["birka", "aldeigjuborg", "holmgard", "koenugard", "miklagard"]
+## What a trader carries east: what fetches most at Miklagard.
+const EAST_GOODS := [WorldTypes.Good.WALRUS_IVORY, WorldTypes.Good.AMBER, WorldTypes.Good.FURS]
+## The home markets silk is carried back to.
+const SILK_HOMES := ["kaupang", "lade", "bjarkoy", "hedeby", "ribe"]
+## A trader with a hold and the silver for it sets out on the road east in
+## this share of the springs he could (once in `EAST_EVERY` years at most);
+## a viking turns west for the Hebrides in this share of his summers.
+const EAST_CHANCE := 0.25
+const EAST_EVERY := 3
+const WEST_RAID_CHANCE := 0.35
+
+
+## The far roads, as a man of his bent would take them: the trader's
+## venture east and home with silk (`j.life["bot_east"]`), a viking's run
+## to the Hebrides, and an outlaw's winter in Shetland. True when he did
+## something.
+static func _wider(j: Journey, bent: int, ids: Dictionary) -> bool:
+	var c := j.c
+	var band := c.band
+	if Outlawry.is_outlawed(band, c.cal) and j.days_left() <= 30 and band.knows("shetland") and band.location != "shetland" \
+			and j.days_to("shetland") >= 0 and j.days_to("shetland") + 5 <= j.days_left():
+		return _go(j, "shetland")
+	if Outlawry.is_outlawed(band, c.cal) and band.location == "shetland" and j.days_left() <= 30 and ids.has("winter"):
+		j.act("winter")
+		return true
+	if bent == Way.Id.TRADER:
+		return _east(j, ids)
+	if bent == Way.Id.VIKING:
+		return _west_raid(j, ids)
+	return false
+
+
+static func _east(j: Journey, ids: Dictionary) -> bool:
+	var c := j.c
+	var band := c.band
+	var wr := c.world_rules
+	var here := j.here()
+	var plan: Dictionary = j.life.get("bot_east", {})
+	if plan.is_empty():
+		# Whether to set out: once a spring, with a hold, the silver, and
+		# the summer for it.
+		if here == null or Roam.far_east(here) or band.ship == null or j.sail_speed() <= 0.0 \
+				or band.ship.cargo_capacity(wr) < 6 or band.silver < 150 or j.days_left() < 100:
+			return false
+		if c.cal.year - int(j.life.get("bot_east_last", -100)) < EAST_EVERY or j.life.has("bot_east_roll:%d" % c.cal.year):
+			return false
+		# He must know where the road begins, or a market where it is told of.
+		if not band.knows("birka") and not band.knows("gotland") and not band.knows("kaupang"):
+			return false
+		# The road there must fit in what is left of the summer, with time to
+		# trade (the way home may not: then he winters abroad).
+		var start := "birka" if band.knows("birka") else ("gotland" if band.knows("gotland") else "kaupang")
+		var there := j.days_to(start)
+		var road := j.roam.place_days("birka", "miklagard", j.foot_speed(), j.sail_speed(), true, EastRoad.haul(j))
+		if there < 0 or road < 0.0 or there + road + 20 > j.days_left():
+			return false
+		j.life["bot_east_roll:%d" % c.cal.year] = true
+		if j.c.rng.fork("bot_east:%d" % c.cal.year).randf() >= EAST_CHANCE:
+			return false
+		plan = {"year": c.cal.year, "leg": "out", "stocked": false}
+		j.life["bot_east"] = plan
+		j._say("%s makes up his mind to take the road east, to Miklagard." % band.leader.display_name)
+	if str(plan.leg) == "out":
+		if here != null and here.id == "miklagard":
+			_at_miklagard(j, ids, plan)
+			return true
+		# Goods the Greeks pay for, half his silver's worth, at the first
+		# market of the Baltic or home waters on his way.
+		if here != null and here.has_market and not Roam.far_east(here) and not bool(plan.stocked):
+			plan.stocked = true
+			var mik := c.world.place("miklagard")
+			var budget := band.silver / 2
+			for g in EAST_GOODS:
+				if Market.cargo_room(wr, band) <= 0:
+					break
+				var cost := Market.buy_price(wr, here, band, g)
+				if Market.sell_price(wr, mik, band, g) < cost * 3 / 2:
+					continue
+				var n := mini(mini(Market.cargo_room(wr, band) / 2 + 1, budget / maxi(1, cost)), 12)
+				if n > 0:
+					budget -= cost * j.buy(g, n)
+		# On to the furthest stop of the road he knows (Gotland will do for
+		# Birka: the road east begins at either; Kaupang, where it is told
+		# of, if he knows neither).
+		for i in range(EAST_ROAD.size() - 1, -1, -1):
+			var to: String = EAST_ROAD[i]
+			if i == 0 and not band.knows("birka"):
+				to = "gotland" if band.knows("gotland") else "kaupang"
+			if to == band.location:
+				break
+			if band.knows(to):
+				if j.days_to(to) < 0:
+					break
+				return _go(j, to)
+		# He knows no road on from here: the venture is given up.
+		j.life.erase("bot_east")
+		return false
+	# Home with the silk: to the nearest home market, and sell it there.
+	if here != null and SILK_HOMES.has(here.id):
+		for row in j.market():
+			if int(row.have) > 0 and bool(row.get("can_sell", true)) and int(row.sell) > 0:
+				j.sell(int(row.good), int(row.have))
+		j.life.erase("bot_east")
+		j.life["bot_east_last"] = int(plan.year)
+		return false
+	var best := ""
+	var best_d := 1 << 20
+	for id in SILK_HOMES:
+		var d := j.days_to(id)
+		if band.knows(id) and d >= 0 and d < best_d:
+			best_d = d
+			best = id
+	if best == "":
+		j.life.erase("bot_east")
+		return false
+	if best_d + 5 > j.days_left() and here != null and ids.has("winter"):
+		# The road home is longer than what is left of the summer: he
+		# winters where he is, and goes on in the spring.
+		j.act("winter")
+		return true
+	return _go(j, best)
+
+
+## At Miklagard: sell what he brought, buy silk with what he can spare,
+## and either turn for home or, with the summer too far gone, stand in the
+## emperor's guard for the winter.
+static func _at_miklagard(j: Journey, ids: Dictionary, plan: Dictionary) -> void:
+	var c := j.c
+	var band := c.band
+	var wr := c.world_rules
+	for row in j.market():
+		if int(row.have) > 0 and bool(row.get("can_sell", true)) and int(row.sell) > 0:
+			j.sell(int(row.good), int(row.have))
+	if ids.has("captives"):
+		j.act("captives")
+	var spend := band.silver * 2 / 3
+	var home := c.world.place("kaupang")
+	while Market.cargo_room(wr, band) > 0 and spend > 0:
+		var cost := Market.buy_price(wr, j.here(), band, WorldTypes.Good.SILK)
+		if cost > spend or Market.sell_price(wr, home, band, WorldTypes.Good.SILK) < cost * 3 / 2:
+			break
+		if j.buy(WorldTypes.Good.SILK, 1) <= 0:
+			break
+		spend -= cost
+	plan.leg = "home"
+	var back := j.days_to("kaupang")
+	if (back < 0 or back + 10 > j.days_left()) and ids.has("guard"):
+		j.act("guard")
+
+
+## A viking's summer in the west: now and then he makes for the Hebrides
+## and the farms of Skye, which no beacons watch.
+static func _west_raid(j: Journey, ids: Dictionary) -> bool:
+	var c := j.c
+	var band := c.band
+	if band.ship == null or j.sail_speed() <= 0.0 or j.days_left() < 40:
+		return false
+	var key := "bot_west:%d" % c.cal.year
+	if not j.life.has(key):
+		j.life[key] = c.rng.fork(key).randf() < WEST_RAID_CHANCE
+	if not bool(j.life[key]):
+		return false
+	for id in ["skye", "hebrides"]:
+		var q := c.world.place(id)
+		if q == null or not band.knows(id) or not _raidable(j, q):
+			continue
+		if band.location == id:
+			if ids.has("raid"):
+				j.life[key] = false  # one raid in the west a summer
+				j.act("raid")
+				return true
+			continue
+		if j.days_to(id) >= 0 and j.days_to(id) + 15 <= j.days_left():
+			return _go(j, id)
 	return false

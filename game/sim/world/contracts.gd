@@ -83,7 +83,8 @@ static func _make(rng: SimRng, rules: WorldRules, world: World, band: Band, at: 
 		"escort":
 			var markets: Array[Place] = []
 			for p in world.open_places():
-				if p.has_market and p.id != at.id:
+				# (The wider world: not over the river road from the home waters, nor back.)
+				if p.has_market and p.id != at.id and Roam.far_east(p) == Roam.far_east(at):
 					markets.append(p)
 			if markets.is_empty():
 				return {}

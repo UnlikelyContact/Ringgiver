@@ -23,7 +23,7 @@ static func price(rules: WorldRules, place: Place, good: WorldTypes.Good) -> int
 ## A farm's or a hall's own stall (Place.trade): what it makes is cheap,
 ## what it lacks dear, and either moves with the few units it has.
 static func _local_price(rules: WorldRules, place: Place, good: WorldTypes.Good) -> int:
-	var factor: float = rules.region_factor.get(place.region, {}).get(good, 1.0)
+	var factor := factor_at(rules, place, good)
 	factor *= rules.local_sell_factor if str(place.trade[good]) == "sells" else rules.local_buy_factor
 	var stock := int(place.stock.get(good, rules.local_stock))
 	var scarcity := clampf(float(rules.local_stock) / float(maxi(1, stock)), rules.price_floor, rules.price_ceiling)
@@ -66,8 +66,8 @@ static func mend_local(rules: WorldRules, world: World, days: float) -> void:
 
 
 static func _price_at(rules: WorldRules, place: Place, good: WorldTypes.Good, stock: int) -> int:
-	var factor: float = rules.region_factor.get(place.region, {}).get(good, 1.0)
-	var scarcity := clampf(float(rules.stock_baseline) / float(maxi(1, stock)), rules.price_floor, rules.price_ceiling)
+	var factor := factor_at(rules, place, good)
+	var scarcity := clampf(float(depth(rules, place)) / float(maxi(1, stock)), rules.price_floor, rules.price_ceiling)
 	return maxi(1, roundi(float(rules.base_price[good]) * factor * scarcity))
 
 
@@ -79,14 +79,14 @@ static func _price_at(rules: WorldRules, place: Place, good: WorldTypes.Good, st
 static func buy_price(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good) -> int:
 	if not place.has_market and not place.trade.has(good):
 		return price(rules, place, good)
-	var over := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)) - Families.spread_off(rules, band, place))
+	var over := maxf(0.0, spread_at(rules, place) - float(band.gift("trade_edge", 0.0)) - Families.spread_off(rules, band, place))
 	return maxi(1, ceili(float(price(rules, place, good)) * (1.0 + over) * Families.foe_factor(rules, band, place) - 0.0001))
 
 
 ## What this band is paid here: the price less the spread, plus its
 ## `trade_edge` gift (never over the price itself).
 static func sell_price(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good) -> int:
-	var under := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)) - Families.spread_off(rules, band, place))
+	var under := maxf(0.0, spread_at(rules, place) - float(band.gift("trade_edge", 0.0)) - Families.spread_off(rules, band, place))
 	return maxi(0, floori(float(price(rules, place, good)) * (1.0 - under) / Families.foe_factor(rules, band, place) + 0.0001))
 
 
@@ -185,15 +185,15 @@ static func sell(rules: WorldRules, place: Place, band: Band, good: WorldTypes.G
 
 ## Price of the next captive here, or 0 where captives are not bought.
 static func captive_price(rules: WorldRules, place: Place) -> int:
-	if not rules.slave_markets.has(place.id):
+	if not buys_captives(rules, place):
 		return 0
-	return maxi(0, roundi(float(rules.captive_price) * (1.0 - rules.captive_glut * float(place.captives_sold))))
+	return maxi(0, roundi(float(captive_base(rules, place)) * (1.0 - rules.captive_glut * float(place.captives_sold))))
 
 
 ## Sells up to `count` captives, each at the glutted price of the moment;
 ## stops when the price reaches nothing. Returns ounces earned.
 static func sell_captives(rules: WorldRules, place: Place, band: Band, count: int, log: PackedStringArray) -> int:
-	if not rules.slave_markets.has(place.id):
+	if not buys_captives(rules, place):
 		log.append("%s does not buy captives" % place.display_name)
 		return 0
 	var sold := 0
@@ -226,8 +226,8 @@ static func yearly_drift(rng: SimRng, rules: WorldRules, world: World, log: Pack
 			if place.trade.has(g) and not place.has_market:
 				continue  # a farm's stall mends by the day (mend_local)
 			var s := int(place.stock.get(g, 0))
-			s += roundi(float(rules.stock_baseline - s) * rules.drift_fraction)
-			if place.has_market and rules.good_sources.get(g, []).has(place.region):
+			s += roundi(float((depth(rules, place) if place.has_market else rules.stock_baseline) - s) * rules.drift_fraction)
+			if place.has_market and is_source(rules, place, g):
 				s += maxi(0, rules.source_supply + rng.randi_range(-rules.source_supply_spread, rules.source_supply_spread))
 			place.stock[g] = maxi(0, s)
 	log.append("the markets settle after a year")
@@ -253,8 +253,55 @@ static func best_trade(world: World, band: Band, from: String, rules: WorldRules
 			var dst: Place = world.places[id]
 			if id == from or not dst.has_market or not dst.is_open(world.year) or not band.knows(id):
 				continue
+			# The river road is a summer's venture, not a carry: it is
+			# judged from its own end (the Baltic towns and the east).
+			if Roam.far_east(dst) and not Roam.far_east(src) and not WorldRules.EAST_ROAD_MARKETS.has(from):
+				continue
 			var profit := price(rules, dst, g) - cost
 			if profit > best_profit:
 				best_profit = profit
 				best = {"good": g, "to": id, "profit_per_unit": profit}
 	return best
+
+
+# --- The wider world (docs/design/notes/wider-world.md) -------------------------------
+
+## The price factor of a good at a place: the place's own (`place_factor`,
+## the eastern towns) where it has one, else its region's.
+static func factor_at(rules: WorldRules, place: Place, good: WorldTypes.Good) -> float:
+	var own: Dictionary = rules.place_factor.get(place.id, {})
+	if own.has(good):
+		return float(own[good])
+	return float(rules.region_factor.get(place.region, {}).get(good, 1.0))
+
+
+## A market's stock of each good when its prices stand at their mean: the
+## great markets are deeper (`place_depth`), so a hold bought or sold
+## there moves the price less.
+static func depth(rules: WorldRules, place: Place) -> int:
+	return int(rules.place_depth.get(place.id, rules.stock_baseline))
+
+
+## The middlemen's take at a place (`place_spread`, else `market_spread`).
+static func spread_at(rules: WorldRules, place: Place) -> float:
+	return float(rules.place_spread.get(place.id, rules.market_spread))
+
+
+## Whether this market makes good its stock of `good` each year.
+static func is_source(rules: WorldRules, place: Place, good: WorldTypes.Good) -> bool:
+	if rules.place_sources.has(place.id):
+		return (rules.place_sources[place.id] as Array).has(good)
+	return rules.good_sources.get(good, []).has(place.region)
+
+
+## Whether a place buys captives, and what a head fetches there before the
+## glut: Dublin's own price, the eastern towns' (`place_captive_price`),
+## else the plain one.
+static func buys_captives(rules: WorldRules, place: Place) -> bool:
+	return rules.slave_markets.has(place.id) or rules.place_captive_price.has(place.id)
+
+
+static func captive_base(rules: WorldRules, place: Place) -> int:
+	if place.id == "dublin":
+		return rules.captive_price_dublin
+	return int(rules.place_captive_price.get(place.id, rules.captive_price))

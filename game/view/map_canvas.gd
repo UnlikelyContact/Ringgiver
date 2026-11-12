@@ -35,7 +35,13 @@ const TAGS_FROM := 18.0
 ## The seas named on the map, at points in leagues, and the zoom beyond
 ## which their names are no longer drawn (they would only cover the view).
 const SEAS := [["The North Sea", Vector2(26, 92)], ["Skagerrak", Vector2(52, 88)], ["The Norway Sea", Vector2(6, 26)],
-		["The Western Ocean", Vector2(-36, 46)], ["The Baltic", Vector2(96, 104)], ["Kattegat", Vector2(70, 98)]]
+		["The Western Ocean", Vector2(-36, 46)], ["The Baltic", Vector2(104, 93)], ["Kattegat", Vector2(70, 98)],
+		["The Black Sea", Vector2(174, 136)], ["Lake Ladoga", Vector2(167, 37)], ["The Gulf of Finland", Vector2(140, 55)],
+		["The Sea of the Isles", Vector2(-27, 61)]]
+## The far lands named in spaced capitals like the lands of Norway (the
+## wider world: docs/design/notes/wider-world.md).
+const LANDS := [["GARDARIKI", Vector2(150, 78)], ["THE STEPPE", Vector2(150, 112)], ["THE LAND OF THE GREEKS", Vector2(178, 158)],
+		["WENDLAND", Vector2(88, 113)], ["FINNMARK", Vector2(135, 25)], ["SCOTLAND", Vector2(-2, 66)]]
 const SEA_NAMES_TO := 16.0
 const REGION_NAMES_TO := 15.0
 ## Pixels beyond the view's edge that the places layer is drawn out to,
@@ -414,7 +420,8 @@ func _paint_static(ci: CanvasItem) -> void:
 			_marks.append(Rect2(bar.position, bar.size.max(bar.get_combined_minimum_size())).grow(4.0))
 	var k := _scale()
 	_marks.append(Rect2(_band_px(k) + Vector2(-11, -34) * k * 1.25, Vector2(36, 44) * k * 1.25))
-	var labels := _draw_places(ci, k)
+	var labels := _draw_hauls(ci, k)
+	labels.append_array(_draw_places(ci, k))
 	_name_lands(labels)
 	_draw_labels(ci, labels)
 	cam = keep_cam
@@ -446,7 +453,7 @@ func _draw_course(font: Font, k: float) -> void:
 		var to := MapGrid.centre(c)
 		var by_ship: bool = roam.route_aboard[i] and (grid.is_sea(c) or grid.is_sea(prev_cell))
 		var len := here.distance_to(to)
-		var seg_days := len / sail if by_ship else len * float(MapGrid.COST[grid.terrain(c)]) / foot
+		var seg_days := len / sail if by_ship else len * grid.walk_cost(c) / foot
 		var a := to_px(here)
 		var b := to_px(to)
 		if _on_screen(a, 40) or _on_screen(b, 40):
@@ -645,7 +652,7 @@ func _name_lands(labels: Array) -> void:
 		for e in SEAS:
 			labels.append([to_px(e[1]), e[0], 17 if zoom < 8.0 else 19, -2, false, -1.0, Color(0.80, 0.90, 0.88, 0.5), _sea_font, false])
 	if zoom <= REGION_NAMES_TO:
-		for e in _regions:
+		for e in _regions + LANDS:
 			labels.append([to_px(e[1]), e[0], 12 if zoom < 8.0 else 14, -1, false, -1.0, Color(0.22, 0.16, 0.09, 0.62), _region_font, false])
 
 
@@ -761,3 +768,41 @@ func _draw_furniture(ci: Control) -> void:
 	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 	var tp := Vector2(right_x - 55.0 - tw / 2.0, 104.0)
 	ci.draw_string(font, tp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Palette.BONE)
+
+
+# --- The wider world (docs/design/notes/wider-world.md) ----------------------------------
+
+## The portages of the river road, once the band knows a town on it: a
+## dotted track of rollers over the land from water to water, and its
+## name. Returns the names, for the labels.
+func _draw_hauls(ci: CanvasItem, k: float) -> Array:
+	var out := []
+	var band := screen.journey.c.band
+	var known := false
+	for id in ["holmgard", "koenugard", "miklagard"]:
+		known = known or band.knows(id)
+	if not known:
+		return out
+	for haul in NorwayData.PORTAGES:
+		var cells: Array = haul[1]
+		var pts := PackedVector2Array()
+		# From the water above the first cell to the water below the last.
+		var first: Vector2 = cells[0]
+		var last: Vector2 = cells[cells.size() - 1]
+		pts.append(to_px(first.floor() + Vector2(0.5, -0.5)))
+		for v in cells:
+			pts.append(to_px((v as Vector2).floor() + Vector2(0.5, 0.5)))
+		pts.append(to_px(last.floor() + Vector2(0.5, 1.5)))
+		if not _on_screen(pts[pts.size() / 2], STATIC_MARGIN):
+			continue
+		var w := maxf(1.5, 2.4 * k)
+		ci.draw_polyline(pts, Color(0.08, 0.06, 0.04, 0.55), w + 2.0, true)
+		for i in pts.size() - 1:
+			ci.draw_dashed_line(pts[i], pts[i + 1], Color("e8d9a8"), w, maxf(3.0, 0.35 * zoom), true)
+		# A roller across the track at each end.
+		for e in [pts[0], pts[pts.size() - 1]]:
+			ci.draw_line(e + Vector2(-5, 0) * k, e + Vector2(5, 0) * k, Color("6b4a2a"), 2.0 * k)
+		if zoom >= 7.0:
+			var mid: Vector2 = pts[pts.size() / 2]
+			out.append([mid, str(haul[0]), 13, 1, false, 9.0 * k, Color("f0e2b8"), null, true, false])
+	return out

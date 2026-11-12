@@ -163,6 +163,7 @@ func begin_summer() -> void:
 	c.band.year = cal.year
 	c.world.year = cal.year
 	cal.day = 1
+	Omens.short_summer(self)  # the year's early winter, known (and saved) from its first day
 	c._summer_wins = 0
 	_rng = c.rng.fork("journey:%d" % cal.year)
 	_n = 0
@@ -521,6 +522,7 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 			_after_strandhogg(ctx, result)
 	_wing_lines(ctx, result)
 	_law_land_after_fight(ctx, result)
+	EastRoad.after_fight(self, ctx, result)
 	_killed_their_men(ctx, result)
 	# The party it was fought with: beaten, it is gone; otherwise it keeps
 	# its distance for a while.
@@ -697,10 +699,10 @@ func days_to(to: String) -> int:
 	var sail := sail_speed()
 	var days := -1.0
 	if c.band.location != "" and (sail <= 0.0 or roam.aboard):
-		days = roam.place_days(c.band.location, to, foot_speed(), sail, _deep_ok())
+		days = roam.place_days(c.band.location, to, foot_speed(), sail, _deep_ok(), EastRoad.haul(self))
 	else:
 		var p := roam.grid.find_path(roam.cell(), roam.grid.place_cell[to], foot_speed(), sail if roam.has_reach(sail) else 0.0,
-				roam.aboard and sail > 0.0, roam.ship_cell(), _deep_ok())
+				roam.aboard and sail > 0.0, roam.ship_cell(), _deep_ok(), EastRoad.haul(self))
 		days = p.days if not (p.cells as Array).is_empty() else -1.0
 	return -1 if days < 0.0 else maxi(1, ceili(days - 0.01))
 
@@ -720,7 +722,7 @@ func go_to_point(v: Vector2) -> bool:
 
 
 func _plot(cell: Vector2i, what: String) -> bool:
-	var days := roam.plot(cell, foot_speed(), sail_speed(), _deep_ok())
+	var days := roam.plot(cell, foot_speed(), sail_speed(), _deep_ok(), EastRoad.haul(self))
 	if days < 0.0:
 		var why := "there is no way by land"
 		if roam.grid.is_sea(cell) and c.band.ship == null:
@@ -752,9 +754,11 @@ func advance(dt: float) -> bool:
 		var used := chunk
 		var was_moving := roam.moving()
 		if was_moving:
-			used = maxf(0.001, roam.step_band(chunk, foot_speed(), sail_speed()))
+			used = maxf(0.001, roam.step_band(chunk, foot_speed(), sail_speed(), EastRoad.haul(self)))
 		_clock(used)
 		_look_about()
+		if was_moving:
+			EastRoad.tick(self, used)
 		if roam.afloat() and roam.aboard and c.band.ship != null:
 			_weather(used)
 		_moods()
@@ -840,6 +844,7 @@ func _arrived() -> void:
 		Knowledge.see_prices(c.world_rules, c.world, c.band, p.id, c.cal.day)
 		WorldLife.hear_news(self)
 		TradeRoad.check_escort(self)
+		EastRoad.arrived(self, p)
 	_was_at = c.band.location
 
 
@@ -1014,6 +1019,7 @@ func actions() -> Array[Dictionary]:
 	out.append_array(TradeRoad.actions(self))
 	out.append_array(Hiring.actions(self))
 	out.append_array(WorldLife.actions(self))
+	out.append_array(EastRoad.actions(self))
 	out.append_array(_house_actions(p))
 	if SETTLED.has(p.kind):
 		var guest := not at_home
@@ -1226,7 +1232,8 @@ func act(id: String) -> void:
 		wintering = true
 	elif id == "king_justice":
 		_act_king_justice()
-	elif TradeRoad.act(self, id) or Hiring.act(self, id) or WorldLife.act(self, id) or _act_law_land(id) or _act_men_silver(id):
+	elif TradeRoad.act(self, id) or Hiring.act(self, id) or WorldLife.act(self, id) or _act_law_land(id) or _act_men_silver(id) \
+			or EastRoad.act(self, id):
 		pass
 	elif _act_house(id, p):
 		pass

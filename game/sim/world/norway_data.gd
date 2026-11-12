@@ -54,6 +54,80 @@ const PLACES := [
 	{"id": "seine", "name": "the camp on the Seine", "region": R.FRANKIA, "kind": K.HALL, "pos": Vector2(2, 106), "wealth": 35, "defenses": 4, "faction": "seine", "family": "the Seine host"},
 	{"id": "rouen", "name": "Rouen", "region": R.FRANKIA, "kind": K.TOWN, "pos": Vector2(12, 110), "wealth": 80, "defenses": 5, "faction": "", "family": "the Franks of the Seine"},
 	{"id": "iceland", "name": "the Iceland land-take", "region": R.ICELAND, "kind": K.FARMSTEAD, "pos": Vector2(-40, 10), "wealth": 10, "defenses": 0, "faction": "", "family": "Ingolf's kin", "open_year": 874},
+	# --- The wider world (docs/design/notes/wider-world.md) ---
+	# Shetland: poor, out of the king's reach, the first landfall on the
+	# Iceland road; and the Hebrides, where Norse lords rule Gaelic
+	# islanders and the farms of Skye lie open to any ship.
+	{"id": "shetland", "name": "Shetland", "region": R.WEST, "kind": K.FARMSTEAD, "pos": Vector2(5, 39), "wealth": 15, "defenses": 1, "faction": "orkney", "family": "the Shetland steaders"},
+	{"id": "hebrides", "name": "the Hebrides", "region": R.WEST, "kind": K.HALL, "pos": Vector2(-17, 54), "wealth": 45, "defenses": 4, "faction": "hebrides", "family": "Ketil Flatnose's kin"},
+	{"id": "skye", "name": "the farms of Skye", "region": R.WEST, "kind": K.FARMSTEAD, "pos": Vector2(-12, 59), "wealth": 40, "defenses": 1, "faction": "hebrides", "family": "the Norse-Gaels of Skye"},
+	# The east road: over the Baltic to Aldeigjuborg on the Volkhov, up the
+	# river to Holmgard, the haul to the Dnieper, down to Koenugard, the
+	# rapids, the Black Sea, and Miklagard at the end of it.
+	{"id": "aldeigjuborg", "name": "Aldeigjuborg", "region": R.EAST, "kind": K.TOWN, "pos": Vector2(167, 48), "wealth": 55, "defenses": 4, "faction": "rus", "family": "Rurik's kin", "market": true},
+	{"id": "holmgard", "name": "Holmgard", "region": R.EAST, "kind": K.TOWN, "pos": Vector2(171, 57), "wealth": 70, "defenses": 6, "faction": "rus", "family": "Rurik's kin", "market": true},
+	{"id": "koenugard", "name": "Koenugard", "region": R.EAST, "kind": K.TOWN, "pos": Vector2(177, 98), "wealth": 75, "defenses": 6, "faction": "kiev", "family": "Askold's kin", "market": true},
+	{"id": "miklagard", "name": "Miklagard", "region": R.EAST, "kind": K.TOWN, "pos": Vector2(157, 152), "wealth": 200, "defenses": 12, "faction": "greeks", "family": "the Emperor's men", "market": true},
+]
+
+## What a place of the wider world is, in a line or two, for the place's
+## panel (the old places are told by their kind, region and house).
+const ABOUT := {
+	"shetland": "Wind-scoured isles with more sheep than men, the first landfall west over sea and the last before the long run to Iceland. The jarl in Orkney is far; men the law wants winter here, and nobody asks them much.",
+	"hebrides": "The Southern Isles: Ketil Flatnose holds them for himself now, not for any king in Norway, with Norse spears over Gaelic farmers. His hall wants iron and wine, and has work for a band that will fight the Gaels.",
+	"skye": "Norse-Gaels on rich grazing, with cattle, silver from the churches and no beacons yet. Raiding country: every ship that passes takes something.",
+	"aldeigjuborg": "The Swedes' old town at the Volkhov's mouth, where the Baltic road ends and the river road begins. Rurik's men sit here; furs come down from the forests.",
+	"holmgard": "Rurik's town on its island in the river, the great fur market of the north. Beyond it the river narrows and the ship must be hauled overland to the Dnieper.",
+	"koenugard": "Askold's town high on the Dnieper bank, where the Rus gather their ships for the run south. Below it are the rapids, and the Pechenegs watch them.",
+	"miklagard": "The Great City of the Greeks: walls no army has broken, silk for silver, and the emperor's gold for any northman who will stand in his guard.",
+}
+
+## The river road east (MapGrid): `WATERS` are lakes and seas inside the
+## land, `RIVERS` water a cell wide cut along each line (a ship goes slower
+## on them, against the current or picking through shoals), `PORTAGES` land
+## a ship can be hauled over on rollers (Journey's band only, slowly, and
+## open to ambush: EastRoad), and `FLATS` land that never rises to fell or
+## mountain however far from the sea (the forests and steppe of the Rus'
+## lands), with whether it is wooded.
+const WATERS := [
+	# Lake Ladoga, the Aldeigja lake
+	[Vector2(160, 36), Vector2(165, 31), Vector2(171, 32), Vector2(174, 38), Vector2(172, 44), Vector2(166, 46), Vector2(161, 43)],
+	# Lake Ilmen, below Holmgard
+	[Vector2(167, 60), Vector2(172, 59), Vector2(175, 62), Vector2(173, 66), Vector2(168, 66)],
+	# The Black Sea, with the Crimea hanging into it and the Sea of Azov
+	# behind
+	[Vector2(150, 130), Vector2(156, 125), Vector2(165, 123), Vector2(174, 123), Vector2(178, 124), Vector2(180, 128),
+		Vector2(182, 132), Vector2(185, 131), Vector2(186, 127), Vector2(189, 125), Vector2(192, 121), Vector2(196, 122),
+		Vector2(195, 126), Vector2(193, 128), Vector2(196, 133), Vector2(197, 139), Vector2(193, 143), Vector2(184, 146),
+		Vector2(172, 147), Vector2(162, 147), Vector2(157, 146), Vector2(152, 141), Vector2(150, 136)],
+	# The Sea of Marmara, below the Sound
+	[Vector2(149, 157), Vector2(155, 155), Vector2(162, 156), Vector2(164, 159), Vector2(157, 161), Vector2(150, 160)],
+]
+const RIVERS := [
+	# The Neva, from the gulf to Ladoga
+	[Vector2(160, 52), Vector2(163, 49), Vector2(163, 44)],
+	# The Volkhov, Ladoga to Lake Ilmen past Aldeigjuborg and Holmgard
+	[Vector2(168, 45), Vector2(168, 51), Vector2(170, 53), Vector2(170, 60)],
+	# The Lovat, south out of Ilmen to the haul
+	[Vector2(171, 65), Vector2(171, 70), Vector2(172, 74), Vector2(172, 77)],
+	# The Dnieper, from the haul past Koenugard to the rapids
+	[Vector2(173, 85), Vector2(174, 90), Vector2(176, 95), Vector2(176, 106)],
+	# The Dnieper below the rapids, to the sea
+	[Vector2(176, 111), Vector2(176, 118), Vector2(175, 124)],
+	# The Sound below Miklagard
+	[Vector2(158, 144), Vector2(158, 156)],
+]
+## [name, cells along the haul in leagues (a cell each, in order)].
+const PORTAGES := [
+	["the haul to the Dnieper", [Vector2(172, 78), Vector2(172, 79), Vector2(172, 80), Vector2(173, 81), Vector2(173, 82), Vector2(173, 83), Vector2(173, 84)]],
+	["the rapids of the Dnieper", [Vector2(176, 107), Vector2(176, 108), Vector2(176, 109), Vector2(176, 110)]],
+]
+const FLATS := [
+	# Gardariki: the forests of the Rus, the Finns and the Balts
+	[[Vector2(112, 94), Vector2(124, 74), Vector2(122, 50), Vector2(112, 14), Vector2(140, -20), Vector2(205, -20),
+		Vector2(205, 112), Vector2(150, 112), Vector2(110, 104)], true],
+	# The steppe, the Pechenegs' grass, down to the sea and beyond
+	[[Vector2(110, 104), Vector2(150, 112), Vector2(205, 112), Vector2(205, 170), Vector2(110, 170)], false],
 ]
 
 ## Rough shores, in the map's leagues (x east, y south): what is land. The
@@ -82,6 +156,22 @@ const SHORES := [
 		Vector2(42, 126), Vector2(-14, 126)],
 	# Gotland
 	[Vector2(110, 76), Vector2(113, 77), Vector2(114, 83), Vector2(111, 85), Vector2(109, 81)],
+	# --- The wider world ---
+	# Shetland
+	[Vector2(1, 35), Vector2(5, 33), Vector2(7, 37), Vector2(6, 42), Vector2(2, 41)],
+	# The Long Isle of the Hebrides, and Skye
+	[Vector2(-21, 51), Vector2(-16, 49), Vector2(-14, 53), Vector2(-16, 57), Vector2(-20, 56)],
+	[Vector2(-14, 58), Vector2(-11, 57), Vector2(-10, 60), Vector2(-13, 61)],
+	# The mainland east and south of the Baltic: the Wendish and Prussian
+	# shore, the Balts, the Gulf of Finland, Finland and the Lapp country
+	# round the Bothnian gulf, the Rus' lands to the edge of the map, and
+	# the Frankish and Greek lands to its foot.
+	[Vector2(63, 117), Vector2(68, 111), Vector2(76, 108), Vector2(88, 105), Vector2(100, 104), Vector2(108, 100),
+		Vector2(118, 97), Vector2(124, 90), Vector2(127, 82), Vector2(129, 76), Vector2(128, 69), Vector2(131, 64),
+		Vector2(140, 62), Vector2(150, 61), Vector2(156, 57), Vector2(160, 54), Vector2(161, 51), Vector2(152, 49),
+		Vector2(140, 49), Vector2(128, 50), Vector2(121, 52), Vector2(119, 46), Vector2(117, 36), Vector2(113, 24),
+		Vector2(106, 14), Vector2(84, 14), Vector2(78, 2), Vector2(73, -4), Vector2(73, -20), Vector2(215, -20),
+		Vector2(215, 175), Vector2(-14, 175), Vector2(-14, 124), Vector2(40, 124), Vector2(50, 118), Vector2(58, 119)],
 ]
 
 ## [from, to, days, open_sea]
@@ -99,6 +189,11 @@ const LANES := [
 	["avaldsnes", "orkney", 4, true], ["giske", "orkney", 5, true], ["orkney", "dublin", 4, true],
 	["orkney", "iceland", 7, true],
 	["orkney", "iona", 3, true], ["northumbria", "seine", 5, true], ["ribe", "seine", 6, true], ["seine", "rouen", 1, false], ["iona", "dublin", 3, false], ["orkney", "northumbria", 4, true],
+	# The wider world
+	["orkney", "shetland", 2, true], ["shetland", "sogn_hall", 4, true], ["shetland", "iceland", 6, true],
+	["orkney", "hebrides", 3, true], ["hebrides", "skye", 1, false], ["skye", "iona", 2, false],
+	["birka", "aldeigjuborg", 13, true], ["gotland", "aldeigjuborg", 12, true], ["aldeigjuborg", "holmgard", 3, false],
+	["holmgard", "koenugard", 20, false], ["koenugard", "miklagard", 19, true],
 ]
 
 const FACTIONS := [
@@ -126,11 +221,20 @@ const FACTIONS := [
 	{"id": "gotlanders", "name": "the Gotland farmers", "leader": "the Gotland Thing", "kind": WorldTypes.FactionKind.TOWN,
 		"holdings": ["gotland"], "strength": 50, "ambition": "trade", "relations": {"svear": 10}},
 	{"id": "orkney", "name": "the Orkney jarls", "leader": "Sigurd the Mighty", "kind": WorldTypes.FactionKind.JARL,
-		"holdings": ["orkney"], "strength": 40, "ambition": "hold", "relations": {"more": 40, "dublin_norse": 10}},
+		"holdings": ["orkney", "shetland"], "strength": 40, "ambition": "hold", "relations": {"more": 40, "dublin_norse": 10}},
 	{"id": "seine", "name": "the host on the Seine", "leader": "Weland", "kind": WorldTypes.FactionKind.JARL,
 		"holdings": ["seine"], "strength": 40, "ambition": "hold", "relations": {"danes": 10}},
 	{"id": "dublin_norse", "name": "the Norse of Dublin", "leader": "Ivar's sons", "kind": WorldTypes.FactionKind.KING,
 		"holdings": ["dublin"], "strength": 120, "ambition": "trade", "relations": {"orkney": 10}},
+	# The wider world
+	{"id": "hebrides", "name": "the lords of the Isles", "leader": "Ketil Flatnose", "kind": WorldTypes.FactionKind.JARL,
+		"holdings": ["hebrides", "skye"], "strength": 50, "ambition": "hold", "relations": {"dublin_norse": 30, "orkney": -10}},
+	{"id": "rus", "name": "the Rus of Holmgard", "leader": "Rurik", "kind": WorldTypes.FactionKind.KING,
+		"holdings": ["aldeigjuborg", "holmgard"], "strength": 120, "ambition": "trade", "relations": {"svear": 20, "kiev": 10}},
+	{"id": "kiev", "name": "the Rus of Koenugard", "leader": "Askold", "kind": WorldTypes.FactionKind.KING,
+		"holdings": ["koenugard"], "strength": 100, "ambition": "hold", "relations": {"rus": 10, "greeks": -10}},
+	{"id": "greeks", "name": "the Emperor of the Greeks", "leader": "the Emperor Michael", "kind": WorldTypes.FactionKind.KING,
+		"holdings": ["miklagard"], "strength": 1000, "ambition": "hold", "relations": {"kiev": -10}},
 ]
 
 ## The houses the western sagas are about (Families), by the name the
@@ -157,6 +261,16 @@ const HOUSES := [
 		"temper": "proud", "honor": 60},
 	{"name": "Hrafn's kin", "seat": "more_farms", "head": "Hrafn", "heir": "Onund", "age": 55, "strength": 7, "wealth": 30,
 		"temper": "peaceable", "honor": 65},
+	# The wider world. `western` false: far houses the band meets only when
+	# it goes there, not shown among the sagas' houses until it knows them.
+	{"name": "Ketil Flatnose's kin", "seat": "hebrides", "head": "Ketil Flatnose", "heir": "Bjorn the Easterner", "age": 56, "strength": 20,
+		"wealth": 45, "temper": "proud", "honor": 55},
+	{"name": "Rurik's kin", "seat": "holmgard", "head": "Rurik", "heir": "Helgi", "age": 50, "strength": 40, "wealth": 90,
+		"temper": "grasping", "honor": 50, "western": false},
+	{"name": "Askold's kin", "seat": "koenugard", "head": "Askold", "heir": "Dir", "age": 45, "strength": 30, "wealth": 75,
+		"temper": "proud", "honor": 50, "western": false},
+	{"name": "the Emperor's men", "seat": "miklagard", "head": "the Emperor Michael", "heir": "Basil", "age": 26, "strength": 200,
+		"wealth": 200, "temper": "steadfast", "honor": 60, "western": false},
 ]
 
 ## The web the sagas begin in: [a, b, kind] with kind kin, marriage,
@@ -186,6 +300,17 @@ const HOUSE_TIES := [
 	["the Sygna kings", "Horda-Kari's kin", "debt", {}],
 	["Hardanger-Atli's kin", "Horda-Kari's kin", "debt", {}],
 	["Ulfar's kin", "Horda-Kari's kin", "debt", {}],
+	# The wider world: Ketil Flatnose's daughter Aud is married to Olaf the
+	# White of Dublin; Ketil holds the Isles against the Orkney jarls and
+	# the Gaels of Skye; he was a Sogn man before he went west. Rurik's Rus
+	# came from the Swedes; Askold left Rurik and raided Miklagard in 860.
+	["Ketil Flatnose's kin", "Ivar's kin", "marriage", {}],
+	["Ketil Flatnose's kin", "the Norse-Gaels of Skye", "grudge", {}],
+	["Ketil Flatnose's kin", "the Orkney jarls", "grudge", {}],
+	["Ketil Flatnose's kin", "the Sygna kings", "friend", {}],
+	["Rurik's kin", "the Uppsala kings", "friend", {}],
+	["Rurik's kin", "Askold's kin", "grudge", {}],
+	["Askold's kin", "the Emperor's men", "grudge", {}],
 ]
 
 ## Names for the heads and heirs of houses the data does not name, and for
