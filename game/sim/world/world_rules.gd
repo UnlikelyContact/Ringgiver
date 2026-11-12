@@ -159,7 +159,9 @@ var contract_relation := 0
 var contract_relation_gain := 10
 var contract_fail_relation_hit := 10
 var contract_pay := {"escort": 25, "hunt_outlaws": 20, "levy": 0, "debt": 15, "tribute": 40}
-var contract_fame := {"escort": 2, "hunt_outlaws": 4, "levy": 8, "debt": 1, "tribute": 5}
+## Fame a lord's work brings (halved, 12 Nov 2026: the king's man reached
+## fame 100 in four years; his road is service and rank, not renown).
+var contract_fame := {"escort": 1, "hunt_outlaws": 2, "levy": 4, "debt": 0, "tribute": 2}
 ## Days the work is expected to take (the offer's `days`).
 var contract_days := {"escort": 12, "hunt_outlaws": 4, "levy": 20, "debt": 6, "tribute": 15}
 var contract_pay_spread := 0.2
@@ -602,3 +604,218 @@ var lords_hall_relation := 40
 ## At the thaw the band may go this many days by land to begin its summer
 ## somewhere else; its ship, if it has one with it, stays where it lay.
 var spring_days := 6
+
+# --- The world alive in summer (world_life.gd, roam.gd) ----------------------------
+## The others abroad live their own summer: raiders fall on merchants and
+## on farms, the king's ships hunt raiders and outlaws, houses at feud send
+## their men against each other. All of it is reckoned every
+## `life_tick_days` of the summer's clock, cheaply: no battle is fought, a
+## clash is a strength roll.
+var life_tick_days := 0.5
+## The king's ships abroad each summer (they hunt raiders and outlaws, and
+## ask a band passing through the king's waters for passage money).
+var roam_kings_ships := 2
+var kings_crew := 12
+var kings_tier: CombatTypes.Tier = CombatTypes.Tier.BLOODED
+var kings_speed := 7.0
+## A hunter (raiders after a merchant, the king's ships after raiders,
+## a house's men after its enemy's) goes for prey it sees within these
+## leagues, and two parties close enough fall to fighting.
+var hunt_sight := 6.0
+var clash_leagues := 1.0
+## A fight between two parties lasts this many days before it is decided,
+## and a band that comes within `contact_leagues` of it in that time may
+## take a side. What is left of it (a wreck, loot, survivors) lies where
+## it was fought for `wreck_days`.
+var clash_days := 1.0
+var wreck_days := 12.0
+## A party's strength in a clash: its men times this by tier (green,
+## blooded, veteran, champion), times a roll of `clash_luck` either way.
+var clash_tier_weight := [1.0, 1.3, 1.7, 2.2]
+var clash_luck := 0.3
+## The beaten side loses this share of its men if it gets away (it gets
+## away when its strength was at least `clash_flee_ratio` of the
+## winner's); the winner loses `clash_winner_loss` of the beaten side's
+## strength in men.
+var clash_loser_loss := 0.5
+var clash_flee_ratio := 0.6
+var clash_winner_loss := 0.3
+## Raiders on the farms: a raider ship strikes at a farm or a hamlet near
+## its course in this share of days, if one lies within `strike_leagues`;
+## the raid lasts `place_raid_days`, and a band at the place (or coming to
+## it) may stand with the farmers. The farm's own defenders fight as men
+## of `place_defender_tier`. A farm the raiders have plundered loses
+## `raided_wealth_share` of its wealth (it mends as any raided place) and
+## is not struck again for `raided_rest_days`.
+var strike_chance_day := 0.08
+var strike_leagues := 10.0
+var place_raid_days := 1.5
+var place_defender_tier: CombatTypes.Tier = CombatTypes.Tier.GREEN
+var raided_wealth_share := 0.35
+var raided_rest_days := 60.0
+## Driving the raiders off a house's farm: the house's standing rises by
+## this, and the farmers give `defend_fee` oz and their thanks.
+var standing_defended := 20
+var defend_fee := 8
+## A party the band helps in a fight it came upon: the merchant pays this
+## share of his cargo's worth; standing with a house whose men were helped.
+var rescue_share := 0.25
+var standing_rescued := 15
+## Houses at feud send men against each other in summer: at most this many
+## parties, each of `house_party_men` (the house's strength allowing). A
+## clash between them is a killing on the feud's ledger (Families.kill).
+var house_parties_max := 2
+var house_party_men := 6
+var house_party_chance := 0.6
+## Tidings: a clash within `hear_leagues` of the band is heard at once;
+## the rest is told at the next hall, town or market it comes to, at most
+## `news_per_place` at a time and only what happened in the last
+## `news_days` days.
+var hear_leagues := 10.0
+var news_per_place := 2
+var news_days := 40.0
+## The king's ships ask a band they hail of this much a man for passage
+## through the king's waters (not of his sworn men, nor of an outlaw: they
+## fight an outlaw). Refusing is a fight in `toll_refused_fight` of
+## hailings, else it costs the king's goodwill.
+var toll_per_man := 1
+var toll_min := 3
+var toll_refused_fight := 0.5
+var toll_refused_relation := 10
+## Escorting a merchant for pay: he pays `escort_pay_base` and this much a
+## day of the way, if the band brings him there within the days he gives
+## (the way's days times `escort_slack`, and a few).
+var escort_pay_base := 6
+var escort_pay_day := 1.5
+var escort_slack := 1.8
+## A beached ship in hostile country (an ill-wisher's land, or raiders or
+## outlaws within `ship_thief_sight` leagues of her) is taken in this share
+## of days she lies unguarded. At a well-wisher's place, or one where the
+## band has paid `ship_watch_ounces` for a watch, she is safe. The thieves
+## sail her to their home; she is there to be taken back until the summer
+## ends.
+var ship_theft_day := 0.04
+var ship_theft_day_near := 0.12
+var ship_thief_sight := 8.0
+var ship_watch_ounces := 2
+var ship_thieves_men := 5
+
+# --- The trader's road (trade_road.gd, market.gd) ------------------------------------
+## Farms and halls without a market still deal in what they make and what
+## they lack (place id -> {Good: "sells" | "buys"}): a small stall with
+## `local_stock` units at the baseline, what it makes cheap
+## (`local_sell_factor` of the price) and what it lacks dear
+## (`local_buy_factor`). The stall mends toward its baseline by
+## `local_mend_day` units a day, so a difference lasts long enough to walk
+## a load across it, and no faster.
+var local_trade := {
+	"hardanger": {WorldTypes.Good.IRON: "sells", WorldTypes.Good.FURS: "buys"},
+	"sogn_farms": {WorldTypes.Good.FURS: "sells", WorldTypes.Good.IRON: "buys"},
+	"fitjar": {WorldTypes.Good.SOAPSTONE: "sells", WorldTypes.Good.FURS: "buys", WorldTypes.Good.WINE: "buys"},
+	"sogn_hall": {WorldTypes.Good.IRON: "sells", WorldTypes.Good.SOAPSTONE: "buys"},
+	"more_farms": {WorldTypes.Good.SOAPSTONE: "sells", WorldTypes.Good.IRON: "buys"},
+	"giske": {WorldTypes.Good.FURS: "buys", WorldTypes.Good.WINE: "buys"},
+	"avaldsnes": {WorldTypes.Good.WINE: "buys", WorldTypes.Good.IRON: "buys"},
+	"agder_farms": {WorldTypes.Good.IRON: "sells", WorldTypes.Good.SOAPSTONE: "buys"},
+	"lier": {WorldTypes.Good.IRON: "sells", WorldTypes.Good.FURS: "buys"},
+	"trondelag_farms": {WorldTypes.Good.FURS: "sells", WorldTypes.Good.IRON: "buys"},
+	"halogaland_farms": {WorldTypes.Good.WALRUS_IVORY: "sells", WorldTypes.Good.IRON: "buys"},
+	"orkney": {WorldTypes.Good.SOAPSTONE: "buys", WorldTypes.Good.FURS: "buys"},
+}
+var local_stock := 10
+var local_sell_factor := 0.5
+var local_buy_factor := 2.2
+var local_mend_day := 0.3
+## What a band on foot carries: `no_ship_cargo` for the leader, and a load
+## more for each man with him. A band with a ship carries its hold, or its
+## men's loads if they come to more.
+var load_per_man := 1
+## Passage on another man's ship takes the band's loads too, at this much
+## a load.
+var passage_per_load := 1
+## A félag: a man at a market or a hall gives the band his goods to carry
+## and sell elsewhere for a share (`felag_share` of what they fetch). At
+## most `felag_units` loads, one partnership a place a year; goods not sold
+## by the summer's end cost his house `standing_felag_broken`, sold they
+## bring `standing_felag_kept`.
+var felag_share := 0.4
+var felag_units := 4
+var standing_felag_kept := 6
+var standing_felag_broken := -10
+## A man's first livings, each once a place a year (fishing `fish_max`
+## times): labour on a farm (`labour_days`, `labour_pay` and a little for
+## each man, rations), herding the summer pastures (`herd_days`, pay,
+## rations, and the uplands about it come to be known), fishing from a farm
+## on the shore, and a place at another man's oars for a share
+## (`crew_pay_day` for each man, for a voyage of up to `crew_max_days`, at
+## most `crew_max_men` hands taken).
+var labour_days := 6
+var labour_pay := 3
+var labour_pay_man := 1
+var labour_food := 6
+var herd_days := 12
+var herd_pay := 5
+var herd_food := 8
+var herd_reveal_leagues := 12.0
+var fish_days := 4
+var fish_food := 10
+var fish_pay := 2
+var fish_max := 2
+var standing_labour := 4
+var crew_pay_day := 0.7
+var crew_max_days := 14
+var crew_max_men := 4
+
+# --- Men in summer (hiring.gd) ---------------------------------------------------------
+## Men for hire at halls, towns and markets (`hire_offers` of them, fewer
+## at a farm), rolled once a visit: each has a price to join and a wage
+## every `wage_days`. A man not paid loses `unpaid_loyalty`; a man whose
+## loyalty is under CampaignRules.loyalty_leave_below takes his leave at
+## the next place the band comes to; one whose loyalty is at
+## `hire_swear_loyalty` at the summer's end swears himself to the band and
+## takes no more wage. Men lent by a house go home at the summer's end, or
+## at once if the house turns against the band.
+var hire_offers := 3
+var hire_offers_farm := 1
+var wage_days := 30.0
+var unpaid_loyalty := 15
+var hire_swear_loyalty := 50
+## The kinds of men for hire: key -> {text, tier, price, wage, loyalty,
+## bias (stat bonuses: might, skill, grit, nerve, wits), honor (what taking
+## him costs), weight (how often he is about)}.
+var hire_kinds := {
+	"farmers_son": {"text": "a farmer's son who wants to see more than his father's fields", "tier": CombatTypes.Tier.GREEN,
+		"price": 4, "wage": 1, "loyalty": 55, "bias": [0, 0, 0, 0, 0], "honor": 0, "weight": 4},
+	"fisher": {"text": "a fisherman's lad, good at an oar", "tier": CombatTypes.Tier.GREEN,
+		"price": 3, "wage": 1, "loyalty": 50, "bias": [0, 0, 1, 0, 0], "honor": 0, "weight": 2},
+	"outlaw": {"text": "an outlaw from the uplands who asks no questions and answers none", "tier": CombatTypes.Tier.BLOODED,
+		"price": 3, "wage": 1, "loyalty": 30, "bias": [1, 0, 0, 0, 0], "honor": 2, "weight": 2},
+	"shipless": {"text": "a Dane who lost his ship and his lord in the same storm", "tier": CombatTypes.Tier.BLOODED,
+		"price": 9, "wage": 2, "loyalty": 45, "bias": [0, 1, 0, 0, 0], "honor": 0, "weight": 2},
+	"berserk": {"text": "a berserk of ill fame, whom the farmers are glad to see go", "tier": CombatTypes.Tier.BLOODED,
+		"price": 12, "wage": 3, "loyalty": 35, "bias": [2, 0, 0, 2, -1], "honor": 3, "weight": 1},
+	"old_hand": {"text": "an old hand who has stood in a king's wall", "tier": CombatTypes.Tier.VETERAN,
+		"price": 20, "wage": 3, "loyalty": 50, "bias": [0, 1, 1, 0, 0], "honor": 0, "weight": 1},
+}
+## Captives: ransomed at a hall or a town for this much a head by their
+## kin, or freed for honor (a point a head, at most `free_honor_max`).
+var captive_ransom := 7
+var free_honor_max := 3
+
+# --- The vengeance (families.gd, journey.gd) -----------------------------------------
+## The burners stand with their allies: each house allied to them sends
+## `ally_men_sent` to a reckoning. They offer wergild for the burning, and
+## answer it at the Thing, only once the band's backing (its own men and
+## the men its friends among their enemies would send) is this share of
+## their strength with their allies'.
+var ally_men_sent := 3
+var vengeance_backing_ratio := 0.8
+## The wergild the burners offer, once they must, is this many times the
+## dead man's: they pay dearly or not at all.
+var vengeance_wergild_mult := 1.5
+## The burners' men in the field (a reckoning at their seat, blood taken
+## for silver refused) fight at this stat centre: the jarl's picked men,
+## not the farmers of the place.
+var vengeance_stat := 5
+## A house abroad (outside Norway's own regions) does not offer marriage or
+## fostering, and is not brought to a reckoning as a Norse house is.

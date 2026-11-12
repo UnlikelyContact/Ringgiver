@@ -14,8 +14,55 @@ extends RefCounted
 ## (not for sale).
 static func price(rules: WorldRules, place: Place, good: WorldTypes.Good) -> int:
 	if not place.has_market:
+		if place.trade.has(good):
+			return _local_price(rules, place, good)
 		return rules.farm_food_price if good == WorldTypes.Good.GRAIN else 0
 	return _price_at(rules, place, good, int(place.stock.get(good, 0)))
+
+
+## A farm's or a hall's own stall (Place.trade): what it makes is cheap,
+## what it lacks dear, and either moves with the few units it has.
+static func _local_price(rules: WorldRules, place: Place, good: WorldTypes.Good) -> int:
+	var factor: float = rules.region_factor.get(place.region, {}).get(good, 1.0)
+	factor *= rules.local_sell_factor if str(place.trade[good]) == "sells" else rules.local_buy_factor
+	var stock := int(place.stock.get(good, rules.local_stock))
+	var scarcity := clampf(float(rules.local_stock) / float(maxi(1, stock)), rules.price_floor, rules.price_ceiling)
+	return maxi(1, roundi(float(rules.base_price[good]) * factor * scarcity))
+
+
+## Whether the band can buy `good` here (a market's stall, or what a farm
+## or a hall makes; grain anywhere settled) and sell it here (a market, or
+## what a farm or a hall lacks).
+static func sells_here(place: Place, good: WorldTypes.Good) -> bool:
+	if place.has_market:
+		return true
+	if place.trade.has(good):
+		return str(place.trade[good]) == "sells"
+	return good == WorldTypes.Good.GRAIN
+
+
+static func buys_here(place: Place, good: WorldTypes.Good) -> bool:
+	return place.has_market or str(place.trade.get(good, "")) == "buys"
+
+
+## Every stall of a farm or a hall mends toward its baseline by
+## `local_mend_day` a day: its makings are made again, what it bought is
+## used up. Fractions are carried in `place.stock_mend`.
+static func mend_local(rules: WorldRules, world: World, days: float) -> void:
+	for id in world.places:
+		var place: Place = world.places[id]
+		if place.trade.is_empty() or place.has_market:
+			continue
+		for g in place.trade:
+			var s := int(place.stock.get(g, rules.local_stock))
+			if s == rules.local_stock:
+				place.stock_mend.erase(g)
+				continue
+			var acc := float(place.stock_mend.get(g, 0.0)) + days * rules.local_mend_day
+			var step := int(acc)
+			place.stock_mend[g] = acc - step
+			if step > 0:
+				place.stock[g] = (mini(rules.local_stock, s + step)) if s < rules.local_stock else maxi(rules.local_stock, s - step)
 
 
 static func _price_at(rules: WorldRules, place: Place, good: WorldTypes.Good, stock: int) -> int:
@@ -30,7 +77,7 @@ static func _price_at(rules: WorldRules, place: Place, good: WorldTypes.Good, st
 ## foe_factor).
 ## Rations at a farm are sold at the farm's price.
 static func buy_price(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good) -> int:
-	if not place.has_market:
+	if not place.has_market and not place.trade.has(good):
 		return price(rules, place, good)
 	var over := maxf(0.0, rules.market_spread - float(band.gift("trade_edge", 0.0)) - Families.spread_off(rules, band, place))
 	return maxi(1, ceili(float(price(rules, place, good)) * (1.0 + over) * Families.foe_factor(rules, band, place) - 0.0001))
@@ -45,8 +92,17 @@ static func sell_price(rules: WorldRules, place: Place, band: Band, good: WorldT
 
 ## Free cargo room: the ship's hold, or what the men can carry without one.
 static func cargo_room(rules: WorldRules, band: Band) -> int:
-	var cap: int = band.ship.cargo_capacity(rules) if band.ship != null else rules.no_ship_cargo
-	return maxi(0, cap - band.cargo_units())
+	return maxi(0, cargo_capacity(rules, band) - band.cargo_units() - band.felag_units())
+
+
+## What the band can carry: its men's loads on their backs (the leader's
+## `no_ship_cargo` and `load_per_man` for every man with him), or its
+## ship's hold if that is more.
+static func cargo_capacity(rules: WorldRules, band: Band) -> int:
+	var backs := rules.no_ship_cargo + rules.load_per_man * band.living_men().size()
+	if band.ship != null:
+		return maxi(band.ship.cargo_capacity(rules), backs)
+	return backs
 
 
 ## Buys up to `units`, one at a time at the price of the moment, stopping
@@ -56,12 +112,14 @@ static func cargo_room(rules: WorldRules, band: Band) -> int:
 static func buy(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good, units: int, log: PackedStringArray) -> int:
 	var bought := 0
 	var paid := 0
-	var farm := not place.has_market
-	if farm and good != WorldTypes.Good.GRAIN:
+	# Rations at a farm go into the food store; a farm's or a hall's own
+	# makings go into the cargo like a market's.
+	var farm := not place.has_market and not place.trade.has(good)
+	if not sells_here(place, good):
 		log.append("%s sells no %s" % [place.display_name, WorldTypes.GOOD_NAMES[good]])
 		return 0
 	while bought < units:
-		if int(place.stock.get(good, 0)) <= 0:
+		if int(place.stock.get(good, rules.local_stock if place.trade.has(good) else 0)) <= 0:
 			break
 		if not farm and cargo_room(rules, band) <= 0:
 			break
@@ -70,7 +128,7 @@ static func buy(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Go
 			break
 		band.silver -= p
 		paid += p
-		place.stock[good] = int(place.stock[good]) - 1
+		place.stock[good] = int(place.stock.get(good, rules.local_stock)) - 1
 		if farm:
 			band.food += 1
 		else:
@@ -91,8 +149,8 @@ static func buy(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Go
 ## adds to stock and lowers the next price. Returns ounces earned. A place
 ## without a market buys nothing.
 static func sell(rules: WorldRules, place: Place, band: Band, good: WorldTypes.Good, units: int, log: PackedStringArray) -> int:
-	if not place.has_market:
-		log.append("%s has no market" % place.display_name)
+	if not buys_here(place, good):
+		log.append("%s does not buy %s" % [place.display_name, WorldTypes.GOOD_NAMES[good]])
 		return 0
 	var n := mini(units, int(band.cargo.get(good, 0)))
 	var earned := 0
@@ -100,7 +158,7 @@ static func sell(rules: WorldRules, place: Place, band: Band, good: WorldTypes.G
 		# The unit goes onto the stall first and is paid for at the price it
 		# then stands at: the same price a buyer would pay to take it back,
 		# so selling and buying back is never a gain.
-		place.stock[good] = int(place.stock.get(good, 0)) + 1
+		place.stock[good] = int(place.stock.get(good, rules.local_stock if place.trade.has(good) else 0)) + 1
 		earned += sell_price(rules, place, band, good)
 	if n > 0:
 		band.cargo[good] = int(band.cargo[good]) - n
@@ -165,6 +223,8 @@ static func yearly_drift(rng: SimRng, rules: WorldRules, world: World, log: Pack
 		place.captives_sold = 0
 		var goods: Array = WorldTypes.Good.values() if place.has_market else place.stock.keys()
 		for g in goods:
+			if place.trade.has(g) and not place.has_market:
+				continue  # a farm's stall mends by the day (mend_local)
 			var s := int(place.stock.get(g, 0))
 			s += roundi(float(rules.stock_baseline - s) * rules.drift_fraction)
 			if place.has_market and rules.good_sources.get(g, []).has(place.region):

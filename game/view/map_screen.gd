@@ -444,6 +444,7 @@ func _fill_place() -> void:
 		place_box.add_child(go)
 		return
 	# The market first, then the deeds.
+	place_box.add_child(UiTheme.secondary("What sells where, and men for hire", _show_trade))
 	var goods := journey.market()
 	if not goods.is_empty():
 		place_box.add_child(UiTheme.gap(UiTheme.S1))
@@ -794,6 +795,37 @@ func _show_chronicle() -> void:
 	_close_side(box)
 	# The newest at the foot, where the eye is.
 	side_panel.scroll.set_deferred("scroll_vertical", 1 << 20)
+
+
+## What sells where (Journey.price_book) and the men for hire where the
+## band stands (Journey.men_for_hire): plain values from the sim, read
+## out. Hiring itself is among the place's deeds.
+func _show_trade() -> void:
+	var box := _open_side("What sells where")
+	var book := journey.price_book()
+	box.add_child(UiTheme.section("The best carries you know of"))
+	var runs: Array = (book.runs as Array).slice(0, 6)
+	if runs.is_empty():
+		box.add_child(UiTheme.label("You have seen too few prices yet. Every market and farm stall you come to is remembered.", "SmallLabel"))
+	for r in runs:
+		box.add_child(UiTheme.label("%s: buy at %s for %d, sell at %s for %d." % [str(r.name).capitalize(), r.from_name, int(r.buy), r.to_name, int(r.sell)]))
+	if not (book.places as Array).is_empty():
+		box.add_child(UiTheme.gap(UiTheme.S1))
+		box.add_child(UiTheme.section("Prices you have seen"))
+		box.add_child(UiTheme.label("What you pay and what you are paid, an ounce a unit.", "SmallLabel"))
+	for pl in book.places:
+		var goods := PackedStringArray()
+		for row in pl.rows:
+			goods.append("%s %s/%s" % [row.name, str(row.buy) if int(row.buy) > 0 else "-", str(row.sell) if int(row.sell) > 0 else "-"])
+		box.add_child(UiTheme.label("%s (%s)" % [Journey._cap(str(pl.name)), pl.when], "StrongLabel"))
+		box.add_child(UiTheme.label(", ".join(goods), "SmallLabel"))
+	var men := journey.men_for_hire()
+	if not men.is_empty():
+		box.add_child(UiTheme.gap(UiTheme.S1))
+		box.add_child(UiTheme.section("Men for hire here"))
+		for o in men:
+			box.add_child(UiTheme.label("%s, %d oz and %d a month, %s." % [o.text, int(o.price), int(o.wage), o.tier]))
+	_close_side(box)
 
 
 ## The ruling family of a place and how it stands toward you, for the

@@ -576,7 +576,11 @@ func _draw_parties(font: Font, k: float) -> void:
 			continue
 		var pk := k * 0.9
 		var afloat := grid.is_sea(MapGrid.cell_of(party.pos))
-		var hostile: bool = party.kind in ["raiders", "levy", "outlaws"]
+		# Who would harm the band: raiders and outlaws unless their house
+		# wishes it well, and any party sent after it (mood -1).
+		var hostile: bool = party.mood < 0 or (party.mood == 0 and party.kind in ["raiders", "levy", "outlaws", "ship_thieves"])
+		if party.kind == "wreck":
+			hostile = false
 		var on_ship: bool = party.sails and afloat
 		if hostile:
 			MapIcons.hostile(self, at + (Vector2(0, -6) * pk if on_ship else Vector2.ZERO), (15.0 if on_ship else 8.0) * pk, party.chasing, on_ship)
@@ -597,6 +601,22 @@ func _draw_parties(font: Font, k: float) -> void:
 			"outlaws":
 				tag = "outlaws, %d" % party.men
 				MapIcons.token(self, at, pk, Color("3a3330"), Color("6b4a2e"))
+			"kings_ships":
+				tag = "the king's ships, %d" % party.men
+				MapIcons.ship(self, at, pk, facing, Color("4a3a2a"), Palette.GOLD, Palette.WOAD, Palette.WOAD)
+			"ship_thieves":
+				tag = "your ship, taken" if party.name == "" else party.name
+				MapIcons.ship(self, at, pk, facing, Color("2e2620"), Palette.UNDYED, Palette.BLOOD)
+			"house_men", "avengers":
+				tag = "%s, %d" % [party.name if party.name != "" else ("men of %s" % party.family), party.men]
+				if on_ship:
+					MapIcons.ship(self, at, pk, facing, Color("5a4630"), Palette.UNDYED, Palette.MADDER if hostile else Palette.WOAD)
+				else:
+					MapIcons.token(self, at, pk, Palette.MADDER if hostile else Palette.WOAD, Palette.UNDYED)
+			"wreck":
+				# What a fight left: a hull with no sail, lying still.
+				tag = party.name if party.name != "" else "what a fight left"
+				MapIcons.ship(self, at, pk * 0.85, facing, Color("3a3028"), Color(0, 0, 0, 0), Color(0, 0, 0, 0))
 			_:
 				tag = party.name if party.name != "" else party.kind
 				if party.sails and afloat:

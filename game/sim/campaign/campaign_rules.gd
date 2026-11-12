@@ -235,7 +235,9 @@ var storm_ship_damage := 1
 var thrall_unrest_food := 6
 var quarrel_holmgang_chance := 0.3
 var envoy_fame := 1
-var marriage_houses := ["the Ladejarl's kin", "a rich bondi of Vik", "the Hordaland jarl's house"]
+## Houses of the web (Families, NorwayData.HOUSES) whose daughters a winter
+## guest may be offered: Norse houses at home, none of them the burners.
+var marriage_houses := ["Horda-Kari's kin", "Hrafn's kin", "the Sygna kings"]
 ## default_plan: ounces given to each of the three lowest-loyalty men at Yule.
 var default_gift_ounces := 5
 

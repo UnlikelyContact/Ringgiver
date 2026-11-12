@@ -337,3 +337,51 @@ func test_rest_and_mend_heals_the_hurt() -> void:
 	j.act("rest")
 	assert_eq(m.healing_turns, 1, "a turn mended")
 	assert_true(j.c.cal.day > day, "days pass")
+
+
+## The harder ring (12 Nov 2026, world-life): the jarl's picked men hold
+## except at the thin place, more come up from the flanks as the rounds
+## pass, and their leader is the head of the house that burned the hall.
+func test_the_ring_holds_but_at_the_thin_place() -> void:
+	var broke := 0
+	var routed := 0
+	for s in range(1, 11):
+		var j := Journey.begin(s, "burned_hall", "Egil", true)
+		var b: Battle = j.fight.built.battle
+		var thin: Array = []
+		for c in (j.fight.built.gap as Array).slice(1):
+			thin.append(b.grid.occupant(c))
+		var t := follow_tutorial(b)
+		t.free()
+		for w in j.fight.built.theirs:
+			if (w as Warrior).broken and not thin.has(w):
+				broke += 1
+		if b.result.how == BattleResult.End.ROUT and b.result.winner == 0:
+			routed += 1
+	assert_eq(routed, 0, "three men do not rout the jarl's men")
+	assert_true(broke <= 10, "the ring holds: %d of its men broke in 10 escapes, the thin place aside" % broke)
+
+
+func test_more_come_from_the_flanks_and_lingering_is_punished() -> void:
+	var rules := CombatRules.new()
+	var f := Scenario.build_escape(3, rules)
+	assert_eq((f.theirs as Array).size(), rules.escape_enemy_shields + rules.escape_flankers + rules.escape_enemy_spears,
+			"the ring and the men at the yard's edges")
+	var out := 0
+	for s in range(1, 11):
+		var j := Journey.begin(s, "burned_hall", "Egil", true)
+		var b: Battle = j.fight.built.battle
+		var lw := _leader_warrior(j)
+		while not b.is_over() and b.round < 40:
+			b.run_round()
+		if b.result.escaped(0) and not lw.is_down():
+			out += 1
+	assert_true(out <= 3, "a band that stands in the yard is caught: out on his feet %d of 10" % out)
+
+
+func test_the_ring_is_led_by_the_head_of_the_burning_house() -> void:
+	var j := Journey.begin(2, "burned_hall", "Egil", true)
+	var h := j.c.world.families.house(j.c.band.vengeance)
+	var leader: Warrior = j.fight.built.theirs[0]
+	assert_true(leader.is_leader)
+	assert_eq(leader.display_name, h.name.trim_suffix("'s kin"), "not the prototype's name")

@@ -45,6 +45,21 @@ var our_men := 0
 var odds_max := 1.2
 ## The scout's report (Scouting.report), filled by the campaign.
 var report := {}
+## The ground under the band where the fight finds it (from the map, by
+## Journey): "" (not known: the old drawn field), "sea" (aboard: they
+## close and it is fought out on the strand by the ships), "strand" (open
+## sand: no cover, nowhere better to stand), "farm" (a steading: the hall
+## to hold), "open" (low country: a ford to wait at, a road to lie in
+## wait by), "hills" (the uplands: high ground to hold, narrows to wait
+## in). It decides which choices there are and the field each makes
+## (Campaign.build_fight).
+var ground := ""
+
+const GROUND_TEXT := {"sea": "You are aboard, and they will come at you where the ships lie.",
+	"strand": "You are on open sand, with nothing to put at your back.",
+	"farm": "You are at a steading, with a hall to hold.",
+	"open": "You are in the low country, by a ford and a road.",
+	"hills": "You are in the hills, where the ground is steep and the ways narrow."}
 
 
 func options() -> Array[int]:
@@ -52,9 +67,11 @@ func options() -> Array[int]:
 	if they_know_first:
 		return out  # no choice: they have you
 	out.append(Choice.TAKE_THE_FIELD)
-	if not attacking and not at_sea:
+	# Open sand has no ground worth choosing and nowhere to hide.
+	var bare := ground == "strand" or ground == "sea"
+	if not attacking and not at_sea and not bare:
 		out.append(Choice.WAIT_FOR_THEM)
-	if we_know_first and not at_sea:
+	if we_know_first and not at_sea and not bare:
 		out.append(Choice.LAY_AMBUSH)
 	if not cornered:
 		out.append(Choice.FADE_AWAY)
@@ -78,9 +95,32 @@ func scenario_for(choice: int) -> String:
 			return "equal_green"
 
 
+## What a choice is called here, by the ground (the HUD and the map's
+## decision list): "Hold the high ground", "Lie in wait by the road".
+func title(choice: int) -> String:
+	match choice:
+		Choice.WAIT_FOR_THEM:
+			match ground:
+				"hills":
+					return "Hold the high ground"
+				"farm":
+					return "Hold the hall"
+				"open":
+					return "Wait for them at the ford"
+		Choice.LAY_AMBUSH:
+			match ground:
+				"hills":
+					return "Wait for them in the narrows"
+				"open", "farm":
+					return "Lie in wait by the road"
+	return CHOICE_TITLES[choice]
+
+
 ## A line for the log or the HUD: what is coming, as the scout tells it.
 func brief() -> String:
 	var text: String = report.get("text", "")
+	if GROUND_TEXT.has(ground):
+		text += " " + str(GROUND_TEXT[ground])
 	if they_know_first:
 		return text + " They have seen you first: you are caught on the march."
 	if we_know_first:

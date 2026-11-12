@@ -4,7 +4,8 @@
 ## Commands, run in order on the journey before the shot: sail:<place> (go
 ## there), go:<place> (set the course only), days:<n>, act:<id>,
 ## answer:<id>, select:<place>, invest:<way>, silver:<oz>, zoom:<px>,
-## quick (tell fights quickly), men, ways, families, chronicle, year:<way> (the stand-in player
+## quick (tell fights quickly), men, ways, families, chronicle, trade (what
+## sells where and the men for hire), year:<way> (the stand-in player
 ## plays a year with that bent), rounds:<n> and leave (on the battle screen).
 ## The winter (WinterScreen): summer:<way> lets the stand-in player of that
 ## bent play on until the band goes into winter quarters; winter answers what waits and winters where
@@ -150,6 +151,9 @@ func _init() -> void:
 				continue
 			elif cmd == "chronicle":
 				map._show_chronicle()
+				continue
+			elif cmd == "trade":
+				map._show_trade()
 				continue
 			elif cmd.begins_with("year:"):
 				JourneyBot.play_year(j, int(cmd.trim_prefix("year:")))

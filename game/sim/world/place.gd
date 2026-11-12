@@ -19,6 +19,11 @@ var family := ""
 var has_market := false
 ## Good -> units in stock (markets only; farms hold grain).
 var stock := {}
+## A farm's or a hall's own stall (no market): Good -> "sells" (what it
+## makes) or "buys" (what it lacks), from WorldRules.local_trade; and the
+## fractions of a unit its stall has mended toward its baseline.
+var trade := {}
+var stock_mend := {}
 ## Year from which the place exists on the map (Iceland opens in 874).
 var open_year := 0
 ## Captives sold here this year, for the glut rule.

@@ -49,6 +49,10 @@ var _n := 0
 var _offers := {}  # place id -> the work on offer, rolled once a visit
 var _traded_at := ""  # the place whose market the band has paid its days at
 var _was_at := ""  # the place the band was last seen to be at
+## The summer's own life beyond the band (WorldLife, TradeRoad, Hiring):
+## the offers rolled at each place, what was done where this year, the
+## merchant under guard, the stolen ship, the watch on the beach.
+var life := {}
 
 
 ## A new saga: a man of the given origin (Origins key) and name, where his
@@ -90,7 +94,9 @@ static func begin(seed_in: int, origin_key: String, leader_name: String, escape 
 		for id in wr.origin_standing.get(origin_key, {}):
 			band.known_places[str(id)] = true
 	if escape and Origins.has_escape(origin_key):
-		var built := j.c.build_escape()
+		# The ring is led by the head of the house that burned the hall.
+		var burners: House = j.c.world.families.house_at(j.c.world, str(d.feud_with)) if j.c.world.families != null else null
+		var built := j.c.build_escape(burners.name.trim_suffix("'s kin") if burners != null else "")
 		(built.battle as Battle).clear_ai(0)
 		j.fight = {"offer": null, "built": built, "ctx": {"kind": "escape"}}
 		j._say("The night the hall at %s burned." % theirs_name(j))
@@ -144,6 +150,7 @@ func begin_summer() -> void:
 	roam.stop()
 	roam.clock = 0.0
 	roam.populate(_fork("parties"), c.world_rules, c.world, Outlawry.is_outlawed(c.band, cal))
+	WorldLife.spring(self)
 	c.band.location = roam.grid.place_at(roam.pos)
 	_was_at = c.band.location
 	_say("Spring of %d. The ice is off the fjord%s." % [cal.year, (" at %s" % here().display_name) if here() != null else ""])
@@ -252,6 +259,8 @@ func answer(id: String) -> void:
 					_say("The knarr goes on its way.")
 		"house":
 			_answer_house(d, id)
+		"world":
+			WorldLife.answer(self, d, id)
 		"fight":
 			_answer_fight(d, int(id))
 			return  # _answer_fight settles when the fight is over
@@ -313,18 +322,39 @@ func _tell_fight(result: BattleResult, told: Dictionary) -> void:
 
 func _offer_fight(kind: String, tier: CombatTypes.Tier, size: int, attacking: bool, stat: int, at_sea: bool,
 		cornered: bool, ctx: Dictionary, text: String, front: bool) -> void:
-	var offer := c.offer_fight(kind, tier, size, attacking, stat, at_sea, cornered)
+	var offer := c.offer_fight(kind, tier, size, attacking, stat, at_sea, cornered, ground_here())
 	var opts: Array[Dictionary] = []
 	if offer.they_know_first:
 		opts.append({"id": str(FightOffer.Choice.TAKE_THE_FIELD), "label": "Fight"})
 	for ch in offer.options():
-		opts.append({"id": str(ch), "label": FightOffer.CHOICE_TITLES[ch]})
+		opts.append({"id": str(ch), "label": offer.title(ch)})
 	var d := {"kind": "fight", "offer": offer, "ctx": ctx, "text": "%s %s You have %d men fit to fight." % [text, offer.brief(), offer.our_men],
 			"options": opts}
 	if front:
 		decisions.push_front(d)
 	else:
 		decisions.append(d)
+
+
+## The ground under the band, for a fight that finds it here
+## (FightOffer.ground): aboard at sea, at a steading, on the strand, in the
+## hills (a mountain cell, or low land under one), or the open low country.
+func ground_here() -> String:
+	if roam.afloat():
+		return "sea"
+	var p := here()
+	if p != null and SETTLED.has(p.kind):
+		return "farm"
+	var cell := roam.cell()
+	match roam.grid.terrain(cell):
+		MapGrid.T.SHORE:
+			return "strand"
+		MapGrid.T.MOUNTAIN:
+			return "hills"
+	for d in MapGrid._DIRS:
+		if roam.grid.terrain(cell + d) == MapGrid.T.MOUNTAIN:
+			return "hills"
+	return "open"
 
 
 ## What the fight was for, once it is over (`result` null: the band faded).
@@ -372,12 +402,21 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 			_pass(float(wr.holmgang_days))
 		"house_fight", "blood", "reckoning":
 			_after_house_fight(ctx, result)
+		"world_fight":
+			WorldLife.after_fight(self, ctx, result)
 	_killed_their_men(ctx, result)
 	# The party it was fought with: beaten, it is gone; otherwise it keeps
 	# its distance for a while.
 	var party: Roam.Party = ctx.get("party", null)
 	if party != null:
 		if won:
+			# What they carried is the band's now: a raider's plunder.
+			if party.loot > 0:
+				c.band.silver += party.loot
+				_say("Their plunder is %s's now: %d oz." % [c.band.leader.display_name, party.loot])
+				party.loot = 0
+			c.band.captives += party.captives
+			party.captives = 0
 			roam.parties.erase(party)
 		else:
 			party.rest_until = roam.clock + c.world_rules.party_rest_days
@@ -445,8 +484,11 @@ func sail_speed() -> float:
 		return 0.0
 	var wr := c.world_rules
 	var men := band.fighters().size()
-	if men < int(wr.ship_min_crew[band.ship.kind]) or men > band.ship.crew_capacity(wr):
+	if men < int(wr.ship_min_crew[band.ship.kind]):
 		return 0.0
+	if men > band.ship.crew_capacity(wr):
+		# Overladen: she will not put out so, but at sea she limps home.
+		return wr.ship_limp_speed if roam.afloat() and roam.aboard else 0.0
 	if not band.ship.can_sail(wr):
 		return wr.ship_limp_speed
 	return float(wr.ship_speed[band.ship.kind])
@@ -538,12 +580,14 @@ func advance(dt: float) -> bool:
 			used = maxf(0.001, roam.step_band(chunk, foot_speed(), sail_speed()))
 		_clock(used)
 		_look_about()
-		if roam.afloat() and roam.aboard:
+		if roam.afloat() and roam.aboard and c.band.ship != null:
 			_weather(used)
 		_moods()
 		var met := roam.step_parties(used, _fork("parties"), c.world_rules, c.world, c.band.fighters(c.rules).size(), c.band.location)
 		if met != null:
 			_meet(met)
+		if can_act():
+			WorldLife.tick(self, used)
 		left -= used
 		if was_moving and not roam.moving():
 			_arrived()
@@ -594,6 +638,8 @@ func _pass(days: float) -> void:
 		var met := roam.step_parties(chunk, _fork("parties"), c.world_rules, c.world, c.band.fighters(c.rules).size(), c.band.location)
 		if met != null:
 			_meet(met)
+		if decisions.is_empty() and fight.is_empty():
+			WorldLife.tick(self, chunk)
 
 
 ## The band's place, and what comes in sight of it.
@@ -614,6 +660,9 @@ func _arrived() -> void:
 	if p != null and p.id != _was_at:
 		_say("%s comes to %s on day %d." % [c.band.leader.display_name, p.display_name, c.cal.day])
 		Knowledge.reveal(c.world, c.band, p.id, said)
+		Knowledge.see_prices(c.world_rules, c.world, c.band, p.id, c.cal.day)
+		WorldLife.hear_news(self)
+		TradeRoad.check_escort(self)
 	_was_at = c.band.location
 
 
@@ -649,6 +698,8 @@ func _weather(days: float) -> void:
 ## Another party has come up with the band.
 func _meet(p: Roam.Party) -> void:
 	var wr := c.world_rules
+	if WorldLife.meet(self, p):
+		return
 	p.rest_until = roam.clock + wr.party_rest_days
 	var at_sea := roam.afloat()
 	match p.kind:
@@ -666,7 +717,7 @@ func _meet(p: Roam.Party) -> void:
 			var text := "A rival ship bears down on you, %d men at her oars." % p.men
 			_offer_fight("rival_ship", p.tier, Sandbox._forced(c, p.men), false, wr.sea_fight_stat, at_sea, false,
 					{"kind": "sea", "req": {"kind": "rival_ship"}, "party": p}, text, true)
-		"levy":
+		"levy", "kings_ships":
 			var text2 := "The levy ships have found the outlaw, and come on."
 			_offer_fight("levy", p.tier, Sandbox._forced(c, p.men), false, wr.levy_stat, at_sea, false,
 					{"kind": "sea", "req": {"kind": "levy"}, "party": p}, text2, true)
@@ -729,16 +780,24 @@ func actions() -> Array[Dictionary]:
 		out.append({"id": "champion", "label": "Stand in the farmer's place",
 				"hint": "A berserk has called %s out for their land. Meet him on the island yourself: %d oz, honor and their friendship if you blood him." % [
 						p.family, roundi(float(wr.champion_fee + p.wealth / wr.champion_wealth_per_oz) * float(band.gift("champion_fee", 1.0)))]})
-	if Callings.can_challenge(wr, c.world, band, p):
+	# The burners will not stake a burning on the island.
+	if Callings.can_challenge(wr, c.world, band, p) and p.family != band.vengeance:
 		var t := Callings.holmgang_terms(wr, c.world, band, p)
 		out.append({"id": "holmgang", "label": "Call %s to the island" % p.family,
 				"hint": ("To end the feud, and for %d oz." % t.stake) if t.feud else ("For %d oz of what they own. It costs honor: %d." % [t.stake, t.honor_cost])})
 	if p.kind == WorldTypes.PlaceKind.THING_SITE and not Outlawry.is_outlawed(band, c.cal):
 		for f in band.unsettled_feuds():
 			var family := str(f.get("family", f.get("against", "")))
-			out.append({"id": "case:" + family, "label": "Plead against %s" % family,
-					"hint": "Support, procedure, the standoff, the verdict. %d days." % wr.thing_days,
-					"enabled": band.silver >= wr.thing_min_silver})
+			var hint := "Support, procedure, the standoff, the verdict. %d days." % wr.thing_days
+			var ready := true
+			if family == band.vengeance and c.world.families != null:
+				var vb := c.world.families.vengeance_backing(wr, band, family, band.fighters(c.rules).size())
+				ready = bool(vb.ready)
+				if not ready:
+					hint = "%s will not answer for the burning at the Thing while they and their friends are the stronger: you could bring %d men, they %d. Win friends among their enemies first." % [
+							family, int(vb.ours), int(vb.theirs)]
+			out.append({"id": "case:" + family, "label": "Plead against %s" % family, "hint": hint,
+					"enabled": band.silver >= wr.thing_min_silver and ready})
 	if band.captives > 0 and Market.captive_price(wr, p) > 0:
 		out.append({"id": "captives", "label": "Sell %d captives" % band.captives, "hint": "%d oz for the next." % Market.captive_price(wr, p)})
 	if not p.has_market and SETTLED.has(p.kind):
@@ -752,10 +811,13 @@ func actions() -> Array[Dictionary]:
 					"hint": "Carries %d men and %d of cargo, %d leagues a day; needs %d at the oars.%s" % [int(wr.ship_crew[kind]), int(wr.ship_cargo[kind]),
 							int(wr.ship_speed[kind]), int(wr.ship_min_crew[kind]), " She keeps out of the deep." if kind == WorldTypes.ShipKind.FAERING else ""],
 					"enabled": band.silver >= cost})
-	if sail_speed() <= 0.0 and SETTLED.has(p.kind):
+	# Passage for a band without a ship it can use here, or with only a
+	# small boat that will not cross the deep (she stays on the beach).
+	if (sail_speed() <= 0.0 or not _deep_ok()) and SETTLED.has(p.kind):
 		for to in passages():
 			out.append({"id": "passage:" + str(to.id), "label": "Take passage to %s (%d oz)" % [c.world.place(to.id).display_name, int(to.cost)],
-					"hint": "%d days on another man's ship." % int(to.days), "enabled": band.silver >= int(to.cost)})
+					"hint": "%d days on another man's ship%s." % [int(to.days), (", your loads with you" if band.cargo_units() + band.felag_units() > 0 else "")],
+					"enabled": band.silver >= int(to.cost)})
 	if band.ship != null and band.ship.damage > 0 and roam.aboard:
 		out.append({"id": "mend", "label": "Mend the ship", "hint": "%d days on the beach for each of her %d hurts%s." % [
 				wr.ship_mend_days, band.ship.damage, "" if band.ship.can_sail(wr) else ". She only limps as she is"]})
@@ -763,6 +825,9 @@ func actions() -> Array[Dictionary]:
 		out.append({"id": "rest", "label": "Rest and mend", "hint": "%d days under a roof: every man's wounds mend a turn. %s" % [wr.rest_days,
 				"Some of your men are too hurt to fight yet." if not band.hurt(c.rules).is_empty() else "Your men are hurt, but can stand in the line."]})
 	out.append({"id": "listen", "label": "Wait and listen", "hint": "%d days. At a hall or a market there is talk of places you do not know." % wr.listen_days})
+	out.append_array(TradeRoad.actions(self))
+	out.append_array(Hiring.actions(self))
+	out.append_array(WorldLife.actions(self))
 	out.append_array(_house_actions(p))
 	if SETTLED.has(p.kind):
 		var guest := not at_home
@@ -835,7 +900,8 @@ func passages() -> Array[Dictionary]:
 		if days <= 0.0:
 			continue
 		var d := maxi(1, ceili(days - 0.01))
-		out.append({"id": id, "days": d, "cost": wr.passage_base + ceili(d * (1.0 + band.fighters().size() * wr.passage_per_man_day))})
+		out.append({"id": id, "days": d, "cost": wr.passage_base + ceili(d * (1.0 + band.fighters().size() * wr.passage_per_man_day))
+				+ wr.passage_per_load * (band.cargo_units() + band.felag_units())})
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.days) < int(b.days) or (int(a.days) == int(b.days) and str(a.id) < str(b.id)))
 	return out.slice(0, 4)
 
@@ -911,6 +977,8 @@ func act(id: String) -> void:
 				"" if _healing() > 0 else ": every man is whole again"])
 	elif id == "winter":
 		wintering = true
+	elif TradeRoad.act(self, id) or Hiring.act(self, id) or WorldLife.act(self, id):
+		pass
 	elif _act_house(id, p):
 		pass
 	_vengeance()
@@ -1183,7 +1251,11 @@ func _answer_house(d: Dictionary, id: String) -> void:
 				_say("%s takes %d oz of wergild from %s, and the feud is ended." % [who, int(d.ounces), name])
 			else:
 				var men2 := Sandbox._forced(c, mini(wr.avenger_men, h.strength))
-				_offer_fight("men of %s" % name, wr.house_fight_tier, men2, true, wr.feud_stat_base + 1, false, false,
+				var stat2 := wr.feud_stat_base + 1
+				if name == band.vengeance:
+					men2 = mini(int(fs.reckoning_terms(wr, band, name).men), Campaign.MAX_FIGHTERS)
+					stat2 = wr.vengeance_stat
+				_offer_fight("men of %s" % name, wr.house_fight_tier, men2, true, stat2, false, false,
 						{"kind": "blood", "family": name}, "%s will have blood, not silver, from %s." % [who, name], true)
 
 
@@ -1312,10 +1384,13 @@ func _house_actions(p: Place) -> Array[Dictionary]:
 				"hint": "Silver for the feud over %s: it ends it, and they think the better of you for it." % str(f.get("cause", "an old wrong"))})
 		var t := fs.reckoning_terms(wr, band, h.name)
 		var friends: Array = t.friends
-		out.append({"id": "reckoning", "label": "Bring your friends against %s" % h.name, "enabled": int(favour.get("reckoning", -1)) != year,
-				"hint": "They have %d men. %s Against you: about %d." % [int(t.house_men),
-						("%s send %d men with you." % [", ".join(PackedStringArray(friends)), int(t.sent)]) if not friends.is_empty() \
-								else "None of their enemies is your friend yet, and you would go alone.", int(t.men)]})
+		var allies: Array = t.allies
+		if not fs.abroad(h.name):
+			out.append({"id": "reckoning", "label": "Bring your friends against %s" % h.name, "enabled": int(favour.get("reckoning", -1)) != year,
+					"hint": "They have %d men%s. %s Against you: about %d." % [int(t.house_men),
+							(", and %s send them %d more" % [", ".join(PackedStringArray(allies)), int(t.allied)]) if not allies.is_empty() else "",
+							("%s send %d men with you." % [", ".join(PackedStringArray(friends)), int(t.sent)]) if not friends.is_empty() \
+									else "None of their enemies is your friend yet, and you would go alone.", int(t.men)]})
 	return out
 
 
@@ -1350,6 +1425,7 @@ func _act_house(id: String, p: Place) -> bool:
 			var lend := int(wr.men_lent.get(Families.support_step(wr, band, h.name), 0))
 			for i in lend:
 				var m := Recruits.random(_fork("lent"), c.rules, band.next_id())
+				m.lent_by = h.name
 				band.add_man(m)
 				_say("%s, one of %s's men, comes to %s's band." % [m.display_name, h.head, band.leader.display_name])
 			c._arm_new_men()
@@ -1370,6 +1446,8 @@ func _act_house(id: String, p: Place) -> bool:
 			if not friends.is_empty():
 				_say("%s send men: %d of them stand with you against %s." % [", ".join(PackedStringArray(friends)), int(t.sent), h.name])
 			var center := int(wr.defender_stat_by_kind[p.kind] + p.defenses * wr.defender_stat_per_defense)
+			if h.name == band.vengeance:
+				center = wr.vengeance_stat  # the jarl's picked men, not farmers
 			_offer_fight("the reckoning with %s" % h.name, wr.house_fight_tier, int(t.men), true, clampi(center, 1, 10), false, false,
 					{"kind": "reckoning", "family": h.name, "friends": friends}, "%s comes to %s for the reckoning." % [band.leader.display_name, p.display_name], true)
 		_:
@@ -1407,16 +1485,35 @@ func _speak(client: String) -> void:
 func market() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var p := here()
-	if p == null or not p.has_market:
+	if p == null or (not p.has_market and p.trade.is_empty()):
 		return out
 	for g in WorldTypes.Good.values():
-		var stock := int(p.stock.get(g, 0))
+		if not p.has_market and not p.trade.has(g):
+			continue  # a farm's stall: what it makes and what it lacks
+		var stock := int(p.stock.get(g, 0)) if Market.sells_here(p, g) else 0
 		var have := int(c.band.cargo.get(g, 0))
-		if stock <= 0 and have <= 0:
+		if stock <= 0 and have <= 0 and p.has_market:
 			continue
 		out.append({"good": g, "name": WorldTypes.GOOD_NAMES[g], "stock": stock, "have": have,
-				"buy": Market.buy_price(c.world_rules, p, c.band, g), "sell": Market.sell_price(c.world_rules, p, c.band, g)})
+				"buy": Market.buy_price(c.world_rules, p, c.band, g) if Market.sells_here(p, g) else 0,
+				"sell": Market.sell_price(c.world_rules, p, c.band, g) if Market.buys_here(p, g) else 0,
+				"can_buy": Market.sells_here(p, g), "can_sell": Market.buys_here(p, g)})
 	return out
+
+
+## What sells where, as far as the band has seen (Knowledge.price_book):
+## {places: [{id, name, when, rows: [{good, name, buy, sell}]}], runs:
+## [{good, name, from_name, buy, to_name, sell, margin}]}.
+func price_book() -> Dictionary:
+	if here() != null:
+		Knowledge.see_prices(c.world_rules, c.world, c.band, here().id, c.cal.day)
+	return Knowledge.price_book(c.world_rules, c.world, c.band, c.cal.day)
+
+
+## The men for hire where the band is (Hiring.men_for_hire): [{i, name,
+## text, price, wage, tier, loyalty, stats}]. Hire one with act("hire:<i>").
+func men_for_hire() -> Array[Dictionary]:
+	return Hiring.men_for_hire(self)
 
 
 func buy(good: int, units: int) -> int:
@@ -1472,9 +1569,19 @@ func _settle() -> void:
 			_say("The season is closing: there is no more travelling this year.")
 			wintering = true
 		if wintering:
+			_end_of_summer()
 			_winter()
 			continue
 		return
+
+
+## What the summer leaves undone when the band turns for its winter
+## quarters: a partner's goods unsold, a merchant unguarded, men lent by a
+## house going home, a stolen ship not won back.
+func _end_of_summer() -> void:
+	TradeRoad.end_of_summer(self)
+	Hiring.end_of_summer(self)
+	WorldLife.end_of_summer(self)
 
 
 func _winter() -> void:

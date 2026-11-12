@@ -30,6 +30,31 @@ class Party:
 	var rest_until := 0.0
 	var offer := {}  # a merchant's goods: {good, units, price, home, family}
 	var chasing := false
+	## The world's own life (WorldLife): the party it hunts, the one it is
+	## locked in a fight with and when that fight is decided, the place it
+	## is making for to plunder (`strike`) and when that raid is over, what
+	## it carries (silver, captives), a stolen ship, the faction whose
+	## ships these are, when it is gone from the map (a wreck), and a
+	## merchant who walks or sails with the band under its guard.
+	var prey: Party = null
+	var engaged: Party = null
+	var fray_until := 0.0
+	var strike := ""
+	var raiding_until := -1.0
+	var loot := 0
+	var captives := 0
+	var ship: Ship = null
+	var faction := ""
+	var expire := INF
+	var escorted := false
+	## In a fight it did not start: it was fallen upon.
+	var hunted := false
+	## A wreck's leavings: {silver, goods: {Good: n}, captives, survivor}.
+	var leavings := {}
+	var text := ""
+
+	func busy() -> bool:
+		return engaged != null or raiding_until >= 0.0
 
 
 var grid: MapGrid
@@ -47,6 +72,16 @@ var last_cell := Vector2i(-1, -1)
 var parties: Array[Party] = []
 ## Days since the summer began, with fractions.
 var clock := 0.0
+## The band guards a merchant: raiders and outlaws go for it whatever the
+## odds, for the goods.
+var lure := false
+## Tidings of the world's own fights not yet heard by the band:
+## [{at (clock), text, pos}] (WorldLife).
+var news: Array[Dictionary] = []
+## Place id -> the clock of the last raid on it this summer.
+var struck := {}
+## When the world's life was last reckoned (WorldLife.tick).
+var life_clock := 0.0
 
 static var _sea_routes := {}
 static var _place_days := {}
@@ -266,6 +301,82 @@ func add_avengers(rules: WorldRules, world: World, family: String, seat: String,
 	return a
 
 
+## The king's ships: they hunt raiders and outlaws, and hail a band at sea
+## for the king's due. `faction` is the king's (Harald's while he lives).
+func add_kings_ships(rules: WorldRules, world: World, home: String, faction: String) -> Party:
+	if not grid.place_cell.has(home):
+		return null
+	var k := Party.new()
+	k.kind = "kings_ships"
+	var f: Faction = world.factions.get(faction, null)
+	k.name = "the ships of %s" % (f.leader if f != null else "the king")
+	k.faction = faction
+	k.home = home
+	k.men = rules.kings_crew
+	k.tier = rules.kings_tier
+	k.speed = rules.kings_speed
+	k.pos = MapGrid.centre(grid.place_cell[home])
+	parties.append(k)
+	return k
+
+
+## Men of a house sent against a house it is at feud with: they make for
+## the other's seat, and fall on its men where they meet them.
+func add_house_party(rules: WorldRules, world: World, family: String, seat: String, against: String, to_seat: String, men: int) -> Party:
+	if not grid.place_cell.has(seat) or not grid.place_cell.has(to_seat):
+		return null
+	var h := Party.new()
+	h.kind = "house_men"
+	h.family = family
+	h.name = "men of %s" % family
+	h.text = against
+	h.home = seat
+	h.men = men
+	h.tier = rules.house_fight_tier
+	h.speed = rules.raider_speed
+	h.pos = MapGrid.centre(grid.place_cell[seat])
+	h.strike = to_seat
+	h.route = sea_route(seat, to_seat).duplicate()
+	h.at = 0
+	h.home = to_seat
+	if h.route.is_empty():
+		return null
+	parties.append(h)
+	return h
+
+
+## What is left where two parties fought: it lies there `wreck_days`.
+func add_wreck(rules: WorldRules, at: Vector2, text: String, leavings: Dictionary) -> Party:
+	var w := Party.new()
+	w.kind = "wreck"
+	w.name = text
+	w.text = text
+	w.sails = false
+	w.speed = 0.0
+	w.men = 0
+	w.pos = at
+	w.leavings = leavings
+	w.expire = clock + rules.wreck_days
+	parties.append(w)
+	return w
+
+
+## A merchant under the band's guard, with it wherever it goes.
+func add_escorted(rules: WorldRules, world: World, from: String) -> Party:
+	var m := Party.new()
+	m.kind = "merchant"
+	m.escorted = true
+	m.name = "a merchant of %s" % world.place(from).display_name
+	m.home = from
+	m.family = world.place(from).family
+	m.men = 2
+	m.speed = rules.merchant_speed
+	m.pos = pos
+	m.mood = 1
+	parties.append(m)
+	return m
+
+
 ## A ship's next voyage: from where she lies to another of `places`.
 func _new_route(p: Party, rng: SimRng, places: Array[String]) -> void:
 	p.at = 0
@@ -280,10 +391,17 @@ func _new_route(p: Party, rng: SimRng, places: Array[String]) -> void:
 	if to == p.home:
 		return
 	var here := MapGrid.cell_of(p.pos)
-	if here == grid.place_cell[p.home]:
+	if grid.place_cell.has(p.home) and here == grid.place_cell[p.home]:
 		p.route = sea_route(p.home, to).duplicate()
 	else:
-		# Off her course (a chase): the way from where she is.
+		# Off her course (a chase, a fight): back to the nearest harbour,
+		# a short search, and from there the kept sea routes.
+		var best_d := INF
+		for id in places:
+			var d := MapGrid.centre(grid.place_cell[id]).distance_to(p.pos)
+			if d < best_d and grid.place_cell[id] != here:
+				best_d = d
+				to = id
 		p.route = grid.find_path(here, grid.place_cell[to], 0.0001, 7.0, true).cells
 	p.home = to
 
@@ -298,12 +416,28 @@ func step_parties(dt: float, rng: SimRng, rules: WorldRules, world: World, band_
 	var band_wet := grid.is_sea(band_cell)
 	var band_shore := band_wet or grid.terrain(band_cell) == MapGrid.T.SHORE
 	var places: Array[String] = []
+	var home_places: Array[String] = []
 	for p in parties:
+		if p.escorted:
+			p.pos = pos  # under the band's guard: where it goes, he goes
+			continue
 		var d := p.pos.distance_to(pos)
+		var near := d <= rules.contact_leagues
+		if p.kind == "wreck":
+			if met == null and near and clock >= p.rest_until and band_wet == grid.is_sea(MapGrid.cell_of(p.pos)):
+				met = p
+			continue
+		if p.busy():
+			# Locked in a fight, or plundering a farm: it stands, and a band
+			# that comes upon it may take a hand.
+			if met == null and near and clock >= p.rest_until:
+				met = p
+			continue
 		# A house's men leave a band they think well of alone.
 		var free := clock >= p.rest_until and band_place == "" and p.mood <= 0
-		# A house's men hunt a blood-enemy whatever the odds.
-		var odds_ok := p.mood < 0
+		# A house's men hunt a blood-enemy whatever the odds; and a laden
+		# merchant under the band's guard draws any raider or outlaw.
+		var odds_ok := p.mood < 0 or lure
 		p.chasing = false
 		match p.kind:
 			"raiders":
@@ -311,32 +445,54 @@ func step_parties(dt: float, rng: SimRng, rules: WorldRules, world: World, band_
 			"levy":
 				p.chasing = free and band_shore and d <= rules.raider_sight * 1.5
 			"outlaws":
-				p.chasing = free and not band_wet and d <= rules.outlaw_sight and p.men >= band_men
+				p.chasing = free and not band_wet and d <= rules.outlaw_sight and (p.men >= band_men or odds_ok)
 			"avengers":
 				p.chasing = free and (band_shore if p.sails else not band_wet) and d <= rules.raider_sight * 1.5
+			"kings_ships":
+				# They hail a band at sea once a summer for the king's due.
+				p.chasing = free and band_wet and d <= rules.raider_sight and p.mood == 0
 		if p.chasing:
 			_chase(p, dt)
+		elif p.prey != null and parties.has(p.prey) and p.prey.pos.distance_to(p.pos) <= rules.hunt_sight * 1.5:
+			_chase_point(p, p.prey.pos, dt)
+		elif p.kind == "ship_thieves":
+			_follow(p, dt)  # home with her, and there they stay
 		elif p.sails:
-			if p.at >= p.route.size():
-				if places.is_empty():
-					places = _harbours(world, p.kind == "merchant")
-				_new_route(p, rng, places)
+			if p.at >= p.route.size() and p.strike != "" and p.home != p.strike and grid.place_cell.has(p.home):
+				# A farm in its sights: from the harbour it has come to, the way
+				# there is the sea route (kept once found, no search on the way).
+				p.route = sea_route(p.home, p.strike).duplicate()
+				p.at = 0
+				p.home = p.strike
+			elif p.at >= p.route.size() and p.strike == "":
+				if p.kind == "kings_ships" or p.kind == "house_men":
+					# The king's ships and a house's men keep to Norway's own waters.
+					if home_places.is_empty():
+						home_places = _harbours(world, false, true)
+					_new_route(p, rng, home_places)
+				else:
+					if places.is_empty():
+						places = _harbours(world, p.kind == "merchant")
+					_new_route(p, rng, places)
+			# (At the farm it made for, it waits: WorldLife starts the raid.)
 			_follow(p, dt)
 		else:
 			_wander(p, dt, rng)
-		if met == null and free and p.pos.distance_to(pos) <= rules.contact_leagues \
-				and (p.chasing or (p.kind == "merchant" and band_wet)):
+		if met == null and free and near \
+				and (p.chasing or (p.kind == "merchant" and band_wet) or (p.kind == "ship_thieves")):
 			met = p
 	return met
 
 
-func _harbours(world: World, markets_only: bool) -> Array[String]:
+func _harbours(world: World, markets_only: bool, home_only := false) -> Array[String]:
 	var out: Array[String] = []
 	var ids: Array = world.places.keys()
 	ids.sort()
 	for id in ids:
 		var p: Place = world.places[id]
 		if not p.is_open(world.year) or p.region == WorldTypes.Region.ICELAND:
+			continue
+		if home_only and not Families.HOME_REGIONS.has(p.region):
 			continue
 		if p.has_market or (not markets_only and p.kind != WorldTypes.PlaceKind.THING_SITE):
 			out.append(id)
@@ -358,40 +514,64 @@ func _follow(p: Party, dt: float) -> void:
 
 ## Straight for the band, a cell at a time, over the party's own element.
 func _chase(p: Party, dt: float) -> void:
+	_chase_point(p, pos, dt)
+
+
+## Straight for a point (the band, or the party it hunts), a cell at a
+## time, over the party's own element; it stands off where its element
+## ends.
+func _chase_point(p: Party, to: Vector2, dt: float) -> void:
 	var left := dt
 	var guard := 0
+	var goal := MapGrid.cell_of(to)
 	while left > 0.0001 and guard < 12:
 		guard += 1
 		var here := MapGrid.cell_of(p.pos)
-		var target := pos
-		if here != cell():
+		var target := to
+		if here != goal:
 			var best := here
-			var best_d := MapGrid.centre(here).distance_to(pos)
+			var best_d := MapGrid.centre(here).distance_to(to)
 			for d in MapGrid._DIRS:
 				var n: Vector2i = here + d
 				if not MapGrid.inside(n):
 					continue
-				var ok := (grid.is_sea(n) if p.sails else grid.is_land(n)) or n == cell()
+				var ok := (grid.is_sea(n) if p.sails else grid.is_land(n)) or n == goal
 				if not ok:
 					continue
-				var nd := MapGrid.centre(n).distance_to(pos)
+				var nd := MapGrid.centre(n).distance_to(to)
 				if nd < best_d:
 					best_d = nd
 					best = n
 			if best == here:
-				return  # no nearer by her own element: she stands off
+				break  # no nearer by her own element: she stands off
 			target = MapGrid.centre(best)
 		var speed := p.speed if p.sails else p.speed / float(MapGrid.COST[grid.terrain(MapGrid.cell_of(target))])
 		var dist := p.pos.distance_to(target)
 		if speed * left < dist:
 			p.pos = p.pos.move_toward(target, speed * left)
-			return
+			break
 		p.pos = target
 		left -= dist / maxf(speed, 0.05)
-		if p.pos.distance_to(pos) < 0.5:
-			return
+		if p.pos.distance_to(to) < 0.5:
+			break
 	p.route = []  # off her course now
 	p.at = 0
+
+
+## A course for a party from where it is to a place (by its own element;
+## a ship to the place's landing). False when there is no way.
+func set_course(p: Party, place_id: String) -> bool:
+	if not grid.place_cell.has(place_id):
+		return false
+	var here := MapGrid.cell_of(p.pos)
+	var to: Vector2i = grid.place_cell[place_id]
+	var path := grid.find_path(here, to, 0.0001 if p.sails else p.speed, 7.0 if p.sails else 0.0, p.sails)
+	var cells: Array[Vector2i] = path.cells
+	if cells.is_empty():
+		return false
+	p.route = cells
+	p.at = 0
+	return true
 
 
 ## Outlaws keep to the land about the farm they prey on.
