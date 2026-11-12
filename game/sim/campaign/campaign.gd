@@ -74,14 +74,15 @@ func start(origin: CampaignTypes.Origin, leader_name: String, followers: int) ->
 	_name_second_if_needed()
 
 
-## A fresh start in one of the ways of life (Way): its origin, followers,
-## silver and gifts, and the leader's own bent. The ship and what the way
-## knows of the map are given by Journey.setup, once there is a world.
-func start_as(way: int, leader_name: String) -> void:
-	var d := Way.def(way)
+## A fresh start from one of the origins (Origins): the man, the few who
+## follow him and what silver he has. Where he stands and whom he is at
+## feud with are set by Journey.begin, once there is a world.
+func start_from(origin_key: String, leader_name: String) -> void:
+	var d := Origins.def(origin_key)
 	start(d.origin, leader_name, int(d.followers))
-	Way.apply(band, way)
-	band.log("%s takes up the life of a %s" % [leader_name, str(d.name).to_lower()])
+	band.origin = str(d.key)
+	band.silver = int(d.silver)
+	Way.refresh(band)
 
 
 func run_years(n: int) -> void:

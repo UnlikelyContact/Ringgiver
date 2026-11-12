@@ -1382,6 +1382,67 @@ other ways the sagas give (the settler, the outlaw who is made not
 chosen, the chieftain) have no start yet; the winter is a report, not a
 screen; there is no saving.
 
+**One start, any path, no boat, a map to roam (12 Nov 2026, later).**
+Three corrections to the ways of life as first built.
+
+*The start is the origins, not a way.* You begin as the concept always
+said: the burned hall (two men, ten ounces, sheltered by kin in Sogn, at
+feud with the men who hold your father's land at Hardanger, and ending
+that feud by any road is told as your vengeance), the younger son (one
+man, fifteen ounces, a place by your brother's door), or the freedman
+(alone, five ounces). No way of life is picked.
+
+*Ways are paths you buy steps down as you grow.* Deeds of any kind earn
+points: one to begin with and one for every six deeds. Each of the six
+ways has three steps, costing one, two and three points, and you take
+them in any mixture: raiding can pay for learning the law. Each step
+gives its edges (the table under "Ways of life" is now the third step of
+each; the first two are part-way there, and the berserk's fury comes at
+his first step, with every lord trusting him the less). The saga still
+names you by your deeds, not your steps: a man can be "law-man and
+verse-maker" by what he has learned and "the Viking" by what he has
+done.
+
+*Nobody starts with a ship.* You go on foot until you can pay for a
+hull at a hall or a town: a færing for 15 oz (four men, two of cargo,
+keeps out of the deep), a karve for 60, a knarr for 110, a snekkja for
+170, the old one taken in part payment. A hull needs hands at her oars
+and will not carry more men than she holds, so the band outgrows its
+boat. Until then there is passage on another man's ship between the
+halls and markets, for silver. You winter wherever there is a roof, as a
+guest for an ounce a man.
+
+*The map is free to roam.* The lanes between places are gone for the
+player. The world is a raster of one-league cells cut from rough shores,
+with a fjord carved in to every place that stood away from the water;
+the land rises from shore to upland to mountain with its distance from
+the sea, and the hills are slow. Tap anywhere: the band walks the land
+at two leagues a day and, with a ship, sails the water at five to eight;
+the way is found for it, and it knows that a ship stays on the beach
+where she was left and must be gone back to. Days pass as you move and
+stop when you stop. Others are abroad and move as you do: merchants
+plying between the markets (hail them, buy, or rob them), raiders along
+the coast and outlaws on the land who go for a band they outnumber when
+they see it in the open, and the levy ships for an outlawed man. A band
+at a place is left alone; a band that outruns or beats them is left
+alone for a fortnight. Places come into your knowledge when you pass
+within eight leagues. At sea there is weather: a storm now and then,
+and on the deep a small chance of foundering.
+
+Stand-in players with each bent, eight sagas of five years from each
+origin: from the burned hall and the younger son every bent lives, gets
+a ship in the first year or two and reaches the second or third step of
+its path; the freedman is the hard start it should be (half the raiders
+are dead in three years). The law-wise man, the skald and the berserk
+earn 110 to 180 oz a year, the raider and the king's man 70 to 100, and
+the trader almost nothing until he can pay for a knarr, which the
+stand-in rarely manages.
+
+Open: the trader's road to his first deep hold is too long; the first
+fight of the burned hall (the escape) is told, not played; a ship left
+on a beach is never stolen; other parties do not fight each other or
+raid places; the mountains are a flat grey.
+
 ## Open questions
 
 - [ ] Art route, production: 3D rendered as pixels or straight pixel art

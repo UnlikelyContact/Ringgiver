@@ -33,6 +33,9 @@ var role: CombatTypes.Role = CombatTypes.Role.SHIELD
 ## Whether he has been given that place (Campaign._arm_new_men); a man
 ## keeps the place he was given.
 var armed := false
+## How deep the fury runs in him (0: none; the leader's is set from his
+## steps down the berserk's way, Way.refresh).
+var fury := 0
 ## Drill points by learned shape name: how well he knows it (concept.md,
 ## "Drill, custom formations and custom shouts"), and the last year he
 ## drilled, for the thaw's decay.
@@ -128,7 +131,8 @@ func to_warrior(side: int, rules: CampaignRules = null, javelins := 1) -> Warrio
 	w.is_banner = is_banner
 	w.is_horn = is_horn
 	w.drill = drill.duplicate()
-	w.fury = traits.has("berserk")
+	w.fury = fury > 0 or traits.has("berserk")
+	w.fury_level = maxi(1, fury)
 	if rules != null:
 		w.wound = current_wound(rules)
 	return w

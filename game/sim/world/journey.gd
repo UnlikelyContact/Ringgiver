@@ -1,13 +1,15 @@
 class_name Journey
 extends RefCounted
-## The player's summer on the map, one decision at a time (concept.md,
-## "Ways of life" and "Picking your fights"). Sandbox.summer is an AI
-## standing in for the player; this is the player: he sails where he will,
-## and at each place does what the place and his way of life allow. The
-## world modules do the work; this strings them together and stops
-## wherever a person must answer.
+## The player's summer on the free-roam map, one decision at a time
+## (concept.md, "Ways of life", "The map" and "Picking your fights").
+## Sandbox.summer is an AI standing in for the player; this is the player:
+## he goes where he will, on foot or under sail (Roam, MapGrid), and at
+## each place does what the place allows. The world modules do the work;
+## this strings them together and stops wherever a person must answer.
 ##
-## The shape: `decisions` is a queue of things that must be answered
+## The shape: `go_to_place` / `go_to_point` set a course and `advance(dt)`
+## moves the band along it as the days pass, with everyone else abroad
+## moving too. `decisions` is a queue of things that must be answered
 ## before anything else (a fight offered, a merchant met, a king's demand);
 ## `answer(id)` answers the first. A fight the player will fight himself
 ## is left in `fight` for the battle view, which calls `fight_done(result)`.
@@ -15,19 +17,21 @@ extends RefCounted
 ## the saga tell it"). Everything the player should read goes to `said`.
 
 const RAID_KINDS := [WorldTypes.PlaceKind.FARMSTEAD, WorldTypes.PlaceKind.HALL, WorldTypes.PlaceKind.TOWN]
+const SETTLED := [WorldTypes.PlaceKind.FARMSTEAD, WorldTypes.PlaceKind.HALL, WorldTypes.PlaceKind.TOWN]
 const SPINE_LABELS := {"serve": "Serve him", "resist": "Resist him", "ignore": "Stand aside",
 	"fight_for_harald": "Fight for Harald", "fight_against": "Fight against Harald", "join_rollo": "Sail west with Rollo",
 	"back_eric": "Back Eric", "betray_eric": "Betray Eric", "acclaim": "Acclaim him"}
+## The hulls a man can buy, smallest first.
+const HULLS := [WorldTypes.ShipKind.FAERING, WorldTypes.ShipKind.KARVE, WorldTypes.ShipKind.KNARR, WorldTypes.ShipKind.SNEKKJA]
 
 var c: Campaign
+var roam: Roam
 var quick := false
 var said := PackedStringArray()
 var decisions: Array[Dictionary] = []
 ## A fight for the battle view: {offer, built, ctx}. Empty when there is none.
 var fight := {}
-## Where the ship is bound, when a voyage was interrupted.
-var destination := ""
-## Work taken that needs a voyage: done on arrival at its `to_place`.
+## Work taken that waits at a place: done on arrival at its `to_place`.
 var contract := {}
 ## The band is making for its winter quarters.
 var wintering := false
@@ -35,42 +39,38 @@ var wintering := false
 var winter_report := PackedStringArray()
 var _rng: SimRng
 var _n := 0
-var _offers := {}  # place id -> {day, list}: the work on offer, rolled once a visit
+var _offers := {}  # place id -> the work on offer, rolled once a visit
 var _traded_at := ""  # the place whose market the band has paid its days at
-var _legs := 0
-var _voyage_days := 0
-var _voyage_from := ""
+var _was_at := ""  # the place the band was last seen to be at
 
 
-## A new saga: a man of the given way (Way.Id) and name, at home in
-## western Norway, in the spring of the first year.
-static func begin(seed_in: int, way: int, leader_name: String, home := "hardanger") -> Journey:
+## A new saga: a man of the given origin (Origins key) and name, where his
+## origin puts him, in the spring of the first year. No ship.
+static func begin(seed_in: int, origin_key: String, leader_name: String) -> Journey:
 	var j := Journey.new()
 	j.c = Campaign.new(seed_in)
-	j.c.start_as(way, leader_name)
+	j.c.start_from(origin_key, leader_name)
+	var d := Origins.def(origin_key)
 	var wr := WorldRules.new()
-	Sandbox.setup(j.c, wr, home)
+	Sandbox.setup(j.c, wr, str(d.at))
 	j.c.world.salt = seed_in
-	var d := Way.def(way)
 	var band := j.c.band
-	band.ship = Ship.make(d.ship)
-	# Every man knows the coast a few days about his own home.
-	var near := Voyage.distances(j.c.world, home)
-	for id in near:
-		if int(near[id]) <= wr.known_days_start:
-			band.known_places[id] = true
-	if band.gift("knows_markets", false):
-		# The trader knows the coast from Hålogaland to Hedeby.
-		for p in j.c.world.places.values():
-			if p.region <= WorldTypes.Region.HALOGALAND or p.region == WorldTypes.Region.DENMARK:
-				band.known_places[p.id] = true
-	var home_place := j.c.world.place(home)
-	if home_place != null and home_place.faction_id != "" and int(band.gift("lords_favour", 0)) != 0:
-		FactionAI.shift(j.c.world, home_place.faction_id, FactionAI.BAND, int(band.gift("lords_favour", 0)))
-	if band.gift("fury", false):
-		# No lord trusts a berserk until he has shown himself worth it.
-		for fid in j.c.world.factions:
-			FactionAI.shift(j.c.world, fid, FactionAI.BAND, -15)
+	band.ship = null
+	band.land = 0
+	j.roam = Roam.new()
+	j.roam.pos = MapGrid.centre(j.roam.grid.place_cell[str(d.at)])
+	# He knows the country about where he stands.
+	var at: Place = j.c.world.place(str(d.at))
+	for p in j.c.world.places.values():
+		if p.pos.distance_to(at.pos) <= wr.known_leagues_start and p.is_open(j.c.world.year):
+			band.known_places[p.id] = true
+	if str(d.feud_with) != "":
+		var theirs: Place = j.c.world.place(str(d.feud_with))
+		band.add_feud(theirs.family, "the burning of your father's hall", theirs.id)
+		band.vengeance = theirs.family
+		band.known_places[theirs.id] = true
+		if theirs.faction_id != "":
+			FactionAI.shift(j.c.world, theirs.faction_id, FactionAI.BAND, -20)
 	j.begin_summer()
 	return j
 
@@ -87,9 +87,13 @@ func begin_summer() -> void:
 	_n = 0
 	_offers.clear()
 	_traded_at = ""
-	destination = ""
 	wintering = false
-	_say("Spring of %d. The ice is off the fjord at %s." % [cal.year, here().display_name])
+	roam.stop()
+	roam.clock = 0.0
+	roam.populate(_fork("parties"), c.world_rules, c.world, Outlawry.is_outlawed(c.band, cal))
+	c.band.location = roam.grid.place_at(roam.pos)
+	_was_at = c.band.location
+	_say("Spring of %d. The ice is off the fjord%s." % [cal.year, (" at %s" % here().display_name) if here() != null else ""])
 	if Outlawry.is_outlawed(c.band, cal):
 		_say("%s sails as an outlaw this year: the halls are shut to him." % c.band.leader.display_name)
 	for ev in Timeline.pending(c.world_rules, c.world, cal.year):
@@ -126,8 +130,19 @@ func can_act() -> bool:
 	return decisions.is_empty() and fight.is_empty() and not c.over
 
 
+## The place the band is at, or null in the wilds and at sea.
 func here() -> Place:
-	return c.world.place(c.band.location)
+	return c.world.place(c.band.location) if c.band.location != "" else null
+
+
+## Where the band is, in words.
+func whereabouts() -> String:
+	var p := here()
+	if p != null:
+		return p.display_name
+	if roam.afloat():
+		return "at sea"
+	return "in the wilds"
 
 
 func days_left() -> int:
@@ -173,7 +188,7 @@ func answer(id: String) -> void:
 				"rob":
 					var req := Encounters.rob_merchant(wr, enc)
 					_offer_fight("merchant", req.tier, req.attackers, true, wr.sea_fight_stat, true, false,
-							{"kind": "rob", "req": req}, str(req.text), true)
+							{"kind": "rob", "req": req, "party": d.get("party", null)}, str(req.text), true)
 				_:
 					_say("The knarr goes on its way.")
 		"fight":
@@ -191,6 +206,7 @@ func _answer_fight(d: Dictionary, choice: int) -> void:
 		_after_fight(d.ctx, null)
 		_settle()
 		return
+	roam.stop()  # a fight is where the day's march ends
 	var built := c.build_fight(offer, choice)
 	if quick:
 		var result: BattleResult = (built.battle as Battle).run()
@@ -268,7 +284,7 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 						FactionAI.shift(c.world, target.faction_id, FactionAI.BAND, -wr.raid_relation_hit)
 					Way.add_deed(c.band, Way.Id.VIKING, wr.deed_raid)
 				c.tally.raids = c.tally.get("raids", 0) + 1
-			c.cal.advance_days(wr.raid_days)
+			_pass(float(wr.raid_days))
 		"contract":
 			var o: Dictionary = ctx.contract
 			Contracts.complete(wr, c.world, c.band, o, won, said)
@@ -276,102 +292,293 @@ func _after_fight(ctx: Dictionary, result: BattleResult) -> void:
 				Way.add_deed(c.band, Way.Id.KINGS_MAN, wr.deed_contract)
 				Sandbox._promote(c, said)
 				c.tally.contracts = c.tally.get("contracts", 0) + 1
-			c.cal.advance_days(int(o.get("days", 10)))
+			_pass(float(int(o.get("days", 10))))
 		"spine":
 			Timeline.resolve(wr, c.world, c.band, ctx.event, ctx.choice, won, said)
 		"duel":
 			var outcome := -1 if result == null or result.winner < 0 else (1 if won else 0)
 			Callings.after_holmgang(wr, c.world, c.band, ctx.place, ctx.terms, outcome, false, said, _fork("holm_feud"))
-			c.cal.advance_days(wr.holmgang_days)
+			_pass(float(wr.holmgang_days))
 		"champion":
 			var came := -1 if result == null or result.winner < 0 else (1 if won else 0)
 			Callings.after_champion(wr, c.world, c.band, ctx.place, came, said)
-			c.cal.advance_days(wr.holmgang_days)
+			_pass(float(wr.holmgang_days))
+	# The party it was fought with: beaten, it is gone; otherwise it keeps
+	# its distance for a while.
+	var party: Roam.Party = ctx.get("party", null)
+	if party != null:
+		if won:
+			roam.parties.erase(party)
+		else:
+			party.rest_until = roam.clock + c.world_rules.party_rest_days
+	_vengeance()
 	if c.over:
 		_say("The saga of %s ends here: %s." % [Way.title(c.band), c.over_reason])
 
 
-# --- Sailing --------------------------------------------------------------------
+## The origin's unfinished matter: when the feud with the burners is ended,
+## by the sword, the island or the Thing, it is told.
+func _vengeance() -> void:
+	var band := c.band
+	if band.vengeance == "" or not Feud.find(band, band.vengeance).is_empty():
+		return
+	_say("The burning is answered: the matter between %s and %s is ended." % [band.leader.display_name, band.vengeance])
+	band.log("%s had his vengeance for the burning of his father's hall" % band.leader.display_name)
+	band.fame = clampi(band.fame + 10, 0, 100)
+	band.vengeance = ""
 
-## Whether the band knows a way to `to` and how long it takes: days, or -1.
+
+# --- Going about ------------------------------------------------------------------
+
+## Leagues a day on foot.
+func foot_speed() -> float:
+	return c.world_rules.foot_speed
+
+
+## Leagues a day in the band's ship, or 0 when it has none it can use: no
+## hull, too few hands for the oars, or more men than she will carry.
+func sail_speed() -> float:
+	var band := c.band
+	if band.ship == null:
+		return 0.0
+	var wr := c.world_rules
+	var men := band.fighters().size()
+	if men < int(wr.ship_min_crew[band.ship.kind]) or men > band.ship.crew_capacity(wr):
+		return 0.0
+	if not band.ship.can_sail(wr):
+		return wr.ship_limp_speed
+	return float(wr.ship_speed[band.ship.kind])
+
+
+## Why the ship is no use, in words, or "" when she is (or there is none).
+func ship_trouble() -> String:
+	var band := c.band
+	if band.ship == null:
+		return ""
+	var wr := c.world_rules
+	var men := band.fighters().size()
+	if men < int(wr.ship_min_crew[band.ship.kind]):
+		return "too few hands for her oars (%d needed)" % int(wr.ship_min_crew[band.ship.kind])
+	if men > band.ship.crew_capacity(wr):
+		return "she will not carry %d men (%d at most)" % [men, band.ship.crew_capacity(wr)]
+	return ""
+
+
+## A small boat keeps out of the deep.
+func _deep_ok() -> bool:
+	return c.band.ship != null and c.band.ship.kind != WorldTypes.ShipKind.FAERING
+
+
+## Days to a place from here as the band would go, or -1 with no way.
 func days_to(to: String) -> int:
 	if to == c.band.location:
 		return 0
-	var route := Voyage.plan(c.world, c.band.location, to, c.band.known_places)
-	return -1 if route.is_empty() else Voyage.route_days(c.world, route)
+	if not roam.grid.place_cell.has(to):
+		return -1
+	var sail := sail_speed()
+	var days := -1.0
+	if c.band.location != "" and (sail <= 0.0 or roam.aboard):
+		days = roam.place_days(c.band.location, to, foot_speed(), sail, _deep_ok())
+	else:
+		var p := roam.grid.find_path(roam.cell(), roam.grid.place_cell[to], foot_speed(), sail if roam.has_reach(sail) else 0.0,
+				roam.aboard and sail > 0.0, roam.ship_cell(), _deep_ok())
+		days = p.days if not (p.cells as Array).is_empty() else -1.0
+	return -1 if days < 0.0 else maxi(1, ceili(days - 0.01))
 
 
-## Sets sail for `to`. The voyage stops for whatever is met and goes on
-## when it has been answered.
-func sail(to: String) -> void:
-	if not can_act() or to == c.band.location:
-		return
-	destination = to
-	_legs = 0
+## Sets the band's course for a place it knows. False when there is no way.
+func go_to_place(to: String) -> bool:
+	if not can_act() or not roam.grid.place_cell.has(to):
+		return false
+	return _plot(roam.grid.place_cell[to], c.world.place(to).display_name)
+
+
+## Sets the band's course for a point on the map (leagues).
+func go_to_point(v: Vector2) -> bool:
+	if not can_act():
+		return false
+	return _plot(MapGrid.cell_of(v), "there")
+
+
+func _plot(cell: Vector2i, what: String) -> bool:
+	var days := roam.plot(cell, foot_speed(), sail_speed(), _deep_ok())
+	if days < 0.0:
+		var why := "there is no way by land"
+		if roam.grid.is_sea(cell) and c.band.ship == null:
+			why = "you have no ship"
+		elif c.band.ship != null and ship_trouble() != "":
+			why = ship_trouble()
+		elif c.band.ship != null and not _deep_ok():
+			why = "a færing will not cross the deep"
+		_say("No way to %s: %s." % [what, why])
+		return false
 	_traded_at = ""
-	_voyage()
+	return true
+
+
+## Whether the band is under way.
+func moving() -> bool:
+	return roam.moving() and can_act()
+
+
+## Lets `dt` days pass with the band following its course (if it has one)
+## and everyone else abroad going about theirs. Stops at once for anything
+## that must be answered. Returns whether the band is still under way.
+func advance(dt: float) -> bool:
+	var left := dt
+	var guard := 0
+	while left > 0.0001 and can_act() and guard < 400:
+		guard += 1
+		var chunk := minf(left, 0.2)
+		var used := chunk
+		var was_moving := roam.moving()
+		if was_moving:
+			used = maxf(0.001, roam.step_band(chunk, foot_speed(), sail_speed()))
+		_clock(used)
+		_look_about()
+		if roam.afloat() and roam.aboard:
+			_weather(used)
+		var met := roam.step_parties(used, _fork("parties"), c.world_rules, c.world, c.band.fighters(c.rules).size(), c.band.location)
+		if met != null:
+			_meet(met)
+		left -= used
+		if was_moving and not roam.moving():
+			_arrived()
+			break
+		if days_left() <= 0:
+			break
 	_settle()
+	return moving()
 
 
-## One lane of the voyage toward `destination`: the ship stops wherever
-## something is met, so what must be answered is answered where it
-## happens, and `_settle` sails the next lane after.
-func _voyage() -> void:
-	_legs += 1
-	var to := destination
-	var from := c.band.location
-	var route := Voyage.plan(c.world, from, to, c.band.known_places)
-	var next: String = route[1] if route.size() > 1 else to
-	if _legs == 1:
-		_voyage_days = 0
-		_voyage_from = from
-	# The lane's own log is kept back: only what was met is told, and the
-	# landfall once, at the end.
-	var leg_log := PackedStringArray()
-	var vr := Voyage.sail(_fork("leg"), c.world_rules, c.world, c.band, c.cal, next, leg_log)
-	_voyage_days += vr.days
-	for line in leg_log:
-		if not (line.begins_with("The band sails from") or line.begins_with("The band makes land at")):
-			_say(line)
-	if vr.arrived and next != to:
-		vr.arrived = false  # a lane done, the voyage not: on to the next
-		if vr.encounters.is_empty():
-			vr.reason = "lane"
-	for enc in vr.encounters:
-		if enc.has("battle_required"):
-			var br: Dictionary = enc.battle_required
-			var stat := c.world_rules.levy_stat if br.get("kind", "") == "levy" else c.world_rules.sea_fight_stat
-			_offer_fight(br.get("kind", "sea fight"), br.tier, Sandbox._forced(c, br.attackers), false, stat, true, false,
-					{"kind": "sea", "req": br}, "", false)
-		elif enc.has("offer"):
-			var offer: Dictionary = enc.offer
-			var room := Market.cargo_room(c.world_rules, c.band)
+## Goes on along the course until the band arrives or something stops it
+## (for the stand-in player and tests). Returns whether it arrived.
+func travel(max_days := 120.0) -> bool:
+	var spent := 0.0
+	while moving() and spent < max_days:
+		advance(1.0)
+		spent += 1.0
+	return not roam.moving() and can_act()
+
+
+## Sets a course for a place and goes there, as far as it can be gone
+## without something to answer. Returns whether the band is there.
+func sail(to: String) -> bool:
+	if to == c.band.location:
+		return true
+	if not go_to_place(to):
+		return false
+	travel()
+	return c.band.location == to
+
+
+## The days go by: the clock, the calendar.
+func _clock(days: float) -> void:
+	roam.clock += days
+	c.cal.day = 1 + int(roam.clock)
+
+
+## Days pass with the band where it is (a deed done, a market, a wait):
+## the others go on moving, and may find it.
+func _pass(days: float) -> void:
+	var left := days
+	while left > 0.0001:
+		var chunk := minf(left, 0.5)
+		_clock(chunk)
+		left -= chunk
+		if not decisions.is_empty() or not fight.is_empty():
+			continue  # the days still pass, but nothing more is met
+		var met := roam.step_parties(chunk, _fork("parties"), c.world_rules, c.world, c.band.fighters(c.rules).size(), c.band.location)
+		if met != null:
+			_meet(met)
+
+
+## The band's place, and what comes in sight of it.
+func _look_about() -> void:
+	var band := c.band
+	band.location = roam.grid.place_at(roam.pos)
+	var wr := c.world_rules
+	for p in c.world.places.values():
+		if band.known_places.has(p.id) or not p.is_open(c.world.year):
+			continue
+		if p.pos.distance_to(roam.pos) <= wr.sight_leagues:
+			band.known_places[p.id] = true
+			_say("%s comes in sight." % _cap(p.display_name))
+
+
+func _arrived() -> void:
+	var p := here()
+	if p != null and p.id != _was_at:
+		_say("%s comes to %s on day %d." % [c.band.leader.display_name, p.display_name, c.cal.day])
+		Knowledge.reveal(c.world, c.band, p.id, said)
+	_was_at = c.band.location
+
+
+## A day's sailing has its weather: a storm that springs the strakes, and
+## on the deep the chance of foundering.
+func _weather(days: float) -> void:
+	var wr := c.world_rules
+	var band := c.band
+	var r := _fork("weather")
+	if r.randf() < wr.storm_chance_day * days:
+		band.ship.damage += wr.storm_ship_damage
+		_clock(float(wr.storm_delay_days))
+		_say("A storm drives the ship off her course; %d days lost and the strakes sprung." % wr.storm_delay_days)
+	if roam.grid.terrain(roam.cell()) == MapGrid.T.DEEP and r.randf() < wr.wreck_chance_deep_day * days:
+		# She founders: the band struggles ashore at the nearest place.
+		var best := ""
+		var best_d := INF
+		for p in c.world.places.values():
+			if p.is_open(c.world.year) and p.pos.distance_to(roam.pos) < best_d:
+				best_d = p.pos.distance_to(roam.pos)
+				best = p.id
+		Voyage._wreck(r, wr, c.world, band, best, said)
+		band.ship = null
+		roam.stop()
+		roam.aboard = false
+		roam.ship_at = Vector2.INF
+		roam.pos = MapGrid.centre(roam.grid.place_cell[best])
+		band.known_places[best] = true
+		_look_about()
+		_was_at = band.location
+
+
+## Another party has come up with the band.
+func _meet(p: Roam.Party) -> void:
+	var wr := c.world_rules
+	p.rest_until = roam.clock + wr.party_rest_days
+	var at_sea := roam.afloat()
+	match p.kind:
+		"merchant":
+			var offer: Dictionary = p.offer
+			var enc := {"kind": "merchant", "offer": offer, "text": "%s hails you, with %s at %d oz a unit." % [
+					_cap(p.name), WorldTypes.GOOD_NAMES[offer.good], int(offer.price)]}
+			var room := Market.cargo_room(wr, c.band)
 			var n := mini(mini(int(offer.units), room), c.band.silver / maxi(1, int(offer.price)))
-			decisions.append({"kind": "merchant", "enc": enc, "text": str(enc.text), "options": [
+			decisions.append({"kind": "merchant", "enc": enc, "party": p, "text": str(enc.text), "options": [
 				{"id": "buy", "label": "Buy %d for %d oz" % [n, n * int(offer.price)], "enabled": n > 0},
 				{"id": "rob", "label": "Rob him"},
 				{"id": "pass", "label": "Sail on"}]})
-	if vr.arrived:
-		destination = ""
-		_say("%s makes land at %s, %d days out of %s." % [c.band.leader.display_name, c.world.place(to).display_name,
-				_voyage_days, c.world.place(_voyage_from).display_name])
-		Knowledge.reveal(c.world, c.band, to, said)
-	elif vr.reason == "lane" or vr.reason == "battle" or (vr.reason == "" and not vr.encounters.is_empty()):
-		pass  # the voyage goes on, once what was met is answered
-	else:
-		# Wrecked, too late in the year, the ship unfit, no way known: the
-		# voyage ends where it is.
-		destination = ""
-		if c.band.location != _voyage_from:
-			_say("The voyage ends at %s." % here().display_name)
-	if _legs >= 40:
-		destination = ""
+		"raiders":
+			var text := "A rival ship bears down on you, %d men at her oars." % p.men
+			_offer_fight("rival_ship", p.tier, Sandbox._forced(c, p.men), false, wr.sea_fight_stat, at_sea, false,
+					{"kind": "sea", "req": {"kind": "rival_ship"}, "party": p}, text, true)
+		"levy":
+			var text2 := "The levy ships have found the outlaw, and come on."
+			_offer_fight("levy", p.tier, Sandbox._forced(c, p.men), false, wr.levy_stat, at_sea, false,
+					{"kind": "sea", "req": {"kind": "levy"}, "party": p}, text2, true)
+		"outlaws":
+			var text3 := "Outlaws come out of the trees, %d of them, and want what you carry." % p.men
+			var bounty := wr.outlaw_bounty if c.band.outlawry == WorldTypes.Outlawry.NONE else 0
+			_offer_fight("outlaws", p.tier, Sandbox._forced(c, p.men), false, wr.sea_fight_stat, false, false,
+					{"kind": "sea", "req": {"kind": "outlaws", "bounty": bounty}, "party": p}, text3, true)
 
 
 # --- What can be done here ---------------------------------------------------------
 
-## The deeds open at this place: [{id, label, hint, enabled}]. Trading has
-## its own calls (`market`, `buy`, `sell`).
+## The deeds open where the band stands: [{id, label, hint, enabled}].
+## Trading has its own calls (`market`, `buy`, `sell`); going somewhere is
+## `go_to_place` / `go_to_point`.
 func actions() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if not can_act():
@@ -379,6 +586,12 @@ func actions() -> Array[Dictionary]:
 	var wr := c.world_rules
 	var p := here()
 	var band := c.band
+	if p == null:
+		# In the wilds or on the water: little to do but wait.
+		if band.ship != null and band.ship.damage > 0 and roam.aboard and not roam.afloat():
+			out.append({"id": "mend", "label": "Mend the ship", "hint": "%d days on the beach for each of her %d hurts." % [wr.ship_mend_days, band.ship.damage]})
+		out.append({"id": "camp", "label": "Wait a day", "hint": "Let a day go by where you are."})
+		return out
 	var at_home := p.id == band.home
 	var closed := Outlawry.halls_closed(band, c.cal)
 	if RAID_KINDS.has(p.kind) and not at_home and p.wealth > 0:
@@ -389,13 +602,16 @@ func actions() -> Array[Dictionary]:
 						" (the beacons are lit)" if a.beacons else "", roundi(a.expected_plunder * float(band.gift("raid_plunder", 1.0))),
 						_cap(p.family) if p.family != "" else "They"]) if fresh else "You have been here this year: what is left is hidden or fled."})
 		if p.kind == WorldTypes.PlaceKind.FARMSTEAD:
-			out.append({"id": "strandhogg", "label": "Strandhögg", "hint": "A quick shore raid for cattle and stores: %d rations and a little silver, no battle." % wr.strandhogg_food})
+			out.append({"id": "strandhogg", "label": "Strandhögg", "hint": "A quick raid for cattle and stores: %d rations and a little silver, no battle." % (
+					wr.strandhogg_food * int(band.gift("strandhogg", 1)))})
 	if not closed:
 		var i := 0
 		for o in _work_here():
 			var label := "%s (%d oz)" % [_cap(str(o.text)), roundi(float(o.pay) * float(band.gift("contract_pay", 1.0)))]
-			out.append({"id": "work:%d" % i, "label": label, "hint": "A lord's work: about %d days." % int(o.get("days", 10)),
-					"enabled": contract.is_empty()})
+			var reach: bool = not o.has("to_place") or days_to(str(o.to_place)) >= 0
+			out.append({"id": "work:%d" % i, "label": label,
+					"hint": ("A lord's work: about %d days." % int(o.get("days", 10))) if reach else "You have no way to get there: it needs a ship.",
+					"enabled": contract.is_empty() and reach})
 			i += 1
 		if Callings.can_verse(c.world, band, p):
 			out.append({"id": "verse", "label": "Speak a verse before the lord", "hint": "Wits and fame against %d: a ring if it pleases him." % Callings.verse_need(wr, band, p)})
@@ -405,7 +621,7 @@ func actions() -> Array[Dictionary]:
 	if Callings.can_champion(wr, c.world, band, p):
 		out.append({"id": "champion", "label": "Stand in the farmer's place",
 				"hint": "A berserk has called %s out for their land. Meet him on the island yourself: %d oz, honor and their friendship if you blood him." % [
-						p.family, wr.champion_fee + p.wealth / wr.champion_wealth_per_oz]})
+						p.family, roundi(float(wr.champion_fee + p.wealth / wr.champion_wealth_per_oz) * float(band.gift("champion_fee", 1.0)))]})
 	if Callings.can_challenge(wr, c.world, band, p):
 		var t := Callings.holmgang_terms(wr, c.world, band, p)
 		out.append({"id": "holmgang", "label": "Call %s to the island" % p.family,
@@ -418,19 +634,84 @@ func actions() -> Array[Dictionary]:
 					"enabled": band.silver >= wr.thing_min_silver})
 	if band.captives > 0 and Market.captive_price(wr, p) > 0:
 		out.append({"id": "captives", "label": "Sell %d captives" % band.captives, "hint": "%d oz for the next." % Market.captive_price(wr, p)})
-	if not p.has_market and p.kind != WorldTypes.PlaceKind.BAY and p.kind != WorldTypes.PlaceKind.THING_SITE:
+	if not p.has_market and SETTLED.has(p.kind):
 		out.append({"id": "rations", "label": "Buy rations", "hint": "Five rations at %d oz each." % wr.farm_food_price,
 				"enabled": band.silver >= wr.farm_food_price})
-	if band.ship != null and band.ship.damage > 0:
+	# A hull of his own, or passage on another man's.
+	if not closed and (p.kind == WorldTypes.PlaceKind.HALL or p.kind == WorldTypes.PlaceKind.TOWN):
+		for kind in hulls_for_sale():
+			var cost := hull_cost(kind)
+			out.append({"id": "hull:%d" % kind, "label": "Buy a %s (%d oz)" % [WorldTypes.SHIP_NAMES[kind], cost],
+					"hint": "Carries %d men and %d of cargo, %d leagues a day; needs %d at the oars.%s" % [int(wr.ship_crew[kind]), int(wr.ship_cargo[kind]),
+							int(wr.ship_speed[kind]), int(wr.ship_min_crew[kind]), " She keeps out of the deep." if kind == WorldTypes.ShipKind.FAERING else ""],
+					"enabled": band.silver >= cost})
+	if sail_speed() <= 0.0 and SETTLED.has(p.kind):
+		for to in passages():
+			out.append({"id": "passage:" + str(to.id), "label": "Take passage to %s (%d oz)" % [c.world.place(to.id).display_name, int(to.cost)],
+					"hint": "%d days on another man's ship." % int(to.days), "enabled": band.silver >= int(to.cost)})
+	if band.ship != null and band.ship.damage > 0 and roam.aboard:
 		out.append({"id": "mend", "label": "Mend the ship", "hint": "%d days on the beach for each of her %d hurts%s." % [
-				wr.ship_mend_days, band.ship.damage, "" if band.ship.can_sail(wr) else ". She cannot sail as she is"]})
+				wr.ship_mend_days, band.ship.damage, "" if band.ship.can_sail(wr) else ". She only limps as she is"]})
 	out.append({"id": "listen", "label": "Wait and listen", "hint": "%d days. At a hall or a market there is talk of places you do not know." % wr.listen_days})
-	if at_home:
-		out.append({"id": "winter", "label": "Winter here", "hint": "End the summer: the hall, the men, the long dark."})
-	else:
-		var d := days_to(band.home)
-		out.append({"id": "home", "label": "Sail home for the winter", "hint": ("%d days' sail." % d) if d >= 0 else "No way home is known.", "enabled": d >= 0})
+	if SETTLED.has(p.kind):
+		var guest := not at_home
+		var cost := wr.guest_winter_per_man * band.fighters().size() if guest else 0
+		out.append({"id": "winter", "label": "Winter here", "enabled": band.silver >= cost or not guest,
+				"hint": ("End the summer as a guest here: %d oz for the lodging." % cost) if guest else "End the summer: the hall, the men, the long dark."})
 	return out
+
+
+## The hulls worth showing here: every one the band can pay for (bigger
+## than the one it has), and the next it cannot yet.
+func hulls_for_sale() -> Array[int]:
+	var out: Array[int] = []
+	var band := c.band
+	var have := HULLS.find(band.ship.kind) if band.ship != null else -1
+	var shown_dear := false
+	for i in HULLS.size():
+		if i <= have:
+			continue
+		if band.silver >= hull_cost(HULLS[i]):
+			out.append(HULLS[i])
+		elif not shown_dear:
+			out.append(HULLS[i])
+			shown_dear = true
+	return out
+
+
+## What a hull costs the band: her price, less part of the old one's.
+func hull_cost(kind: int) -> int:
+	var wr := c.world_rules
+	var cost := int(wr.ship_price[kind])
+	if c.band.ship != null:
+		cost -= roundi(float(wr.ship_price.get(c.band.ship.kind, 0)) * wr.ship_trade_in)
+	return maxi(1, cost)
+
+
+## Passage to be had from here: up to four of the nearest halls, towns and
+## markets the band knows, by sea: [{id, days, cost}].
+func passages() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var wr := c.world_rules
+	var band := c.band
+	var from := band.location
+	if from == "":
+		return out
+	var ids: Array = band.known_places.keys()
+	ids.sort()
+	for id in ids:
+		var p := c.world.place(id)
+		if p == null or id == from or not p.is_open(c.world.year):
+			continue
+		if not (p.has_market or p.kind == WorldTypes.PlaceKind.HALL or p.kind == WorldTypes.PlaceKind.TOWN):
+			continue
+		var days := roam.place_days(from, id, 0.0001, wr.merchant_speed, true)
+		if days <= 0.0:
+			continue
+		var d := maxi(1, ceili(days - 0.01))
+		out.append({"id": id, "days": d, "cost": wr.passage_base + ceili(d * (1.0 + band.fighters().size() * wr.passage_per_man_day))})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.days) < int(b.days) or (int(a.days) == int(b.days) and str(a.id) < str(b.id)))
+	return out.slice(0, 4)
 
 
 ## Does one of `actions()` by id.
@@ -440,7 +721,17 @@ func act(id: String) -> void:
 	var wr := c.world_rules
 	var p := here()
 	var band := c.band
-	if id == "raid":
+	roam.stop()
+	if id == "camp":
+		_pass(1.0)
+	elif id == "mend":
+		if band.ship != null and band.ship.damage > 0:
+			band.ship.damage -= 1
+			_pass(float(wr.ship_mend_days))
+			_say("The crew haul the ship up and mend her (%d days)%s." % [wr.ship_mend_days, "" if band.ship.damage > 0 else "; she is sound again"])
+	elif p == null:
+		pass
+	elif id == "raid":
 		band.raided[p.id] = c.cal.year
 		var req := Raiding.raid(_fork("raid"), wr, c.world, band, p, said)
 		if not req.is_empty():
@@ -450,7 +741,7 @@ func act(id: String) -> void:
 	elif id == "strandhogg":
 		Raiding.strandhogg(_fork("strand"), wr, c.world, band, p, said)
 		Way.add_deed(band, Way.Id.VIKING, wr.deed_strandhogg)
-		c.cal.advance_days(1)
+		_pass(1.0)
 	elif id.begins_with("work:"):
 		var list := _work_here()
 		var i := int(id.trim_prefix("work:"))
@@ -460,10 +751,10 @@ func act(id: String) -> void:
 			_take_work(o)
 	elif id == "verse":
 		Callings.verse(_fork("verse"), wr, c.world, band, p, said)
-		c.cal.advance_days(wr.verse_days)
+		_pass(float(wr.verse_days))
 	elif id == "counsel":
 		Callings.counsel(_fork("counsel"), wr, c.world, band, p, said)
-		c.cal.advance_days(wr.counsel_days)
+		_pass(float(wr.counsel_days))
 	elif id == "holmgang":
 		_holmgang(p)
 	elif id == "champion":
@@ -476,25 +767,68 @@ func act(id: String) -> void:
 		Market.sell_captives(wr, p, band, band.captives, said)
 	elif id == "rations":
 		Market.buy(wr, p, band, WorldTypes.Good.GRAIN, 5, said)
-	elif id == "mend":
-		if band.ship != null and band.ship.damage > 0:
-			band.ship.damage -= 1
-			c.cal.advance_days(wr.ship_mend_days)
-			_say("The crew haul the ship up at %s and mend her (%d days)%s." % [p.display_name, wr.ship_mend_days,
-					"" if band.ship.damage > 0 else "; she is sound again"])
+	elif id.begins_with("hull:"):
+		_buy_hull(int(id.trim_prefix("hull:")))
+	elif id.begins_with("passage:"):
+		_take_passage(id.trim_prefix("passage:"))
 	elif id == "listen":
 		var heard := Knowledge.hear_rumor(_fork("rumor"), wr, c.world, band, p.id, said)
 		if heard == "":
 			_say("%d days pass at %s, and nothing new is heard." % [wr.listen_days, p.display_name])
-		c.cal.advance_days(wr.listen_days)
+		_pass(float(wr.listen_days))
 	elif id == "winter":
 		wintering = true
-	elif id == "home":
-		wintering = true
-		destination = band.home
-		_legs = 0
-		_voyage()
+	_vengeance()
 	_settle()
+
+
+func _buy_hull(kind: int) -> void:
+	var band := c.band
+	var cost := hull_cost(kind)
+	if band.silver < cost or not HULLS.has(kind):
+		return
+	band.silver -= cost
+	var old: String = WorldTypes.SHIP_NAMES[band.ship.kind] if band.ship != null else ""
+	band.ship = Ship.make(kind as WorldTypes.ShipKind)
+	roam.aboard = true
+	roam.ship_at = Vector2.INF
+	_say("%s buys a %s at %s for %d oz%s." % [band.leader.display_name, WorldTypes.SHIP_NAMES[kind], here().display_name, cost,
+			(", the old %s in part payment" % old) if old != "" else ""])
+	band.log("%s got himself a %s" % [band.leader.display_name, WorldTypes.SHIP_NAMES[kind]])
+
+
+func _take_passage(to: String) -> void:
+	var band := c.band
+	for offer in passages():
+		if str(offer.id) != to or band.silver < int(offer.cost):
+			continue
+		band.silver -= int(offer.cost)
+		# A hull of his own stays on the beach where he left her.
+		if band.ship != null and roam.aboard:
+			roam.ship_at = roam.pos
+		roam.aboard = false
+		roam.pos = MapGrid.centre(roam.grid.place_cell[to])
+		_pass(float(offer.days))
+		_look_about()
+		_say("%s takes passage to %s: %d days, %d oz." % [band.leader.display_name, c.world.place(to).display_name, int(offer.days), int(offer.cost)])
+		_arrived()
+		return
+
+
+## Takes the next step down one of the ways of life (Way.invest), if the
+## points are there. A man who takes up the fury is trusted the less by
+## every lord.
+func invest(way: int) -> bool:
+	var had := Way.rank(c.band, way)
+	if not Way.invest(c.band, way):
+		return false
+	var d := Way.def(way)
+	_say("%s takes a step down the %s's way: %s." % [c.band.leader.display_name, str(d.name).to_lower(), d.ranks[had].name])
+	if way == Way.Id.BERSERK and had == 0:
+		for fid in c.world.factions:
+			FactionAI.shift(c.world, fid, FactionAI.BAND, -10)
+		_say("Word of it goes round the halls, and the lords like him the less.")
+	return true
 
 
 func _work_here() -> Array:
@@ -514,8 +848,7 @@ func _take_work(o: Dictionary) -> void:
 	elif r.has("voyage_required"):
 		contract = o
 		_say("The work waits at %s; the lord's steward tells the way." % c.world.place(r.voyage_required).display_name)
-		for id in Voyage.plan(c.world, c.band.location, str(r.voyage_required)):
-			c.band.known_places[id] = true
+		c.band.known_places[str(r.voyage_required)] = true
 	else:
 		_finish_work(o, true)
 
@@ -527,7 +860,7 @@ func _finish_work(o: Dictionary, success: bool) -> void:
 		Way.add_deed(c.band, Way.Id.KINGS_MAN, wr.deed_contract)
 		Sandbox._promote(c, said)
 		c.tally.contracts = c.tally.get("contracts", 0) + 1
-	c.cal.advance_days(int(o.get("days", 10)))
+	_pass(float(int(o.get("days", 10))))
 
 
 func _holmgang(p: Place) -> void:
@@ -536,7 +869,7 @@ func _holmgang(p: Place) -> void:
 	Callings.challenge(wr, c.world, c.band, p, terms, said)
 	if Callings.holmgang_yields(_fork("yield"), c.band):
 		Callings.after_holmgang(wr, c.world, c.band, p, terms, 1, true, said, _fork("holm_feud"))
-		c.cal.advance_days(wr.holmgang_days)
+		_pass(float(wr.holmgang_days))
 		return
 	var opponent := Callings.holmgang_opponent(_fork("opponent"), wr, p, terms, c.combat_rules)
 	_say("%s takes up his shield and comes to the island." % opponent.display_name)
@@ -568,7 +901,7 @@ func _plead(family: String) -> void:
 	var tc := Thing.open_case(wr, c.band, kind, family, Feud.wergild(wr, c.band.rank), wronged)
 	var spend := mini(int(c.band.silver * wr.thing_spend_fraction), wr.thing_spend_max)
 	var verdict := Thing.run(_fork("case"), wr, c.world, c.band, tc, spend, said)
-	c.cal.advance_days(wr.thing_days)
+	_pass(float(wr.thing_days))
 	c.tally.thing_cases = c.tally.get("thing_cases", 0) + 1
 	if verdict != WorldTypes.Verdict.FAILED:
 		f["settled"] = true
@@ -620,40 +953,33 @@ func sell(good: int, units: int) -> int:
 func _market_days() -> void:
 	if _traded_at != c.band.location:
 		_traded_at = c.band.location
-		c.cal.advance_days(c.world_rules.market_days)
+		_pass(float(c.world_rules.market_days))
 
 
 # --- Settling up ------------------------------------------------------------------
 
-## After anything has happened: go on with what was interrupted, as far as
-## the next thing a person must answer.
+## After anything has happened: finish what waits on it, as far as the
+## next thing a person must answer.
 func _settle() -> void:
 	var guard := 0
-	while guard < 80:
+	while guard < 8:
 		guard += 1
 		if c.over:
 			decisions.clear()
 			fight = {}
+			roam.stop()
 			return
 		if not decisions.is_empty() or not fight.is_empty():
 			return
-		if destination != "" and c.band.location != destination:
-			_voyage()
-			continue
-		destination = ""
+		c.band.location = roam.grid.place_at(roam.pos)
 		if not contract.is_empty() and c.band.location == str(contract.get("to_place", "")):
 			var o := contract
 			contract = {}
 			_finish_work(o, true)
 			continue
 		if not wintering and days_left() <= 0:
-			_say("The season is closing: there is no more sailing this year.")
+			_say("The season is closing: there is no more travelling this year.")
 			wintering = true
-			if c.band.location != c.band.home:
-				destination = c.band.home
-				_legs = 0
-				_voyage()
-				continue
 		if wintering:
 			_winter()
 			continue
@@ -662,24 +988,46 @@ func _settle() -> void:
 
 func _winter() -> void:
 	wintering = false
-	destination = ""
+	roam.stop()
 	var wr := c.world_rules
-	if c.band.location != c.band.home:
-		_say("%s winters away from home, at %s." % [c.band.leader.display_name, here().display_name])
+	var band := c.band
+	var p := here()
+	if p == null or not SETTLED.has(p.kind):
+		# Caught out by the snow: the band makes for the nearest roof it knows.
+		var best := ""
+		var best_d := INF
+		for id in band.known_places:
+			var q := c.world.place(id)
+			if q != null and q.is_open(c.world.year) and SETTLED.has(q.kind) and q.pos.distance_to(roam.pos) < best_d:
+				best_d = q.pos.distance_to(roam.pos)
+				best = id
+		if best != "":
+			if band.ship != null and roam.aboard:
+				roam.ship_at = Vector2.INF  # she comes with them
+			roam.pos = MapGrid.centre(roam.grid.place_cell[best])
+			roam.aboard = band.ship != null and roam.ship_at == Vector2.INF
+			band.location = best
+			p = here()
+			_say("The snow catches the band abroad: it makes for %s." % p.display_name)
+	if p != null and p.id != band.home:
+		var cost := mini(band.silver, wr.guest_winter_per_man * band.fighters().size())
+		band.silver -= cost
+		band.home = p.id
+		_say("%s winters at %s as a guest (%d oz for the lodging)." % [band.leader.display_name, p.display_name, cost])
 	# A feud he said he would answer at the Thing and did not goes on.
-	for f in c.band.unsettled_feuds():
+	for f in band.unsettled_feuds():
 		if int(f.get("at_thing", -1)) == c.cal.year:
-			Feud.escalate(wr, c.band, str(f.get("family", f.get("against", ""))), said)
+			Feud.escalate(wr, band, str(f.get("family", f.get("against", ""))), said)
 	if not contract.is_empty():
-		Contracts.complete(wr, c.world, c.band, contract, false, said)
+		Contracts.complete(wr, c.world, band, contract, false, said)
 		contract = {}
 	c._settle_vow()
 	var mark := c.log.size()
-	var chron := c.band.chronicle.size()
+	var chron := band.chronicle.size()
 	c.winter()
 	winter_report = PackedStringArray()
-	for i in range(chron, c.band.chronicle.size()):
-		winter_report.append(c.band.chronicle[i])
+	for i in range(chron, band.chronicle.size()):
+		winter_report.append(band.chronicle[i])
 	for i in range(mark, c.log.size()):
 		var line := c.log[i]
 		if line.contains(" effort in ") or line.contains(" drills "):
@@ -687,10 +1035,10 @@ func _winter() -> void:
 		winter_report.append(line)
 	_say("Winter of %d passes." % c.cal.year)
 	if c.over:
-		_say("The saga of %s ends here: %s." % [Way.title(c.band), c.over_reason])
+		_say("The saga of %s ends here: %s." % [Way.title(band), c.over_reason])
 		return
 	c.cal.next_year()
-	c.band.year = c.cal.year
+	band.year = c.cal.year
 	begin_summer()
 
 
@@ -705,7 +1053,8 @@ func status() -> Dictionary:
 	for g in goods:
 		cargo.append("%d %s" % [int(band.cargo[g]), WorldTypes.GOOD_NAMES[g]])
 	return {
-		"title": Way.title(band), "way": Way.name_of(band.way) if band.way >= 0 else "", "year": c.cal.year, "day": c.cal.day,
+		"title": Way.title(band), "way": Way.standing(band), "points": Way.points_free(band), "where": whereabouts(),
+		"ship_with": roam.aboard, "ship_trouble": ship_trouble(), "year": c.cal.year, "day": c.cal.day,
 		"days_left": maxi(0, days_left()), "silver": band.silver, "food": band.food,
 		"men": band.fighters(c.rules).size(), "hurt": band.hurt(c.rules).size(),
 		"ship": WorldTypes.SHIP_NAMES[band.ship.kind] if band.ship != null else "no ship",

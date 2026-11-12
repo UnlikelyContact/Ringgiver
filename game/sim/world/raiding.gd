@@ -90,7 +90,8 @@ static func after_raid(rng: SimRng, rules: WorldRules, world: World, band: Band,
 		var captives := 0
 		var guarded := place.kind == WorldTypes.PlaceKind.HALL and place.defenses >= rules.no_captives_defense
 		if not guarded and place.kind != WorldTypes.PlaceKind.BAY:
-			captives = maxi(0, rules.captives_per_win + rng.randi_range(-rules.captives_spread, rules.captives_spread))
+			captives = maxi(0, rules.captives_per_win + rng.randi_range(-rules.captives_spread, rules.captives_spread)) \
+					+ int(band.gift("raid_captives", 0))
 		band.captives += captives
 		out.captives = captives
 		var goods_text := PackedStringArray()
@@ -120,11 +121,12 @@ static func strandhogg(rng: SimRng, rules: WorldRules, world: World, band: Band,
 	var silver := mini(rules.strandhogg_silver, place.wealth)
 	place.wealth -= silver
 	band.silver += silver
-	band.food += rules.strandhogg_food
-	out.food = rules.strandhogg_food
+	var food: int = rules.strandhogg_food * int(band.gift("strandhogg", 1))
+	band.food += food
+	out.food = food
 	out.silver = silver
 	_raise_alert(world, place, 1, 0)
-	log.append("strandhögg at %s: %d rations, %d oz" % [place.display_name, rules.strandhogg_food, silver])
+	log.append("strandhögg at %s: %d rations, %d oz" % [place.display_name, food, silver])
 	if place.family != "" and rng.randf() < rules.strandhogg_feud_chance:
 		band.add_feud(place.family, "strandhögg at %s" % place.display_name, place.id)
 		out.feud = true

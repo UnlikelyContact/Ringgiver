@@ -52,6 +52,30 @@ const PLACES := [
 	{"id": "iceland", "name": "the Iceland land-take", "region": R.ICELAND, "kind": K.FARMSTEAD, "pos": Vector2(-40, 10), "wealth": 10, "defenses": 0, "faction": "", "family": "", "open_year": 874},
 ]
 
+## Rough shores, in the map's leagues (x east, y south): what is land. The
+## free-roam map (MapGrid) is cut from these, with a fjord carved in to
+## every place that would otherwise stand away from the water.
+const SHORES := [
+	# Norway and the Swedish lands
+	[Vector2(36, 83), Vector2(30, 77), Vector2(24, 73), Vector2(21, 65), Vector2(20, 56), Vector2(21, 48), Vector2(24, 42),
+		Vector2(25, 36), Vector2(27, 30), Vector2(33, 26), Vector2(41, 21), Vector2(45, 17), Vector2(51, 10), Vector2(55, 3),
+		Vector2(59, -4), Vector2(66, -7), Vector2(74, -5), Vector2(80, 4), Vector2(86, 16), Vector2(92, 30), Vector2(98, 42),
+		Vector2(106, 52), Vector2(111, 60), Vector2(110, 68), Vector2(104, 76), Vector2(97, 82), Vector2(91, 91), Vector2(84, 96),
+		Vector2(78, 91), Vector2(73, 83), Vector2(68, 76), Vector2(65, 68), Vector2(63, 61), Vector2(61, 64), Vector2(62, 72),
+		Vector2(57, 77), Vector2(49, 81), Vector2(42, 82)],
+	# Jutland
+	[Vector2(47, 101), Vector2(53, 97), Vector2(60, 99), Vector2(64, 105), Vector2(66, 113), Vector2(60, 119), Vector2(52, 119), Vector2(46, 111)],
+	# Britain
+	[Vector2(-7, 57), Vector2(1, 55), Vector2(6, 61), Vector2(10, 71), Vector2(14, 81), Vector2(12, 97), Vector2(0, 101),
+		Vector2(-8, 91), Vector2(-12, 77), Vector2(-13, 66)],
+	# Ireland
+	[Vector2(-37, 72), Vector2(-28, 70), Vector2(-24, 78), Vector2(-26, 89), Vector2(-35, 93), Vector2(-41, 84)],
+	# Iceland
+	[Vector2(-51, 6), Vector2(-41, 2), Vector2(-30, 6), Vector2(-32, 14), Vector2(-44, 17)],
+	# Gotland
+	[Vector2(110, 76), Vector2(113, 77), Vector2(114, 83), Vector2(111, 85), Vector2(109, 81)],
+]
+
 ## [from, to, days, open_sea]
 const LANES := [
 	["kaupang", "borre", 1, false], ["borre", "lier", 1, false], ["kaupang", "eidsvoll", 2, false],

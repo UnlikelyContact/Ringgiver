@@ -1,36 +1,18 @@
 class_name MapScreen
 extends Control
-## The summer on the map: the coast and its places on the left, the band,
-## the place and what can be done there on the right. All of it is a face
-## on Journey: every button is one of its calls, and after each the screen
-## reads the journey again (`refresh`).
+## The summer on the free-roam map: the land and the water on the left,
+## with the band, its ship and whoever else is abroad moving on it as the
+## days pass; the band, the place and what can be done there on the right.
+## Tap the map to go there. All of it is a face on Journey: every button
+## is one of its calls, and after each the screen reads the journey again
+## (`refresh`).
 
 const PANEL_W := 430.0
-const SEA := Color("263a4f")
-const LAND := Color("4d5548")
-const LAND_EDGE := Color("3a4038")
-
-## Rough shores, in the map's leagues (x east, y south), for the eye only.
-const SHORES := [
-	# Norway and the Swedish lands
-	[Vector2(36, 83), Vector2(30, 77), Vector2(24, 73), Vector2(21, 65), Vector2(20, 56), Vector2(21, 48), Vector2(24, 42),
-		Vector2(25, 36), Vector2(27, 30), Vector2(33, 26), Vector2(41, 21), Vector2(45, 17), Vector2(51, 10), Vector2(55, 3),
-		Vector2(59, -4), Vector2(66, -7), Vector2(74, -5), Vector2(80, 4), Vector2(86, 16), Vector2(92, 30), Vector2(98, 42),
-		Vector2(106, 52), Vector2(111, 60), Vector2(110, 68), Vector2(104, 76), Vector2(97, 82), Vector2(91, 91), Vector2(84, 96),
-		Vector2(78, 91), Vector2(73, 83), Vector2(68, 76), Vector2(65, 68), Vector2(63, 61), Vector2(61, 64), Vector2(62, 72),
-		Vector2(57, 77), Vector2(49, 81), Vector2(42, 82)],
-	# Jutland
-	[Vector2(47, 101), Vector2(53, 97), Vector2(60, 99), Vector2(64, 105), Vector2(66, 113), Vector2(60, 119), Vector2(52, 119), Vector2(46, 111)],
-	# Britain
-	[Vector2(-7, 57), Vector2(1, 55), Vector2(6, 61), Vector2(10, 71), Vector2(14, 81), Vector2(12, 97), Vector2(0, 101),
-		Vector2(-8, 91), Vector2(-12, 77), Vector2(-13, 66)],
-	# Ireland
-	[Vector2(-37, 72), Vector2(-28, 70), Vector2(-24, 78), Vector2(-26, 89), Vector2(-35, 93), Vector2(-41, 84)],
-	# Iceland
-	[Vector2(-51, 6), Vector2(-41, 2), Vector2(-30, 6), Vector2(-32, 14), Vector2(-44, 17)],
-	# Gotland
-	[Vector2(110, 76), Vector2(113, 77), Vector2(114, 83), Vector2(111, 85), Vector2(109, 81)],
-]
+## Days that pass in a second of travelling, at the plain pace.
+const DAYS_PER_SECOND := 1.5
+const ZOOM_MIN := 4.0
+const ZOOM_MAX := 34.0
+const TERRAIN_COLORS := [Color("1c2e42"), Color("2a4560"), Color("6b7560"), Color("58624f"), Color("8a8c86")]
 
 var journey: Journey
 var host: Node
@@ -40,9 +22,15 @@ var status_label: Label
 var place_box: VBoxContainer
 var log_label: Label
 var modal: PanelContainer
-var men_panel: PanelContainer
+var side_panel: PanelContainer
+var ways_btn: Button
+var pause_btn: Button
+var speed_btn: Button
 var quick_box: CheckBox
+var paused := false
+var fast := false
 var _quick := false
+var _seen := ""  # what the panel was last drawn for, so it is redrawn only on a change
 
 
 func setup(p_journey: Journey, p_host: Node) -> void:
@@ -53,20 +41,47 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	canvas.screen = self
 	canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
 	canvas.offset_right = -PANEL_W
+	canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	canvas.clip_contents = true
 	add_child(canvas)
+	canvas.centre_on(journey.roam.pos)
+
+	# Time and the view, over the map's top edge.
+	var bar := HBoxContainer.new()
+	bar.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	bar.offset_left = 8
+	bar.offset_top = 6
+	bar.add_theme_constant_override("separation", 6)
+	add_child(bar)
+	pause_btn = _small("Pause", func() -> void:
+		paused = not paused
+		_time_buttons())
+	bar.add_child(pause_btn)
+	speed_btn = _small("Faster", func() -> void:
+		fast = not fast
+		_time_buttons())
+	bar.add_child(speed_btn)
+	bar.add_child(_small("Stop", func() -> void:
+		journey.roam.stop()
+		refresh()))
+	bar.add_child(_small("+", func() -> void: canvas.zoom_by(1.3)))
+	bar.add_child(_small("-", func() -> void: canvas.zoom_by(1.0 / 1.3)))
+	bar.add_child(_small("Follow", func() -> void:
+		canvas.follow = true
+		canvas.queue_redraw()))
 
 	log_label = Label.new()
 	log_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	log_label.anchor_right = 1.0
 	log_label.offset_left = 10
 	log_label.offset_right = -PANEL_W - 10
-	log_label.offset_top = -132
+	log_label.offset_top = -118
 	log_label.offset_bottom = -6
 	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	log_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	log_label.add_theme_font_size_override("font_size", 13)
 	log_label.add_theme_color_override("font_color", Palette.TEXT)
-	log_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	log_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	log_label.add_theme_constant_override("shadow_offset_x", 1)
 	log_label.add_theme_constant_override("shadow_offset_y", 1)
 	log_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -85,21 +100,19 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	status_label.add_theme_font_size_override("font_size", 14)
 	status_label.add_theme_color_override("font_color", Palette.TEXT)
 	col.add_child(status_label)
-	var bar := HBoxContainer.new()
-	bar.add_theme_constant_override("separation", 8)
-	col.add_child(bar)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	col.add_child(row)
 	var men_btn := Button.new()
 	men_btn.text = "Your men"
 	men_btn.custom_minimum_size = Vector2(110, 36)
 	men_btn.pressed.connect(_show_men)
-	bar.add_child(men_btn)
-	var here_btn := Button.new()
-	here_btn.text = "Where you are"
-	here_btn.custom_minimum_size = Vector2(130, 36)
-	here_btn.pressed.connect(func() -> void:
-		selected = journey.c.band.location
-		refresh())
-	bar.add_child(here_btn)
+	row.add_child(men_btn)
+	ways_btn = Button.new()
+	ways_btn.text = "Your ways"
+	ways_btn.custom_minimum_size = Vector2(150, 36)
+	ways_btn.pressed.connect(_show_ways)
+	row.add_child(ways_btn)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -117,15 +130,30 @@ func setup(p_journey: Journey, p_host: Node) -> void:
 	modal.visible = false
 	modal.add_theme_stylebox_override("panel", _plate(Color("1f2226"), 16))
 	add_child(modal)
-	men_panel = PanelContainer.new()
-	men_panel.add_theme_stylebox_override("panel", _plate(Color("1f2226"), 16))
-	men_panel.anchor_left = 0.06
-	men_panel.anchor_right = 0.94
-	men_panel.anchor_top = 0.06
-	men_panel.anchor_bottom = 0.94
-	men_panel.visible = false
-	add_child(men_panel)
+	side_panel = PanelContainer.new()
+	side_panel.anchor_left = 0.06
+	side_panel.anchor_right = 0.94
+	side_panel.anchor_top = 0.06
+	side_panel.anchor_bottom = 0.94
+	side_panel.visible = false
+	side_panel.add_theme_stylebox_override("panel", _plate(Color("1f2226"), 16))
+	add_child(side_panel)
+	_time_buttons()
 	refresh()
+
+
+func _small(text: String, on: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(54, 34)
+	b.add_theme_font_size_override("font_size", 13)
+	b.pressed.connect(on)
+	return b
+
+
+func _time_buttons() -> void:
+	pause_btn.text = "Go on" if paused else "Pause"
+	speed_btn.text = "Slower" if fast else "Faster"
 
 
 ## A flat, opaque plate for a panel, with a gold hairline and some margin.
@@ -147,6 +175,34 @@ func _text(text: String, size: int, color: Color) -> Label:
 	return l
 
 
+# --- The days passing ---------------------------------------------------------------
+
+func _process(delta: float) -> void:
+	if journey == null or not visible or host == null:
+		return
+	if modal.visible or side_panel.visible or paused or not journey.moving():
+		return
+	journey.advance(delta * DAYS_PER_SECOND * (3.0 if fast else 1.0))
+	if not journey.fight.is_empty():
+		refresh()
+		return
+	_status()
+	var now := _state_key()
+	if now != _seen:
+		if journey.c.band.location != "":
+			selected = journey.c.band.location
+		refresh()
+	else:
+		log_label.text = "\n".join(journey.said.slice(maxi(0, journey.said.size() - 5)))
+		canvas.queue_redraw()
+
+
+## What the right-hand panel depends on: redrawn when this changes.
+func _state_key() -> String:
+	return "%s|%d|%s|%s|%d|%s" % [journey.c.band.location, journey.decisions.size(), journey.moving(), selected,
+			journey.winter_report.size(), journey.c.over]
+
+
 # --- Reading the journey ---------------------------------------------------------
 
 ## Draws everything again from the journey, and hands a waiting fight to
@@ -158,27 +214,39 @@ func refresh() -> void:
 		host.start_battle()
 		return
 	var band := journey.c.band
-	if journey.c.world.place(selected) == null or not band.knows(selected):
+	if selected != "" and (journey.c.world.place(selected) == null or not band.knows(selected)):
 		selected = band.location
+	_status()
+	log_label.text = "\n".join(journey.said.slice(maxi(0, journey.said.size() - 5)))
+	_fill_place()
+	_fill_modal()
+	_seen = _state_key()
+	canvas.queue_redraw()
+
+
+func _status() -> void:
 	var s := journey.status()
 	var lines := PackedStringArray()
-	lines.append("%s%s    %d, day %d  (%d days of summer left)" % [s.title, (", " + str(s.way).to_lower()) if str(s.way) != "" else "",
-			s.year, s.day, s.days_left])
-	lines.append("Silver %d oz   Food %d   Men %d%s   %s%s" % [s.silver, s.food, s.men, (" (+%d hurt)" % s.hurt) if int(s.hurt) > 0 else "",
-			str(s.ship).capitalize(), (" (hurt %d)" % s.ship_damage) if int(s.ship_damage) > 0 else ""])
+	lines.append("%s%s" % [s.title, (", " + str(s.way)) if str(s.way) != "" else ""])
+	lines.append("%d, day %d (%d days of summer left)   %s" % [s.year, s.day, s.days_left, Journey._cap(str(s.where))])
+	lines.append("Silver %d oz   Food %d   Men %d%s" % [s.silver, s.food, s.men, (" (+%d hurt)" % s.hurt) if int(s.hurt) > 0 else ""])
+	var ship := "No ship: you go on foot"
+	if str(s.ship) != "no ship":
+		ship = "%s%s, %s" % [Journey._cap(str(s.ship)), (" (hurt %d)" % s.ship_damage) if int(s.ship_damage) > 0 else "",
+				"with you" if s.ship_with else "left on the beach"]
+		if str(s.ship_trouble) != "":
+			ship += ": " + str(s.ship_trouble)
+	lines.append(ship)
 	lines.append("Fame %d   Honor %d   Luck %d   %s%s%s" % [s.fame, s.honor, s.luck, str(s.rank).capitalize(),
 			"   OUTLAW" if s.outlaw else "", ("   Feuds %d" % s.feuds) if int(s.feuds) > 0 else ""])
-	var hold := "Hold: %s (room for %d)" % [s.cargo if str(s.cargo) != "" else "empty", s.cargo_room]
+	var hold := "Carrying: %s (room for %d)" % [s.cargo if str(s.cargo) != "" else "nothing", s.cargo_room]
 	if int(s.captives) > 0:
 		hold += "   Captives %d" % s.captives
 	lines.append(hold)
 	if str(s.work) != "":
 		lines.append("Work in hand: %s" % s.work)
 	status_label.text = "\n".join(lines)
-	log_label.text = "\n".join(journey.said.slice(maxi(0, journey.said.size() - 6)))
-	_fill_place()
-	_fill_modal()
-	canvas.queue_redraw()
+	ways_btn.text = "Your ways (%d to spend)" % int(s.points) if int(s.points) > 0 else "Your ways"
 
 
 func _fill_place() -> void:
@@ -186,10 +254,16 @@ func _fill_place() -> void:
 		ch.queue_free()
 	var world := journey.c.world
 	var band := journey.c.band
-	var p := world.place(selected)
+	var p := world.place(selected) if selected != "" else null
+	var here := p != null and p.id == band.location
 	if p == null:
+		# The wilds, or the water.
+		place_box.add_child(_text(Journey._cap(journey.whereabouts()), 18, Palette.GOLD))
+		place_box.add_child(_text("Tap the map to go there: the land on foot, the water if you have a ship. Tap a place to make for it.", 13, Palette.DIM))
+		if journey.moving():
+			place_box.add_child(_text("On your way.", 13, Palette.TEXT))
+		_add_actions()
 		return
-	var here := p.id == band.location
 	place_box.add_child(_text(Journey._cap(p.display_name.trim_prefix("the ")), 18, Palette.GOLD))
 	var lord := FactionAI.ruler_of(world, p.id)
 	var about := "A %s in %s" % [WorldTypes.PLACE_KIND_NAMES[p.kind], WorldTypes.REGION_NAMES[p.region]]
@@ -199,24 +273,31 @@ func _fill_place() -> void:
 		about += ". Home of %s" % p.family
 	about += "."
 	if p.id == band.home:
-		about += " Your own hall is here."
+		about += " You wintered here."
 	if band.friends.has(p.family):
 		about += " They are your friends."
 	if not Feud.find(band, p.family).is_empty():
 		about += " There is a feud between you."
 	place_box.add_child(_text(about, 13, Palette.DIM))
+	if band.gift("price_talk", false) and p.has_market and not here:
+		var talk := PackedStringArray()
+		for g in WorldTypes.Good.values():
+			if int(p.stock.get(g, 0)) > 0 and g != WorldTypes.Good.GRAIN:
+				talk.append("%s %d" % [WorldTypes.GOOD_NAMES[g], Market.price(journey.c.world_rules, p, g)])
+		place_box.add_child(_text("Prices there, as you hear them: %s." % ", ".join(talk), 12, Palette.TEXT))
 	if not here:
 		var days := journey.days_to(p.id)
-		var sail := Button.new()
-		sail.text = ("Sail here (%d days)" % days) if days >= 0 else "No way there is known"
-		sail.disabled = days < 0 or not journey.can_act()
-		sail.custom_minimum_size = Vector2(0, 46)
-		sail.add_theme_font_size_override("font_size", 16)
-		sail.pressed.connect(func() -> void:
-			journey.sail(p.id)
-			selected = journey.c.band.location
+		var go := Button.new()
+		go.text = ("Make for it (%d days)" % days) if days >= 0 else "No way there: it needs a ship"
+		if journey.moving():
+			go.text = "On your way (%d days)" % days if days >= 0 else go.text
+		go.disabled = days < 0 or not journey.can_act()
+		go.custom_minimum_size = Vector2(0, 46)
+		go.add_theme_font_size_override("font_size", 16)
+		go.pressed.connect(func() -> void:
+			journey.go_to_place(p.id)
 			refresh())
-		place_box.add_child(sail)
+		place_box.add_child(go)
 		return
 	# The market first, then the deeds.
 	var goods := journey.market()
@@ -249,6 +330,10 @@ func _fill_place() -> void:
 					refresh())
 				line.add_child(b)
 			place_box.add_child(line)
+	_add_actions()
+
+
+func _add_actions() -> void:
 	for a in journey.actions():
 		var b := Button.new()
 		b.text = str(a.label)
@@ -261,6 +346,8 @@ func _fill_place() -> void:
 		b.pressed.connect(func() -> void:
 			journey.act(id)
 			selected = journey.c.band.location
+			canvas.follow = true
+			canvas.centre_on(journey.roam.pos)
 			refresh())
 		place_box.add_child(b)
 		if str(a.get("hint", "")) != "":
@@ -283,7 +370,7 @@ func _fill_modal() -> void:
 		var told := PackedStringArray()
 		for line in c.band.chronicle.slice(maxi(0, c.band.chronicle.size() - 12)):
 			told.append(line)
-		box.add_child(_scrolling("%s.\n\n%s" % [c.over_reason.capitalize(), "\n".join(told)]))
+		box.add_child(_scrolling("%s.\n\n%s" % [Journey._cap(c.over_reason), "\n".join(told)]))
 		var again := Button.new()
 		again.text = "Another saga"
 		again.custom_minimum_size = Vector2(200, 46)
@@ -301,6 +388,8 @@ func _fill_modal() -> void:
 		spring.pressed.connect(func() -> void:
 			journey.winter_report = PackedStringArray()
 			selected = journey.c.band.location
+			canvas.follow = true
+			canvas.centre_on(journey.roam.pos)
 			refresh())
 		box.add_child(spring)
 		return
@@ -333,7 +422,6 @@ func _fill_modal() -> void:
 		b.pressed.connect(func() -> void:
 			journey.quick = _quick
 			journey.answer(id)
-			selected = journey.c.band.location
 			refresh())
 		row.add_child(b)
 
@@ -348,20 +436,35 @@ func _scrolling(text: String) -> ScrollContainer:
 	return scroll
 
 
-# --- Your men ------------------------------------------------------------------------
+# --- Your men, your ways ----------------------------------------------------------------
 
-func _show_men() -> void:
-	for ch in men_panel.get_children():
+func _open_side(title: String) -> VBoxContainer:
+	for ch in side_panel.get_children():
 		ch.queue_free()
-	men_panel.visible = true
-	var c := journey.c
-	var band := c.band
+	side_panel.visible = true
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
-	men_panel.add_child(box)
-	box.add_child(_text("%s and his men" % Way.title(band), 22, Palette.GOLD))
+	side_panel.add_child(box)
+	box.add_child(_text(title, 22, Palette.GOLD))
+	return box
+
+
+func _close_side(box: VBoxContainer) -> void:
+	var close := Button.new()
+	close.text = "Back to the map"
+	close.custom_minimum_size = Vector2(200, 44)
+	close.pressed.connect(func() -> void:
+		side_panel.visible = false
+		refresh())
+	box.add_child(close)
+
+
+func _show_men() -> void:
+	var c := journey.c
+	var band := c.band
+	var box := _open_side("%s and his men" % Way.title(band))
 	var lines := PackedStringArray()
-	lines.append("Might, Skill, Grit, Nerve, Wits. A man too hurt stays with the ship.")
+	lines.append("Might, Skill, Grit, Nerve, Wits. A man too hurt stays behind when it comes to a fight.")
 	for m in band.fighters():
 		var w := m.current_wound(c.rules)
 		var bits := PackedStringArray()
@@ -371,7 +474,7 @@ func _show_men() -> void:
 		if m != band.leader:
 			bits.append("loyalty %d, wants %s" % [m.loyalty, CampaignTypes.AMBITION_NAMES[m.ambition]])
 		if w != CombatTypes.Wound.UNHURT:
-			bits.append(CombatTypes.WOUND_NAMES[w] + (" (with the ship)" if m.too_hurt_to_fight(c.rules) and m != band.leader else ""))
+			bits.append(CombatTypes.WOUND_NAMES[w] + (" (stays behind)" if m.too_hurt_to_fight(c.rules) and m != band.leader else ""))
 		for mm in m.maims:
 			bits.append(CampaignTypes.MAIM_NAMES[mm])
 		if m.kills > 0:
@@ -379,31 +482,71 @@ func _show_men() -> void:
 		for t in m.traits:
 			bits.append(t)
 		lines.append("  ·  ".join(bits))
-	var deeds := PackedStringArray()
-	for way in Way.Id.values():
-		var pts := int(band.deeds.get(way, 0))
-		if pts > 0:
-			deeds.append("%s %d" % [Way.name_of(way).to_lower(), pts])
 	lines.append("")
-	lines.append("Deeds the saga counts: %s. A name comes at %d." % [", ".join(deeds) if not deeds.is_empty() else "none yet", Way.EPITHET_DEEDS])
 	if not band.friends.is_empty():
 		lines.append("Friends won by counsel and deeds: %s." % ", ".join(band.friends.keys()))
 	for f in band.unsettled_feuds():
 		lines.append("Feud with %s (%s)." % [str(f.get("family", f.get("against", ""))), str(f.get("cause", ""))])
 	box.add_child(_scrolling("\n".join(lines)))
-	var close := Button.new()
-	close.text = "Back to the map"
-	close.custom_minimum_size = Vector2(200, 44)
-	close.pressed.connect(func() -> void: men_panel.visible = false)
-	box.add_child(close)
+	_close_side(box)
+
+
+## The ways of life: the deeds done, the points they have earned, and the
+## steps to be taken down any path, in any mixture.
+func _show_ways() -> void:
+	var band := journey.c.band
+	var box := _open_side("Your ways")
+	var free := Way.points_free(band)
+	var deeds := PackedStringArray()
+	for way in Way.Id.values():
+		var pts := int(band.deeds.get(way, 0))
+		if pts > 0:
+			deeds.append("%s %d" % [Way.name_of(way).to_lower(), pts])
+	box.add_child(_text("Points to spend: %d. A point comes with every %d deeds of any kind, and you take steps down whichever ways you like. Deeds so far: %s. The saga names a man at %d deeds of one kind." % [
+			free, Way.POINT_DEEDS, ", ".join(deeds) if not deeds.is_empty() else "none yet", Way.EPITHET_DEEDS], 13, Palette.TEXT))
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 4)
+	scroll.add_child(list)
+	for way in Way.Id.values():
+		var d := Way.def(way)
+		var r := Way.rank(band, way)
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 10)
+		var name := _text("%s  %s%s   %s" % [str(d.name), "●".repeat(r), "○".repeat(Way.MAX_RANK - r), d.blurb], 15, Palette.GOLD)
+		name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(name)
+		var cost := Way.next_cost(band, way)
+		if cost > 0:
+			var b := Button.new()
+			b.text = "%s (%d)" % [d.ranks[r].name, cost]
+			b.disabled = not Way.can_invest(band, way)
+			b.custom_minimum_size = Vector2(170, 38)
+			var w: int = way
+			b.pressed.connect(func() -> void:
+				journey.invest(w)
+				_show_ways())
+			head.add_child(b)
+		list.add_child(head)
+		for i in Way.MAX_RANK:
+			var step: Dictionary = d.ranks[i]
+			list.add_child(_text("    %s: %s" % [step.name, step.text], 12, Palette.TEXT if i < r else Palette.DIM))
+	_close_side(box)
 
 
 # --- The map itself ------------------------------------------------------------------
 
-## A tap on the map at `at` (canvas pixels): the nearest known place.
+## A tap on the map at `at` (canvas pixels): a place the band knows, or
+## the ground or water there. Either way the band makes for it.
 func tap_map(at: Vector2) -> void:
+	if not journey.can_act():
+		return
 	var best := ""
-	var best_d := 26.0
+	var best_d := 20.0
 	for id in journey.c.band.known_places:
 		var p := journey.c.world.place(id)
 		if p == null or not p.is_open(journey.c.world.year):
@@ -414,88 +557,109 @@ func tap_map(at: Vector2) -> void:
 			best = id
 	if best != "":
 		selected = best
-		refresh()
+		if best != journey.c.band.location:
+			journey.go_to_place(best)
+	else:
+		selected = ""
+		journey.go_to_point(canvas.from_px(at))
+	canvas.follow = true
+	refresh()
 
 
 class MapCanvas:
 	extends Control
 	var screen: MapScreen
-	var _origin := Vector2.ZERO
-	var _scale := 1.0
+	var cam := Vector2(26, 52)
+	var zoom := 14.0
+	var follow := true
+	var _texture: ImageTexture = null
+	var _pressed := false
+	var _dragged := false
+	var _press_at := Vector2.ZERO
 
-	func _gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			screen.tap_map(event.position)
+	func centre_on(v: Vector2) -> void:
+		cam = v
+		queue_redraw()
+
+	func zoom_by(f: float) -> void:
+		zoom = clampf(zoom * f, MapScreen.ZOOM_MIN, MapScreen.ZOOM_MAX)
+		queue_redraw()
 
 	func to_px(leagues: Vector2) -> Vector2:
-		return _origin + leagues * _scale
+		return size / 2.0 + (leagues - cam) * zoom
 
-	func _fit() -> void:
-		var band := screen.journey.c.band
-		var world := screen.journey.c.world
-		var lo := Vector2(INF, INF)
-		var hi := Vector2(-INF, -INF)
-		for id in band.known_places:
-			var p := world.place(id)
-			if p == null or not p.is_open(world.year):
-				continue
-			lo = lo.min(p.pos)
-			hi = hi.max(p.pos)
-		if lo.x == INF:
-			lo = Vector2.ZERO
-			hi = Vector2(40, 40)
-		var pad := 9.0
-		lo -= Vector2(pad, pad)
-		hi += Vector2(pad + 14.0, pad)  # room for the names on the right
-		var span := (hi - lo).max(Vector2(44, 44))
-		var centre := (lo + hi) / 2.0
-		_scale = minf(size.x / span.x, size.y / span.y)
-		_origin = size / 2.0 - centre * _scale
+	func from_px(px: Vector2) -> Vector2:
+		return cam + (px - size / 2.0) / zoom
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+				zoom_by(1.15)
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+				zoom_by(1.0 / 1.15)
+			elif event.button_index == MOUSE_BUTTON_LEFT:
+				if event.pressed:
+					_pressed = true
+					_dragged = false
+					_press_at = event.position
+				else:
+					if _pressed and not _dragged:
+						screen.tap_map(event.position)
+					_pressed = false
+		elif event is InputEventMouseMotion and _pressed:
+			if _dragged or event.position.distance_to(_press_at) > 8.0:
+				_dragged = true
+				follow = false
+				cam -= event.relative / zoom
+				queue_redraw()
+		elif event is InputEventMagnifyGesture:
+			zoom_by(event.factor)
+
+	func _make_texture() -> void:
+		var grid := screen.journey.roam.grid
+		var img := Image.create(MapGrid.W, MapGrid.H, false, Image.FORMAT_RGB8)
+		for y in MapGrid.H:
+			for x in MapGrid.W:
+				img.set_pixel(x, y, MapScreen.TERRAIN_COLORS[grid.cells[y * MapGrid.W + x]])
+		_texture = ImageTexture.create_from_image(img)
+
+	func _boat(at: Vector2, sail: Color, big: bool) -> void:
+		var k := 1.0 if big else 0.75
+		draw_colored_polygon(PackedVector2Array([at + Vector2(-9, 1) * k, at + Vector2(9, 1) * k, at + Vector2(6, 6) * k, at + Vector2(-6, 6) * k]), Palette.TIMBER)
+		draw_line(at + Vector2(0, 1) * k, at + Vector2(0, -10) * k, Palette.BONE, 1.5)
+		draw_colored_polygon(PackedVector2Array([at + Vector2(-6, -9) * k, at + Vector2(6, -9) * k, at + Vector2(6, -2) * k, at + Vector2(-6, -2) * k]), sail)
 
 	func _draw() -> void:
 		if screen == null or screen.journey == null:
 			return
-		_fit()
 		var j := screen.journey
 		var band := j.c.band
 		var world := j.c.world
+		var roam := j.roam
 		var font := ThemeDB.fallback_font
-		draw_rect(Rect2(Vector2.ZERO, size), MapScreen.SEA)
-		for shore in MapScreen.SHORES:
-			var pts := PackedVector2Array()
-			for v in shore:
-				pts.append(to_px(v))
-			draw_colored_polygon(pts, MapScreen.LAND)
-			pts.append(pts[0])
-			draw_polyline(pts, MapScreen.LAND_EDGE, 1.5)
-		# The sea lanes between places the band knows.
+		if _texture == null:
+			_make_texture()
+		if follow:
+			cam = roam.pos
+		draw_rect(Rect2(Vector2.ZERO, size), MapScreen.TERRAIN_COLORS[0])
+		draw_texture_rect(_texture, Rect2(to_px(Vector2(MapGrid.ORIGIN)), Vector2(MapGrid.W, MapGrid.H) * zoom), false)
+		# The course set.
+		if roam.moving():
+			var pts := PackedVector2Array([to_px(roam.pos)])
+			for i in range(roam.route_at, roam.route.size()):
+				pts.append(to_px(MapGrid.centre(roam.route[i])))
+			if pts.size() >= 2:
+				draw_polyline(pts, Color(Palette.GOLD, 0.8), 2.0)
+		# The places the band knows.
 		var ids: Array = band.known_places.keys()
 		ids.sort()
-		for id in ids:
-			var a := world.place(id)
-			if a == null or not a.is_open(world.year):
-				continue
-			for n in world.neighbours(id):
-				if n <= id or not band.knows(n):
-					continue
-				var b := world.place(n)
-				if b == null or not b.is_open(world.year):
-					continue
-				var col := Color(Palette.UNDYED, 0.35)
-				if world.lane_is_open_sea(id, n):
-					draw_dashed_line(to_px(a.pos), to_px(b.pos), col, 1.5, 6.0)
-				else:
-					draw_line(to_px(a.pos), to_px(b.pos), col, 1.5)
-		# The way to the place picked.
-		if screen.selected != band.location:
-			var route := Voyage.plan(world, band.location, screen.selected, band.known_places)
-			for i in range(1, route.size()):
-				draw_line(to_px(world.place(route[i - 1]).pos), to_px(world.place(route[i]).pos), Palette.GOLD, 2.5)
 		for id in ids:
 			var p := world.place(id)
 			if p == null or not p.is_open(world.year):
 				continue
-			var at := to_px(p.pos)
+			var at := to_px(MapGrid.centre(roam.grid.place_cell[id]))
+			if at.x < -60 or at.y < -20 or at.x > size.x + 20 or at.y > size.y + 20:
+				continue
 			var picked: bool = id == screen.selected
 			match p.kind:
 				WorldTypes.PlaceKind.TOWN:
@@ -521,11 +685,40 @@ class MapCanvas:
 			if picked:
 				draw_arc(at, 14.0, 0.0, TAU, 24, Palette.GOLD, 2.0)
 			var name := p.display_name.trim_prefix("the ")
-			draw_string(font, at + Vector2(12, 4), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Palette.TEXT if picked or id == band.location else Color(Palette.TEXT, 0.7))
-		# The ship, where the band is.
-		var here := world.place(band.location)
-		if here != null:
-			var s := to_px(here.pos) + Vector2(-13, -12)
-			draw_colored_polygon(PackedVector2Array([s + Vector2(-8, 0), s + Vector2(8, 0), s + Vector2(5, 5), s + Vector2(-5, 5)]), Palette.TIMBER)
-			draw_line(s + Vector2(0, 0), s + Vector2(0, -10), Palette.BONE, 1.5)
-			draw_colored_polygon(PackedVector2Array([s + Vector2(-5, -9), s + Vector2(5, -9), s + Vector2(5, -3), s + Vector2(-5, -3)]), Palette.MADDER)
+			draw_string(font, at + Vector2(12, 4) + Vector2(1, 1), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0, 0, 0, 0.7))
+			draw_string(font, at + Vector2(12, 4), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Palette.TEXT if picked or id == band.location else Color(Palette.TEXT, 0.8))
+		# The others abroad, as far as the band can see.
+		var sight: float = j.c.world_rules.sight_leagues
+		for party in roam.parties:
+			if party.pos.distance_to(roam.pos) > sight:
+				continue
+			var at := to_px(party.pos)
+			var label := ""
+			match party.kind:
+				"merchant":
+					_boat(at, Palette.BONE, false)
+					label = "merchant"
+				"raiders":
+					_boat(at, Palette.WOAD, false)
+					label = "raiders, %d" % party.men
+				"levy":
+					_boat(at, Palette.GOLD, false)
+					label = "the levy, %d" % party.men
+				_:
+					draw_circle(at, 5.0, Palette.OUTLINE)
+					draw_circle(at, 3.5, Palette.WALNUT)
+					label = "outlaws, %d" % party.men
+			if party.chasing:
+				draw_arc(at, 10.0, 0.0, TAU, 16, Palette.BLOOD, 1.5)
+			draw_string(font, at + Vector2(-20, 18), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Palette.TEXT)
+		# The ship where she lies, and the band.
+		if band.ship != null and not roam.aboard and roam.ship_at != Vector2.INF:
+			_boat(to_px(roam.ship_at), Color(Palette.MADDER, 0.6), false)
+		var me := to_px(roam.pos)
+		if band.ship != null and roam.aboard and roam.afloat():
+			_boat(me, Palette.MADDER, true)
+		else:
+			draw_circle(me, 7.0, Palette.OUTLINE)
+			draw_circle(me, 5.5, Palette.MADDER)
+			draw_line(me + Vector2(0, -5), me + Vector2(0, -16), Palette.BONE, 1.5)
+			draw_colored_polygon(PackedVector2Array([me + Vector2(0, -16), me + Vector2(8, -13), me + Vector2(0, -10)]), Palette.GOLD)

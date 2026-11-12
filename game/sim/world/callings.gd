@@ -93,7 +93,7 @@ static func verse(rng: SimRng, rules: WorldRules, world: World, band: Band, plac
 		band.verses_heard[place.id] = int(band.verses_heard.get(place.id, 0)) + 1
 		var ring := roundi(float(rules.verse_ring + place.wealth / rules.verse_wealth_per_oz) * float(band.gift("verse_gift", 1.0)))
 		band.silver += ring
-		band.fame = clampi(band.fame + rules.verse_fame, 0, 100)
+		band.fame = clampi(band.fame + rules.verse_fame * int(band.gift("verse_fame", 1)), 0, 100)
 		FactionAI.shift(world, f.id, FactionAI.BAND, rules.verse_relation)
 		Way.add_deed(band, Way.Id.SKALD, rules.deed_verse)
 		out.ok = true
@@ -173,7 +173,7 @@ static func after_champion(rules: WorldRules, world: World, band: Band, place: P
 	band.championed[place.id] = world.year
 	var who: String = band.leader.display_name if band.leader != null else "the leader"
 	if outcome == 1:
-		var fee := rules.champion_fee + place.wealth / rules.champion_wealth_per_oz
+		var fee := roundi(float(rules.champion_fee + place.wealth / rules.champion_wealth_per_oz) * float(band.gift("champion_fee", 1.0)))
 		band.silver += fee
 		band.honor = clampi(band.honor + rules.champion_honor, 0, 100)
 		band.fame = clampi(band.fame + rules.champion_fame, 0, 100)

@@ -133,6 +133,68 @@ fight (field, objective, role, enemy, doctrine, outcome) and takes
 and to try tunables, and `log` for the whole log with the field drawn
 after every round.
 
+## Origins, paths and the free-roam map (`origins.gd`, `way.gd`, `map_grid.gd`, `roam.gd`, 12 Nov 2026)
+
+This replaces what the next section says about starting as a way and
+sailing lane by lane; the deeds, the fight hand-off and the screens'
+structure stand.
+
+`Origins.DEFS` (burned_hall, younger_son, freedman: origin enum,
+followers, silver, `at`, `feud_with`). `Campaign.start_from(key, name)`;
+`Journey.begin(seed, origin_key, name)` puts the band at its place with
+no ship, knowing the places within `known_leagues_start`, and for the
+burned hall adds the feud and `Band.vengeance` (`Journey._vengeance`
+tells it when that feud is settled).
+
+`Way`: `DEFS[way].ranks[0..2]` = {name, text, gifts} (the whole of the
+edges at that step). `Band.paths` (Way.Id -> 1..3). `points_earned` =
+`START_POINTS` (1) + total deeds / `POINT_DEEDS` (6); a step costs its
+number; `can_invest`, `invest`, `refresh` (rebuilds `Band.gifts`, sets
+`Man.fury` and the trait). `standing(band)` is what he is by his steps,
+`epithet` what the saga calls him by his deeds. `Journey.invest(way)`
+also costs every lord's trust at the berserk's first step. New gifts
+read: `strandhogg`, `raid_captives` (Raiding), `price_talk` (MapScreen),
+`champion_fee`, `verse_fame` (Callings); `fury` is now a level
+(`Warrior.fury_level`).
+
+`MapGrid` (one static grid, `MapGrid.norway()`): 180 by 140 one-league
+cells from `ORIGIN` (-58, -14); `T` {DEEP, SEA, SHORE, LAND, MOUNTAIN}
+from `NorwayData.SHORES` (point in polygon), every place's cell forced
+to land and given water at one of its four sides by `_harbour` (a fjord
+cut back along the shortest land walk to the sea, round other places),
+then terrain by four-way distance (`SHORE_WITHIN` 2, `LAND_WITHIN` 5,
+`DEEP_BEYOND` 4). `COST` per terrain. `find_path(from, to, foot, sail,
+aboard, ship_cell, deep_ok)` is A* over (cell, with-ship): water needs
+the ship, a ship lands and launches square on and never cuts a corner
+of land, walking on leaves her, reaching `ship_cell` on foot picks her
+up; returns {cells, aboard, days}. A closed set keeps it finite (without
+it, equal-cost re-pushes never ended).
+
+`Roam`: the band's `pos`, `aboard`, `ship_at`, its `route`; `plot`,
+`step_band` (to the next cell centre; `last_cell` is where she is left);
+cached `sea_route` and `place_days`; `Party` (merchant, raiders,
+outlaws, levy) with `populate` each spring and `step_parties` (follow a
+sea route, wander near a farm, or `_chase` the band over its own
+element when it likes the odds; returns the party in contact).
+
+`Journey`: `go_to_place`, `go_to_point`, `advance(dt)` (band, clock,
+`_look_about` for places in sight, `_weather` afloat, parties, `_meet`),
+`travel`, `sail(to)` (both, for the stand-in), `days_to`, `foot_speed`,
+`sail_speed` (0 without a hull, with too few hands or too many men),
+`ship_trouble`; `_pass(days)` for days spent at a deed. New deeds:
+`hull:<kind>` (`hulls_for_sale`, `hull_cost`), `passage:<place>`
+(`passages`), `camp` in the wilds, `winter` at any settled place (a
+guest pays `guest_winter_per_man`). `here()` is null in the wilds.
+`JourneyBot.play_year(j, bent)` spends points down its bent and buys a
+hull that carries its men.
+
+The view: `game.show_origins`; `MapScreen` draws the grid as a texture
+(nearest filtering, five terrain colours), the course, the known places,
+the parties within sight, the ship where she lies and the band, with a
+camera that follows or is dragged, zoom, and Pause / Faster / Stop;
+`_process` advances the journey while the band is under way; a tap on
+the map sets the course; "Your ways" shows the points and the steps.
+
 ## Ways of life and the player's summer (`way.gd`, `callings.gd`, `journey.gd`, 12 Nov 2026)
 
 `Way` (campaign): `Id` {VIKING, TRADER, LAWMAN, BERSERK, SKALD,

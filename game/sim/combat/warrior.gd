@@ -72,8 +72,10 @@ var looted := false
 var kills := 0
 ## Drill points by learned shape name (Man.drill): how well he knows it.
 var drill := {}
-## A berserk: the fury is on him while his breath lasts (CombatRules.fury_*).
+## A berserk: the fury is on him while his breath lasts (CombatRules.fury_*);
+## `fury_level` 2 strikes one better again.
 var fury := false
+var fury_level := 1
 
 
 ## Whether the fury is on him now: a berserk with half his breath or more.
@@ -183,7 +185,7 @@ func condition_penalty(rules: CombatRules) -> int:
 	if fury:
 		# In the fury he feels no wound and strikes harder; spent, he is weak.
 		if in_fury(rules):
-			return -rules.fury_bonus
+			return -(rules.fury_bonus + fury_level - 1)
 		return wound_penalty(rules) + fatigue_penalty(rules) + rules.fury_spent_penalty
 	return wound_penalty(rules) + fatigue_penalty(rules)
 

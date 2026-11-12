@@ -43,12 +43,17 @@ var rank_progress := 0
 var outlawry: WorldTypes.Outlawry = WorldTypes.Outlawry.NONE
 var outlaw_until := 0
 
-## The way the leader lives (Way.Id, -1 for none), the edges it gives
-## (name -> value, read through `gift`), and the deeds done in each way
-## (Way.Id -> points), which are what the saga names him by.
-var way := -1
+## The steps the leader has taken down each way of life (Way.Id -> 1..3),
+## the edges they give (name -> value, read through `gift`; Way.refresh
+## rebuilds them), and the deeds done in each way (Way.Id -> points),
+## which earn the points he spends and are what the saga names him by.
+var paths := {}
 var gifts := {}
 var deeds := {}
+## The origin he began from (Origins key), and the family he has his
+## vengeance to take on ("" for none or done).
+var origin := ""
+var vengeance := ""
 ## Families who owe the leader friendship for his counsel (family -> year):
 ## they stand with him at the Thing.
 var friends := {}

@@ -8,10 +8,31 @@ var summer_days := 200
 var ship_crew := {
 	WorldTypes.ShipKind.KARVE: 12, WorldTypes.ShipKind.SNEKKJA: 24,
 	WorldTypes.ShipKind.LONGSHIP: 40, WorldTypes.ShipKind.KNARR: 10,
+	WorldTypes.ShipKind.FAERING: 4,
 }
 var ship_cargo := {
 	WorldTypes.ShipKind.KARVE: 6, WorldTypes.ShipKind.SNEKKJA: 10,
 	WorldTypes.ShipKind.LONGSHIP: 14, WorldTypes.ShipKind.KNARR: 40,
+	WorldTypes.ShipKind.FAERING: 2,
+}
+## What a hull costs at a hall or a town, in ounces; the old one is taken
+## in part payment at `ship_trade_in` of its price.
+var ship_price := {
+	WorldTypes.ShipKind.FAERING: 15, WorldTypes.ShipKind.KARVE: 60, WorldTypes.ShipKind.KNARR: 110,
+	WorldTypes.ShipKind.SNEKKJA: 170, WorldTypes.ShipKind.LONGSHIP: 320,
+}
+var ship_trade_in := 0.5
+## Leagues a day under sail and oar; a band on foot makes `foot_speed`
+## over easy ground, less in the hills (MapGrid.COST).
+var ship_speed := {
+	WorldTypes.ShipKind.FAERING: 5.0, WorldTypes.ShipKind.KARVE: 7.0, WorldTypes.ShipKind.KNARR: 6.0,
+	WorldTypes.ShipKind.SNEKKJA: 8.0, WorldTypes.ShipKind.LONGSHIP: 8.0,
+}
+var foot_speed := 2.0
+## The hands a hull needs at the oars before she will go anywhere.
+var ship_min_crew := {
+	WorldTypes.ShipKind.FAERING: 1, WorldTypes.ShipKind.KARVE: 4, WorldTypes.ShipKind.KNARR: 4,
+	WorldTypes.ShipKind.SNEKKJA: 10, WorldTypes.ShipKind.LONGSHIP: 20,
 }
 var ship_unsailable_damage := 3
 var alertness_decay_per_year := 2
@@ -373,8 +394,43 @@ var champion_wealth_per_oz := 4
 var champion_honor := 4
 var champion_fame := 3
 var deed_champion := 2
-## A man knows the coast this many days' sail about his home when the saga
-## begins.
-var known_days_start := 5
+## A man knows the places within this many leagues of where his saga
+## begins, and comes to know any place he passes within `sight_leagues` of.
+var known_leagues_start := 14.0
+var sight_leagues := 8.0
+
+# --- The free-roam map (roam.gd, map_grid.gd) ------------------------------------
+## Who else is abroad each summer: merchants plying between the markets,
+## raiders prowling the coast, outlaws on the land near the farms, and the
+## levy ships that hunt an outlawed man.
+var roam_merchants := 4
+var roam_raiders := 3
+var roam_outlaws := 4
+var roam_levy := 2
+## Leagues a day: a merchant's knarr, a raider's ship, outlaws on foot.
+var merchant_speed := 6.0
+var raider_speed := 7.5
+var outlaw_speed := 2.2
+## Raiders and outlaws go for a band they see within these leagues when
+## they like the odds (their men at least the band's); a band they have
+## fought, been outrun by or traded with is left alone for `party_rest_days`.
+var raider_sight := 7.0
+var outlaw_sight := 5.0
+var party_rest_days := 15.0
+## Two parties meet when they come this near, in leagues.
+var contact_leagues := 0.9
+## At sea: the chance of a storm in a day's sailing, and of foundering in
+## a day on the deep. A hull hurt as badly as `ship_unsailable_damage`
+## only limps (`ship_limp_speed`).
+var storm_chance_day := 0.03
+var wreck_chance_deep_day := 0.006
+var ship_limp_speed := 2.0
+## Passage on another man's ship, for a band without one of its own: this
+## much, and this much more a man for each day of the voyage.
+var passage_base := 2
+var passage_per_man_day := 0.5
+## A guest's lodging for the winter, an ounce a man, where a band has no
+## hall of its own.
+var guest_winter_per_man := 1
 ## Days the crew needs to mend one point of the ship's damage on a beach.
 var ship_mend_days := 4

@@ -64,7 +64,7 @@ func show_title() -> void:
 	begin.text = "Begin a saga"
 	begin.custom_minimum_size = Vector2(280, 56)
 	begin.add_theme_font_size_override("font_size", 20)
-	begin.pressed.connect(show_ways)
+	begin.pressed.connect(show_origins)
 	box.add_child(begin)
 	var skirmish := Button.new()
 	skirmish.text = "A single fight"
@@ -74,9 +74,9 @@ func show_title() -> void:
 	box.add_child(skirmish)
 
 
-# --- Who are you? --------------------------------------------------------------
+# --- Where does your saga begin? --------------------------------------------------
 
-func show_ways() -> void:
+func show_origins() -> void:
 	var root := Control.new()
 	_swap(root)
 	var box := VBoxContainer.new()
@@ -87,30 +87,29 @@ func show_ways() -> void:
 	box.offset_bottom = -10
 	box.add_theme_constant_override("separation", 8)
 	root.add_child(box)
-	box.add_child(_label("Who are you? The way you take is where you start. The saga will name you by what you do.", 16, Palette.TEXT))
+	box.add_child(_label("Where does your saga begin? You start with little and no ship. How you live, raider or trader, law-wise man or berserk, skald or king's man, you choose as you go, in any mixture.", 15, Palette.TEXT))
+	(box.get_child(0) as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
 	box.add_child(grid)
 	var group := ButtonGroup.new()
 	var cards: Array[Button] = []
-	for way in Way.Id.values():
-		var d := Way.def(way)
+	for d in Origins.DEFS:
 		var b := Button.new()
 		b.toggle_mode = true
 		b.button_group = group
-		b.button_pressed = way == Way.Id.VIKING
+		b.button_pressed = cards.is_empty()
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.add_theme_font_size_override("font_size", 13)
-		b.text = "%s  (%s, after %s)\n%s\n%s\nYou start with %d men, a %s and %d oz of silver." % [
-				str(d.name).to_upper(), d.norse, d.model, d.blurb, d.gift_text, int(d.followers),
-				WorldTypes.SHIP_NAMES[d.ship], int(d.silver)]
-		b.set_meta("way", way)
+		b.add_theme_font_size_override("font_size", 14)
+		var men := int(d.followers)
+		b.text = "%s\n\n%s\n\nYou start %s, with %d oz of silver, on foot." % [str(d.name).to_upper(), d.blurb,
+				"alone" if men == 0 else ("with one man" if men == 1 else "with %d men" % men), int(d.silver)]
+		b.set_meta("origin", str(d.key))
 		grid.add_child(b)
 		cards.append(b)
 	var row := HBoxContainer.new()
@@ -127,12 +126,12 @@ func show_ways() -> void:
 	go.custom_minimum_size = Vector2(200, 48)
 	go.add_theme_font_size_override("font_size", 18)
 	go.pressed.connect(func() -> void:
-		var way := Way.Id.VIKING
+		var origin := "burned_hall"
 		for c in cards:
 			if c.button_pressed:
-				way = int(c.get_meta("way"))
+				origin = str(c.get_meta("origin"))
 		var who := name_edit.text.strip_edges()
-		begin_saga(way, who if who != "" else "Egil"))
+		begin_saga(origin, who if who != "" else "Egil"))
 	row.add_child(go)
 	var back := Button.new()
 	back.text = "Back"
@@ -143,10 +142,10 @@ func show_ways() -> void:
 
 # --- The saga -------------------------------------------------------------------
 
-func begin_saga(way: int, leader_name: String) -> void:
+func begin_saga(origin: String, leader_name: String) -> void:
 	if not fixed_seed:
 		seed_in = randi_range(1, 999999)
-	journey = Journey.begin(seed_in, way, leader_name)
+	journey = Journey.begin(seed_in, origin, leader_name)
 	show_map()
 
 
