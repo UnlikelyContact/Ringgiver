@@ -122,16 +122,19 @@ func test_the_seer_tells_true() -> void:
 	var long := j.days_left()
 	j.c.cal.year = early
 	assert_eq(j.days_left(), long - j.c.world_rules.early_winter_days, "the summer is short")
-	# And the raiders make for the farm she named.
-	var j2 := Journey.begin(4, "younger_son", "Egil")
-	_free(j2)
-	var f2 := Omens.fate(j2, j2.c.cal.year)
-	if str(f2.raid_at) != "" and j2.life.has("fated_raid"):
-		var bound := false
-		for p in j2.roam.parties:
-			if p.kind == "raiders" and p.strike == str(f2.raid_at):
-				bound = true
-		assert_true(bound, "a raider ship bound for %s" % f2.raid_at)
+	# And the first raider ship to turn for a farm turns for hers.
+	var j2 := _quiet(4, "younger_son", "fitjar")
+	j2.life["fated_raid"] = "lier"
+	var r := Roam.Party.new()
+	r.kind = "raiders"
+	r.family = "Augvald's kin"
+	r.strike = "jaeren"
+	j2.roam.parties.append(r)
+	Omens.tick(j2)
+	assert_eq(r.strike, "lier", "the raid falls where she said")
+	r.strike = "jaeren"
+	Omens.tick(j2)
+	assert_eq(r.strike, "jaeren", "only the first")
 
 
 func test_the_seer_comes_to_the_hall() -> void:

@@ -964,7 +964,7 @@ var sell_standing := -3
 var sell_named_standing := -20
 var sell_named_honor := 3
 ## Dublin pays more for captives than any other market.
-var captive_price_dublin := 21
+var captive_price_dublin := 18
 ## Thralls eat this much of the store a winter, and each is a hand.
 var thrall_food := 2
 ## Unrest among the thralls, 0..10: rises with their number past the

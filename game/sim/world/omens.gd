@@ -179,11 +179,8 @@ static func short_summer(j: Journey) -> int:
 static func _fate_comes(j: Journey) -> void:
 	var f := fate(j, j.c.cal.year)
 	if str(f.raid_at) != "":
-		for p in j.roam.parties:
-			if p.kind == "raiders" and p.strike == "" and p.family != j.c.world.place(str(f.raid_at)).family:
-				p.strike = str(f.raid_at)
-				j.life["fated_raid"] = str(f.raid_at)
-				break
+		j.life["fated_raid"] = str(f.raid_at)
+		j.life.erase("fated_raid_done")
 	var fam := str(f.hunters)
 	var fs := j.c.world.families
 	if fam != "" and fs != null and fs.houses.has(fam) and not Feud.find(j.c.band, fam).is_empty() and not j.first_summer():
@@ -195,6 +192,23 @@ static func _fate_comes(j: Journey) -> void:
 			var h := fs.house(fam)
 			if j.roam.add_avengers(j.c.world_rules, j.c.world, fam, h.seat, mini(j.c.world_rules.avenger_men, h.strength), j.c.band.ship != null) != null:
 				j._say("Word comes that %s have sent men out to look for you." % fam)
+
+
+## The summer's first raid falls where the year's fate says: the first
+## raider ship to turn for a farm turns for that one instead. No raid is
+## added that the world would not have made.
+static func tick(j: Journey) -> void:
+	var at := str(j.life.get("fated_raid", ""))
+	if at == "" or j.life.has("fated_raid_done"):
+		return
+	var target := j.c.world.place(at)
+	for p in j.roam.parties:
+		if p.kind != "raiders" or p.strike == "" or p.raiding_until >= 0.0:
+			continue
+		j.life["fated_raid_done"] = true
+		if target != null and p.family != target.family:
+			p.strike = at
+		return
 
 
 ## The seer's card in the winter hall (WinterHall's talk), now and then.

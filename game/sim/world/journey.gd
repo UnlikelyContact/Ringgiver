@@ -155,8 +155,8 @@ func begin_summer() -> void:
 	c.band.location = roam.grid.place_at(roam.pos)
 	_was_at = c.band.location
 	_say("Spring of %d. The ice is off the fjord%s." % [cal.year, (" at %s" % here().display_name) if here() != null else ""])
-	if Outlawry.is_outlawed(c.band, cal):
-		_say("%s sails as an outlaw this year: the halls are shut to him." % c.band.leader.display_name)
+	if Outlawry.is_outlawed(c.band, cal) and Outlawry.in_realm(self):
+		_say("%s sails as an outlaw this year: the halls of Norway are shut to him." % c.band.leader.display_name)
 	for ev in Timeline.pending(c.world_rules, c.world, cal.year):
 		var opts: Array[Dictionary] = []
 		for o in Timeline.outcome_options(ev):
@@ -1736,6 +1736,7 @@ func _law_land_tick(days: float) -> void:
 	Outlawry.tick(self)
 	Landtake.tick(self)
 	Thralls.tick(self, days)
+	Omens.tick(self)
 
 
 func _law_land_actions() -> Array[Dictionary]:
