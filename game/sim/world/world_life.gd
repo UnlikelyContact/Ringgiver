@@ -397,7 +397,9 @@ static func meet(j: Journey, p: Roam.Party) -> bool:
 			var toll := toll_for(j)
 			j.decisions.append({"kind": "world", "what": "toll", "party": p, "toll": toll,
 					"text": "%s hail you: the king's waters are not crossed for nothing, they say, and want %d oz for your passage." % [Journey._cap(p.name), toll],
-					"options": [{"id": "pay", "label": "Pay %d oz" % toll, "enabled": j.c.band.silver >= toll}, {"id": "refuse", "label": "Refuse"}]})
+					"options": [{"id": "pay", "label": "Pay %d oz" % toll, "enabled": j.c.band.silver >= toll,
+							"hint": "The king thinks the better of you for it." if j.c.band.silver >= toll else "You have not the silver."},
+						{"id": "refuse", "label": "Refuse", "hint": "The king's men will remember it, and as often as not they come on."}]})
 			return true
 		"ship_thieves":
 			p.rest_until = j.roam.clock + 3.0
